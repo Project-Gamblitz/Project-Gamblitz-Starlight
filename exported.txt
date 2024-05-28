@@ -1,0 +1,9 @@
+{
+    global:
+        flexGetStarlightHeap;
+        flexGetCurlClientInstance;
+		_Z10hooks_initv;
+        __custom_init;
+        __custom_fini;
+    local: *;
+};
