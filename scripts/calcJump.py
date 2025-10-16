@@ -3,10 +3,11 @@ import sys, os
 subsdk0Offset = {
     "310" : 0x48DF000,
     "550" : 0x2EBE000,
-    "551" : 0x2EBE000
+    "551" : 0x2EBE000,
+    "552" : 0x2EBE000
 }
 
-DEFAULT_VERS = "551"
+DEFAULT_VERS = "552"
 SOURCE_DIR = "source"
 HOOK_MAGIC = "// hook_from "
 

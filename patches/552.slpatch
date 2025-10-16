@@ -1,0 +1,208 @@
+[version=552, target=main]
+// Kraken
+010ED040+1AC 05000014
+01002410+1AAC:
+	MOV X0, X19
+	BL jetPackJetHook
+01020714 B krakenDiveHook
+00FE8400+820 BL playerModelSetupHook
+01002410+34 BL playerKingSquidCalcHook
+010F1AC4+7D0 BL kingSquidAnimSetControllerHook
+010F1AC4+6EC BL setupKingSquidAnimHook
+010F1AC4+3F4 BL registKingSquidAnimHook
+00FF81E4+2048:
+	LDR X0, [X19, #0xF50]
+	BL stepPaintTypeHook
+	ORR W8, W0, #1
+00FF81E4+2184:
+	LDR X0, [X19, #0xF50]
+	BL stepPaintTypeHook
+	ORR W8, W0, #1
+00FF81E4+263C:
+	LDR X0, [X19, #0xF50]
+	BL stepPaintTypeHook
+	ORR W8, W0, #1
+00FF81E4+2848:
+	LDR X0, [X19, #0xF50]
+	BL stepPaintTypeHook
+	ORR W8, W0, #1
+//00FF81E4+51e4:
+//	LDR X0, [X19, #0xF50]
+//	BL stepPaintTypeHook
+//	ORR W8, W0, #1
+0100174C+1FC:
+	LDR X0, [X19, #0xF50]
+	BL stepPaintTypeHook
+	ORR W8, W0, #1
+0100E290 BL fixEffHook
+// Some Hair Hook
+010E6668+18 BL playerModelResourceLoadHook
+010EC034+344 BL createHumanModelHook
+010EC034+370 BL createPlayerModelHook
+// Bubbler
+0106FE08+1208 BL barrierEffectNameHook
+0106FE08+120C MOV X0, X28
+0106FE08+1218 BL barrierEffectHook
+01001BF0+34 NOP
+// Weapon
+01066298:
+	MOV W0, #0x1
+	RET
+// Killer Wail
+004DEEF8+7C20 BL extraBigLaserBulletHook
+// Player Weapon Mtx stuff
+0018A7EC+34 BL playerModelDrawHook
+// Seeker
+00478410 01000014
+// Save onto sd card
+0240E1CB "_ZN2nn2fs11MountSdCardEPKc"
+// Save renamed to "saveG.dat"
+024B31EE "saveG.dat"
+// allmarking line fix 
+0244DEA4 "MarkingEnd"
+// sharing bubbler line fix 
+0245FB68 "SWpInkArmorLine"
+// No map error
+00376BF0 09000014
+// lan players show up in Plaza
+00376F80 1F2003D5
+// start game on timeout
+0036E304 21028052
+// skip news scratches
+00175A7C 20008052
+001759B0 20008052
+//Don't initialize SoundMic (VC) v550 
+001CE08C C0035FD6 
+// BCAT
+00327EA0 BL bcatHook
+00327DD8 BL bcatHook
+003280FC BL bcatHook
+// Npc Fix
+00F42238:
+	BL npcHeapFix
+	4122
+// InkStrike
+010B919C+34 BL inkstrikeBombVelHook
+010B919C+10C BL inkstrikeShotHook
+010B919C+E0 BL inkstrikeNetHook
+00FEFF0C B isInInkstrikeCarryHook
+010B663C:
+	MOV W0, #0x1
+	RET
+004CF4F8 BL handleBulletCloneEventHook
+// All Marking
+01028854+F8 MOV W8, WZR
+01028854+144 B markedHook
+01028DB8 630080D2
+01028DFC 630080D2
+01028D70 630080D2
+// Team Changer Crash Fix
+0106EB4C 01000014
+// Plaza Mod Checker 
+0008B4EC+2B4 BL actorDbHook
+0008B4EC+2E0 BL actorDbHook
+0008B4EC+30C BL actorDbHook
+// SuperShot
+00181934+A8:
+	SUB W8, W8, #0xF
+	CMP W8, #0x18
+00181934+B4:
+	BL custommgrjptHook
+	MOV X9, X0
+001821F8+AA4:
+	BL specialSetupWithoutModelHook
+	MOV X9, X0
+//01097730+88 TBZ W23, #0, #8
+01097730+12B0 ORR W21, W21, W23
+// Damage Reason
+01314250+1C B damageReasonHook
+// GetCharKindHook
+00425AC8+150 BL GetCharKindHook
+00425E84+114 BL GetCharKindHook
+// Starlight Hooks
+018512B8+284 NOP // enable display debug stuff (which is used for hook)
+018512B8+390:
+	MOV X1, X0
+	MOV X0, X25
+	BL renderEntrypoint
+	B #0x2B8
+// Kelp Physics everywhere
+0018099C 48008052
+// Killer Wail test
+//01013E30 20008052
+// number versionHook
+000E54C4 BL handleDisplayVersion
+//bubbler test
+01002410+2298 BL PlaySuperArmorUse
+01002410+22D0 BL PlaySuperArmorUse
+0101947C+E4 BL PlaySuperArmorUse
+// bye nintendo
+0252030A "bye nintendo1"
+0241BDCC "bye nintendo2"
+02489E15 "bye nintendo3"
+024B68B1 "bye nintendo4"
+024ADD97 "bye nintendo5"
+024B1980 "bye nintendo6"
+02415E61 "bye nintendo7"
+024B12DE "bye nintendo8"
+0248933A "bye nintendo9"
+02489357 "bye nintendo0"
+// Force Fest Result 
+//011414F4 20008052
+//Last Fest Result Ice Cream vs Cake
+01141500 08058052 //alpha vote
+01141508 480E8052 //bravo vote
+01141510 09068052 //alpha cloutwin
+01141514 0C0E8052 //bravo cloutwin
+011415AC 0B068052 //alphateam cloutwin
+011415B0 0C0E8052 //bravoteam cloutwin
+//splashdown
+01133494 BL healPlayerSuperLandingHook
+// Agnet 3 gear
+000E98C8+38 BL msnArmorHook
+001821F8+2EC BL msnArmorHook
+//Disable automatic camera movement [YoshiCrystal]
+010403D0 1F2003D5
+//Skip friend list on PB and League [YoshiCrystal]
+//0149C924 20008052
+// Lan on Versus Lobby and change local to lan
+0149D070 03000014
+0149D080 08000014
+// One Player Private Battles [OatmealDome]
+00371E78 1F2003D51F2003D509000014
+00379338 1F2003D51F2003D509000014
+014C1CE8 21008052
+014DEFD0 1F2003D5
+014DFB14 21008052
+//Save Game on LAN Match [Custom Splatfest Patch]
+01365890 20008052
+//Fix MatchingSave [Custom Splatfest Patch]
+00376F80 20008052
+01365694 20008052
+//Find anyone on ranked matching
+00333270 0C000014
+//Rival Unpatch [YoshiCrystal]
+01454A54 1F2003D5
+// Rival Fix [Shadow]
+//010EF2A8 0D000014
+//010EF30C E0031FAA
+//Remove splatfest from vs select
+014B2484 00008052
+//lan to inet with anticheat
+//019F29E4 20008052C0035FD6
+//019F2A04 00008052C0035FD6
+//0036CB80 00008052
+//0036CC84 00008052
+//01953868 09000014
+//01953444 05000014
+//01953480 05000014
+//01952FEC 4A000014
+//003755C4 00008052
+//003755F8 00008052
+//00375764 00008052
+//00375ED8 00008052
+//0036AE64 00008052
+//0036AE8C 20008052
+//02417124 "balls"
+//Create a PB on VSLobby
+014947C0 1F2003D5

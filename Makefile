@@ -3,8 +3,8 @@
 
 .PHONY: all clean starlight send linkerscript
 
-S2VER ?= 551
-S2VERSTR ?= 5.5.1
+S2VER ?= 552
+S2VERSTR ?= 5.5.2
 S2ROMTYPE ?= EU
 
 ifeq ($(OS), Windows_NT)

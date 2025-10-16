@@ -22,3 +22,4 @@ linkerscripts/symstemp.ld
 scripts/.idea/*
 !exported.txt
 .idea/workspace.xml
+/.idea
