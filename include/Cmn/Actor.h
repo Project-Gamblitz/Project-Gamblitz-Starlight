@@ -90,6 +90,8 @@ namespace Cmn
           public:
         
         static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
+        int countXLinkLocalProperty_() const;
+        int setXLinkLocalPropertyDefinition_(int);
         void setModelScale(float scale){
 			if(this->mActorFullModel != NULL){
 				this->mActorFullModel->mVel.mX=scale;

@@ -51,6 +51,8 @@ namespace Lp {
       class Params : public ParamNode {
         public:
         Lp::Sys::ParamNode *previousChild;
+
+        void ctor(Lp::Sys::ParamNode const&,Lp::Sys::Params const*);
         
         virtual void unknown1();
         virtual void unknown2();

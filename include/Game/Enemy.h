@@ -8,9 +8,13 @@
 #include "Game/Cmp/AnimSetController.h"
 #include "Game/EnemyFunctions.h"
 #include "Game/Cmp/EnemyPhysics.h"
+#include "Game/Cmp/DamageEffectable.h"
+#include "Cmn/MuObj.h"
+#include "Lp/Sys/params.h"
 
 namespace Game {
     class Player;
+    namespace Cmp { class SinkableParams; class Sinkable; }
     class EnemyBaseVtable : public Cmn::ActorVtable{
         public:
         u64 onCreate_;
@@ -153,8 +157,23 @@ namespace Game {
         u64 getAirBallAttachModel_;
     };
     class ModelCB;
-    class EnemyParams{
-        public:
+    class EnemyParamsFamily {
+    public:
+        EnemyParamsFamily();
+        _BYTE _0[0x558];
+    };
+    class EnemyParamsDesigner {
+    public:
+        EnemyParamsDesigner();
+        _BYTE _0[0x220];
+    };
+    class EnemyParams {
+    public:
+        EnemyParams();
+        void readMuObj(Cmn::MuObj const*,sead::SafeStringBase<char> const&);
+        void readFamilyParams(Game::EnemyParamsFamily const*);
+        void readDesignerParams(Lp::Sys::Params const*);
+
         _BYTE _0[0xC0];
     };
     class EnemyBase : public Game::Obj{
@@ -165,19 +184,26 @@ namespace Game {
         sead::Vector3<float> getSearchPos() const;
         static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
         void startGenerate();
+        void splashBulletForDie_(bool, float, sead::Vector3<float> const*);
+        bool checkExistGnd_(float) const;
+        void createFootPaintCheckSet_(Game::Cmp::SinkableParams const*, float const*);
+        int setXLinkLocalPropertyDefinition_(int);
         ModelCB *mModelCB;
         _BYTE _420[0x7D];
         bool _49D;
-        _BYTE _49E[0x4D8 - 0x49E];
+        _BYTE _49E[0x4D0 - 0x49E];
+        void *mStoredMergedParams;
         Game::Cmp::AnimSetController *mAnimSetController;
         _BYTE _4E0[0x4F8 - 0x4E0];
         u32 mIsDead;
-        _BYTE _4FC[0x78];
+        _BYTE _4FC[0x574 - 0x4FC];
         u32 mHealth; // 574
         u32 mHealth2;
         _BYTE _57C[0x590 - 0x57c];
         Game::Cmp::EnemyPhysics *mEnemyPhysics;
-        _BYTE _598[0x668 - 0x598];
+        _BYTE _598[0x5B0 - 0x598];
+        Game::Cmp::Sinkable *mSinkable;
+        _BYTE _5B8[0x668 - 0x5B8];
         u32 _668;
         u32 _66C;
         bool _670;

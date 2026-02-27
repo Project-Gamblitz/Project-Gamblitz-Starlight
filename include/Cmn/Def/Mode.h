@@ -48,6 +48,6 @@ namespace Cmn {
             cDbgSetting, 
             cDevOther
         };
-		static Cmn::Def::Mode getCurMode();
+		Cmn::Def::Mode getCurMode();
     };
 };

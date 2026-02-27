@@ -26,11 +26,11 @@ class FsLogger
     static void addToQueue(const char *sdpath, s64 offset, void* data, size_t length);
     static u32 InitializeFile(const char *sdpath);
     static u32 LogDataToSd(const char *sdpath, s64 offset, void* data, size_t length, nn::fs::WriteOptionFlag flag);
-    static u32 Log(const char *sdpath, s64 offset, const char* data);
+    static void Log(const char *sdpath, s64 offset, const char* data);
     static u32 LogFormat(const char *sdpath, s64 offset, const char* data, ...);
     static u32 LogFormatDirect(const char *sdpath, s64 offset, const char* data, ...);
-    static u32 LogDefault(const char* data);
-    static u32 LogDefaultDirect(const char* data);
-    static u32 LogFormatDefault(const char* data, ...);
-    static u32 LogFormatDefaultDirect(const char* data, ...);
+    static void LogDefault(const char* data);
+    static void LogDefaultDirect(const char* data);
+    static void LogFormatDefault(const char* data, ...);
+    static void LogFormatDefaultDirect(const char* data, ...);
 };

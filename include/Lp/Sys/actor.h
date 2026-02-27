@@ -28,6 +28,7 @@ namespace Lp {
         Lp::Sys::ActorSystem *system = Lp::Sys::ActorSystem::sInstance;
         system->criticalSession->lock();
         T *actor = new T();
+        actor->mHeap = sead::HeapMgr::sInstance->getCurrentHeap();
         ((Lp::Sys::Actor*)actor)->actorSysOnCreate(parent);
         system->criticalSession->unlock();
         return actor;
@@ -53,7 +54,8 @@ namespace Lp {
           u64 LpActor_x140;
           u64 LpActor_x148;
           u64 LpActor_x150[16];
-          char LpActor_x1D0[136];
+          char LpActor_x1D0[128];
+          sead::Heap *mHeap;
           u32 LpActor_x258;
           u32 LpActor_x25C;
           u64 mSystemTick; // _260

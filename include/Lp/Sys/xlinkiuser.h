@@ -4,6 +4,7 @@
 
 #include "gsys/model.h"
 #include "sead/string.h"
+#include "xlink2/handle.hpp"
 
 namespace Lp {
 
@@ -13,7 +14,7 @@ namespace Lp {
       class XLinkIUser {
         public:
           XLinkIUser();
-          //virtual char* getLinkName();
+          void pushLocalPropertyDefinition(xlink2::PropertyDefinition *propDef);
           u64 vtable;
           u64 XLinkIUser_ModelCount;
           gsys::Model **XLinkIUser_ModelArryPtr;

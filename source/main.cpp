@@ -2,13 +2,43 @@
 
 using namespace starlight;
 
+extern "C" {
+    extern void (*__preinit_array_start__[])(void) __attribute__((weak));
+    extern void (*__preinit_array_end__[])(void) __attribute__((weak));
+    extern void (*__init_array_start__[])(void) __attribute__((weak));
+    extern void (*__init_array_end__[])(void) __attribute__((weak));
+    extern void (*__fini_array_start__[])(void) __attribute__((weak));
+    extern void (*__fini_array_end__[])(void) __attribute__((weak));
+}
+
+static void __run_init_array(void) {
+    size_t count;
+    size_t i;
+
+    count = __preinit_array_end__ - __preinit_array_start__;
+    for (i = 0; i < count; i++)
+        __preinit_array_start__[i]();
+
+    count = __init_array_end__ - __init_array_start__;
+    for (i = 0; i < count; i++)
+        __init_array_start__[i]();
+}
+
+static void __run_fini_array(void) {
+    size_t count = __fini_array_end__ - __fini_array_start__;
+    for (size_t i = count; i > 0; i--)
+        __fini_array_start__[i - 1]();
+}
+
 // Needed on old versions of rtld that doesn't check for DT_INIT existance.
 extern "C" void __custom_init(void) {
-
+    __run_init_array();
 }
 
 // DT_FINI here for completeness.
-extern "C" void __custom_fini(void) {}
+extern "C" void __custom_fini(void) {
+    __run_fini_array();
+}
 
 static agl::DrawContext *mDrawContext;
 static sead::TextWriter *mTextWriter;
@@ -26,7 +56,15 @@ static Starlion::KingSquidMgr *kingSquidMgr = NULL;
 static Cmn::CtrlChecker *ctrlChecker = NULL;
 static Starlion::S1Inkstrike *mS1Inkstrike = NULL;
 static Flexlion::InkstrikeMgr *tornadoMgr = NULL;
-
+template<>
+sead::Vector2<float> sead::Vector2<float>::zero = sead::Vector2<float>(0.0f, 0.0f);
+template<>
+sead::Vector3<float> sead::Vector3<float>::zero = sead::Vector3<float>(0.0f, 0.0f, 0.0f);
+template<>
+sead::Vector3<float> sead::Vector3<float>::ey = sead::Vector3<float>(0.0f, 1.0f, 0.0f);
+bool Game::Utl::ActorFactoryBase::isNoActor() const{
+	return false;
+}
 
 static bool tsthk = 0;
 
@@ -85,6 +123,8 @@ void handleDisplayVersion(nn::oe::DisplayVersion *ver){
 		memcpy(ver->name, sversion, stLen);
 	}
 }
+
+xlink2::PropertyDefinition::~PropertyDefinition(){};
 
 void renderEntrypoint(agl::DrawContext *drawContext, sead::TextWriter *textWriter)
 {

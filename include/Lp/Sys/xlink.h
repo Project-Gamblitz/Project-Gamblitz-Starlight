@@ -16,6 +16,7 @@ namespace Lp {
       void setIsActive(bool);
       bool isSleep() const;
       int getLocalPropertyValueS(unsigned int);
+      void setLocalPropertyValue(unsigned int, float);
       void killAllEffect();
       void killAllSound();
       ALWAYS_INLINE void searchAndEmitWrap(const char* name, bool hold, xlink2::Handle* out) {

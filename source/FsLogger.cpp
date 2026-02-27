@@ -20,6 +20,7 @@ u32 FsLogger::Initialize(){
     //}
     fsloggerthread = new Flexlion::Thread((voidFunc)(&FsLogger::threadMain), Flexlion::ThreadType::cDefault, 10);
     fsloggerthread->start();
+    return 0;
 }
 
 void FsLogger::threadMain(){
@@ -48,6 +49,7 @@ u32 FsLogger::InitializeFile(const char *sdpath){
     }
     FsLogger::LogDataToSd(sdpath, 0, (void*)"", strlen(""), nn::fs::WriteOptionFlag::WriteOptionFlag_Flush);
     //}
+    return 0;
 }
 
 u32 FsLogger::LogDataToSd(const char *sdpath, s64 offset, void* data, size_t length, nn::fs::WriteOptionFlag flag){
@@ -87,7 +89,7 @@ u32 FsLogger::LogDataToSd(const char *sdpath, s64 offset, void* data, size_t len
     return r;
     //}
 }
-u32 FsLogger::Log(const char *sdpath, s64 offset, const char* data){
+void FsLogger::Log(const char *sdpath, s64 offset, const char* data){
     FsLogger::addToQueue(sdpath, offset, (void*)data, strlen(data));
 }
 
@@ -138,21 +140,21 @@ u32 FsLogger::LogFormatDirect(const char *sdpath, s64 offset, const char* data, 
     return 0;
 }
 
-u32 FsLogger::LogDefault(const char* data){
+void FsLogger::LogDefault(const char* data){
     //if(nn::fs::IsSdCardInserted()){
     FsLogger::Log(defLogFile, curLogOffset, data);
     curLogOffset+=strlen(data);
     //}
 }
 
-u32 FsLogger::LogDefaultDirect(const char* data){
+void FsLogger::LogDefaultDirect(const char* data){
     //if(nn::fs::IsSdCardInserted()){
     FsLogger::LogDataToSd(defLogFile, curLogOffset, (void*)data, strlen(data), nn::fs::WriteOptionFlag::WriteOptionFlag_Flush);
     curLogOffset+=strlen(data);
     //}
 }
 
-u32 FsLogger::LogFormatDefault(const char* data, ...){
+void FsLogger::LogFormatDefault(const char* data, ...){
     //if(nn::fs::IsSdCardInserted()){
     va_list args;
     char buff[0x1000];
@@ -165,7 +167,7 @@ u32 FsLogger::LogFormatDefault(const char* data, ...){
     //};
 }
 
-u32 FsLogger::LogFormatDefaultDirect(const char* data, ...){
+void FsLogger::LogFormatDefaultDirect(const char* data, ...){
     //if(nn::fs::IsSdCardInserted()){
     va_list args;
     char buff[0x1000];

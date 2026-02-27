@@ -7,15 +7,16 @@
 #include "gsys/model.h"
 
 namespace Game{
+    class Bullet;
 namespace Cmp{
-    class BulletKnockbackableParams{
-        public:
-
-    };
+    class BulletKnockbackableParams;
     class BulletKnockbackable : public Cmn::ComponentBase{
         public:
         BulletKnockbackable(Cmn::ComponentHolder *, const BulletKnockbackableParams *);
-        _BYTE _28[0x18];
+        void onInteractColBullet(Game::Bullet *bullet, sead::Vector3<float> const&, bool);
+        void updatePos(sead::Vector3<float> *);
+        sead::Vector3<float> mVelocity;
+        _BYTE unk34[0x40 - 0x34];
     };
 };
 };

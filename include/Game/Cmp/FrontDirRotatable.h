@@ -9,10 +9,24 @@ namespace Game{
 namespace Cmp{
     class FrontDirRotatable : public Cmn::ComponentBase{
         public:
+        class CalcArg {
+        public:
+            inline CalcArg(){
+                mPhysFrontDir = nullptr;
+                mCurrentPos = nullptr;
+                mTargetPos = nullptr;
+                mSpeed = 0.0f;
+            };
+            sead::Vector3<float> *mPhysFrontDir;
+            sead::Vector3<float> *mCurrentPos;
+            sead::Vector3<float> *mTargetPos;
+            float mSpeed;
+        };
         enum class Interp{
             Disabled, Enabled
         };
         FrontDirRotatable(Cmn::ComponentHolder *, Interp);
+        void calc(CalcArg const&calcArg);
         Interp mInterp;
         int _2C;
     };

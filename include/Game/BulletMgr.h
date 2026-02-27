@@ -16,6 +16,7 @@ namespace Game {
     };
     class Bullet: public Cmn::Actor{
         public:
+        static void *sRTTI;
         struct InitializeArg{
             Cmn::Def::Team mTeam;
             int _4;

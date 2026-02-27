@@ -142,6 +142,8 @@ namespace Game {
 		void applyWeaponChanged(bool isWeapon);
 		static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
 
+		static void *sRTTI;
+
 		bool isAlive(void){
 			Game::PlayerTrouble *playerTrouble = this->mPlayerTrouble;
 			if(playerTrouble != NULL){

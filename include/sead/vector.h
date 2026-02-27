@@ -11,7 +11,7 @@ namespace sead
     class Vector2
     {
     public:
-        static Vector2<float> zero; 
+        static Vector2<T> zero; 
         T mX;
         T mY;
     };
@@ -20,7 +20,8 @@ namespace sead
     class Vector3
     {
     public:
-        static Vector3<float> zero; 
+        static Vector3<T> zero; 
+        static Vector3<T> ey; 
         T mX;
         T mY;
         T mZ;

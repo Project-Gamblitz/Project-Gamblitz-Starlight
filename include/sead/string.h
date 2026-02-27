@@ -55,8 +55,19 @@ namespace sead
             mBufferSize = buffersize;
         };
         virtual ~BufferedSafeStringBase() {};
-        virtual sead::SafeStringBase<T> operator=(sead::SafeStringBase<T> const &);
-        virtual void assureTerminationImpl_() const;
+        virtual sead::SafeStringBase<T> operator=(sead::SafeStringBase<T> const &other){
+            assureTerminationImpl_();
+            strcpy(this->mCharPtr, other.mCharPtr);
+            return *this;
+        };
+        sead::SafeStringBase<T> operator=(sead::SafeStringBase<T> other){
+            assureTerminationImpl_();
+            strcpy(this->mCharPtr, other.mCharPtr);
+            return *this;
+        };
+        virtual void assureTerminationImpl_() const{
+            this->mCharPtr[this->mBufferSize - 1] = 0;
+        };
 
         s32 formatImpl_(T *, s32, T const *, s32);
         s32 formatV(T const *, s32);
@@ -72,11 +83,17 @@ namespace sead
     class FixedSafeString : public sead::BufferedSafeStringBase<char>
     {
     public:
-        FixedSafeString() {
-            mCharPtr = (char*)buffer;
-            mBufferSize = T;
+        FixedSafeString() : sead::BufferedSafeStringBase<char>((char*)buffer, T) {
+            
         };
-        virtual void assureTerminationImpl_();
+        FixedSafeString<T>& operator=(const char *str) {
+            assureTerminationImpl_();
+            strcpy(this->mCharPtr, str);
+            return *this;
+        };
+        virtual void assureTerminationImpl_(){
+            this->mCharPtr[this->mBufferSize - 1] = 0;
+        };
         _BYTE buffer[T];
     };
 

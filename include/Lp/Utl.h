@@ -111,6 +111,7 @@ namespace Lp
             public:
             void changeState(int);
             void executeState();
+            void changeFirstState();
             void registStateName(int stateId, sead::SafeStringBase<char> const&stateName);
             void initialize(int stateNum,int unk,sead::Heap *heap);
             _QWORD __vftable;
@@ -139,13 +140,16 @@ namespace Lp
                     return *this;
                 };
                 virtual void enter(){
-                    (mArg->*mEnterCB)();
+                    if (mEnterCB)
+                        (mArg->*mEnterCB)();
                 };
                 virtual void exec(){
-                    (mArg->*mExecCB)();
+                    if (mExecCB)
+                        (mArg->*mExecCB)();
                 };
                 virtual void exit(int res){
-                    (mArg->*mExitCB)(res);
+                    if (mExitCB)
+                        (mArg->*mExitCB)(res);
                 };
 
                 T *mArg;
