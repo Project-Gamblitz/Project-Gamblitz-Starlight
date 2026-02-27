@@ -24,7 +24,7 @@ namespace Game{
         static void rotateByFrontDir(Cmn::KDUtl::AttT *idk, sead::Vector3<float> vec){
             idk->mtx00 = vec.mZ;
             idk->mtx10 = 0.0f;
-            idk->mtx20 = vec.mX;
+            idk->mtx20 = -vec.mX;
             idk->normalize_YZ_Debug("GameEnemyFunctions.cpp", 710);
         };
         static void wallHitReflect(const wallHitReflectArg &arg);
