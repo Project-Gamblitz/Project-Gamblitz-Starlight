@@ -78,6 +78,7 @@ void stateVictoryOrDefeatHook(Game::SeqVersusResult *vres){
 };*/
 
 static void (*miniMapCamCalcImpl)(Game::MiniMapCamera *_this);
+static xlink2::UserInstanceSLink *(*startSkill_DeathMarkingImpl)(Game::Player*, unsigned int, char);
 void miniMapCamCalcHook(Game::MiniMapCamera *_this){
 	miniMapCamCalcImpl(_this);
 	float anim = tornadoMgr->cameraanim;
@@ -502,6 +503,10 @@ void init_starlion(){
 	FsLogger::LogFormatDefaultDirect("[Gamblitz] Created Cmn::CtrlChecker, 0x%x free RAM.\n", Collector::mHeapMgr->getCurrentHeap()->getFreeSize());
 	ctrlChecker->calc();
 	FsLogger::LogFormatDefaultDirect("[Gamblitz] Initialized, 0x%x free RAM.\n", Collector::mHeapMgr->getCurrentHeap()->getFreeSize());
+
+	startSkill_DeathMarkingImpl = (xlink2::UserInstanceSLink *(*)(Game::Player*, unsigned int, char))
+		ProcessMemory::MainAddr(0x01011268);
+
 }
 
 static bool isEmitting[10];
@@ -617,6 +622,27 @@ void markedHook(Game::Player *player, int a1,int a2,Game::Player::MarkingType a3
 	Game::MainMgr::sInstance->mPaintGameFrame-=0x14;
 }
 
+xlink2::UserInstanceSLink *startSkill_DeathMarkingHook(Game::Player *player, unsigned int a2, char a3) {
+    xlink2::Handle v8;
+
+    Game::Player *PerformerAt = Game::PlayerMgr::sInstance->getPerformerAt(a2);
+
+    // a3 bit 0 selects marking type (m3=2 vs m2=1)
+    Game::Player::MarkingType markType = (a3 & 1) ? Game::Player::MarkingType::m3
+                                                   : Game::Player::MarkingType::m2;
+
+    player->startMarkingOne_Impl(PerformerAt, markType, 0, 0);
+
+    if (!player->mIsRemote) {
+        int *netCtrlField = (int *)((u8 *)player->mPlayerNetControl + 132);
+        *netCtrlField |= 0x20;
+    }
+
+    player->mXLink->searchAndPlayWrap("MarkingDeathAttackStart", false, &v8);
+    return (xlink2::UserInstanceSLink *)v8.mEvent;
+}
+
+
 void inkstrikeNetHook(u64 *x0, u32 w1, u64 *x2, u64 *x3, u32 w4, u32 w5){
 	if(!tornadoMgr->isShot) ((void (*)(u64*, u32, u64*, u64*, u32, u32))ProcessMemory::MainAddr(0x4CEE6C))(x0, w1, x2, x3, w4, w5);
 }
@@ -677,6 +703,7 @@ void hooks_init(){
 	//getBombThrowSpanFrmHook(NULL, 0);
 	isInLauncherHook(NULL);
 	markedHook(NULL, 0, 0, Game::Player::MarkingType::m1, 0, 0);
+	startSkill_DeathMarkingHook(NULL, 0, 0);
 	inkstrikeNetHook(NULL, 0, NULL, NULL, 0, 0);
 	playerModelSetupHook(NULL);
 	playerKingSquidCalcHook(NULL);

@@ -6,6 +6,7 @@
 namespace xlink2 {
 
     struct Event;
+    struct UserInstanceSLink;
 
     struct Handle {
           xlink2::Event* mEvent;

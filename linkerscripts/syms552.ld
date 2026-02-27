@@ -843,3 +843,5 @@ _ZN4Game6Player12informImpactERKN4sead7Vector3IfEENS0_9HitMotionEff = 0x1002300 
 _ZN4Game3Cmp14TrackPaintable5init_EN3Cmn3Def4TeamEf = 0x631300 - 0x2EBE000;
 _ZN3Cmn13ComponentBase13ComponentBaseEPNS_15ComponentHolderE = 0x75F30 - 0x2EBE000;
 
+_ZN4Game6Player23startSkill_DeathMarkingEib = 0x01011268;
+_ZN4Game6Player20startMarkingOne_ImplEPS0_NS0_11MarkingTypeEii = 0x01028854 - 0x2EBE000; 

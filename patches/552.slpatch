@@ -96,6 +96,8 @@
 01028DB8 630080D2
 01028DFC 630080D2
 01028D70 630080D2
+// DeathMarking
+0113641C BL startSkill_DeathMarkingHook
 // Team Changer Crash Fix
 0106EB4C 01000014
 // Plaza Mod Checker 
