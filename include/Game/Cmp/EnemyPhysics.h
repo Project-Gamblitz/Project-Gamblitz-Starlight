@@ -23,6 +23,7 @@ namespace Cmp{
         EnemyObjCollision *mObjCollision;
         _BYTE unk50[0x158 - 0x50];
         sead::Vector3<float> mFrontDir;
+        sead::Vector3<float> _164;
         sead::Vector3<float> mNrmWall;
     };
 };

@@ -16,11 +16,13 @@ namespace Cmp{
                 mCurrentPos = nullptr;
                 mTargetPos = nullptr;
                 mSpeed = 0.0f;
+                mExtraValue = -1.0f;
             };
             sead::Vector3<float> *mPhysFrontDir;
             sead::Vector3<float> *mCurrentPos;
             sead::Vector3<float> *mTargetPos;
             float mSpeed;
+            float mExtraValue;
         };
         enum class Interp{
             Disabled, Enabled

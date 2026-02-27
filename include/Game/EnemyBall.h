@@ -262,10 +262,15 @@ namespace Game{
         Cmp::TrackPaintable *mTrackPaintable;
         Cmp::SearchablePlayer *mSearchablePlayer;
         Cmp::BoneDirectableToSearch *mBoneDirectableToSearch;
-        sead::Vector3<float> mSearchDir;
-        sead::Vector3<float> mCrossDir;
-        sead::Vector3<float> mSearchOwnerFwd;
-        sead::Vector3<float> mPrevPos;
+        union {
+            sead::Matrix44<float> mSearchOwnerMtx;
+            struct {
+                sead::Vector3<float> mSearchDir;
+                sead::Vector3<float> mCrossDir;
+                sead::Vector3<float> mSearchOwnerFwd;
+                sead::Vector3<float> mPrevPos;
+            };
+        };
         u32 mBumpSfxTimer;
         u32 mHitWallCounter;
         u32 mMutekiState;

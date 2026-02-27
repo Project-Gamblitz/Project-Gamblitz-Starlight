@@ -9,6 +9,7 @@
 #include "Game/EnemyFunctions.h"
 #include "Game/Cmp/EnemyPhysics.h"
 #include "Game/Cmp/DamageEffectable.h"
+#include "Game/Cmp/PixelMonitorDiskHolder.h"
 #include "Cmn/MuObj.h"
 #include "Lp/Sys/params.h"
 
@@ -201,7 +202,8 @@ namespace Game {
         u32 mHealth2;
         _BYTE _57C[0x590 - 0x57c];
         Game::Cmp::EnemyPhysics *mEnemyPhysics;
-        _BYTE _598[0x5B0 - 0x598];
+        Game::Cmp::PixelMonitorDiskHolder *mPixelMonitorDiskHolder;
+        _BYTE _598[0x5B0 - 0x5A0];
         Game::Cmp::Sinkable *mSinkable;
         _BYTE _5B8[0x668 - 0x5B8];
         u32 _668;

@@ -159,7 +159,7 @@ EnemyBallParamsDesigner::EnemyBallParamsDesigner() : EnemyParamsDesigner() {
     initFloatParam((char *)&mSinkableDesigner.mOfstMax,      "mOfstMax",     -4.0f,   &mSinkableDesigner);
     initFloatParam((char *)&mSinkableDesigner.mSpringK,      "mSpringK",      0.05f,  &mSinkableDesigner);
     initFloatParam((char *)&mSinkableDesigner.mSpringDamp,   "mSpringDamp",   0.95f,  &mSinkableDesigner);
-    initFloatParam((char *)&mSinkableDesigner.mSpringEnable, "mSpringEnable", true,   &mSinkableDesigner);
+    initBoolParam((char *)&mSinkableDesigner.mSpringEnable,  "mSpringEnable", true,   &mSinkableDesigner);
 
     initSubParams((char *)&mBoneDirectableDesigner, "mEyeDirectableParams", this);
     initFloatParam((char *)&mBoneDirectableDesigner.mAngleLimitP, "mAngleLimitP", 30.0f, &mBoneDirectableDesigner);
@@ -300,7 +300,11 @@ void EnemyBall::load_() {
         mTrackPaintable = trackPaintable;
     }
 
-    createFootPaintCheckSet_(&getMergedParams()->mSinkableParams, gndColRadiusPtr);
+    float *footPaintCheckThresholdPtr = (float*)((char*)getFamilyParams() + 0x300 + 0x2C);
+    createFootPaintCheckSet_(&getMergedParams()->mSinkableParams, footPaintCheckThresholdPtr);
+
+    mPixelMonitorDiskHolder->mMonitorHalfSize = &getFamilyParams()->mMonitorHalfSize.mValue;
+    mPixelMonitorDiskHolder->mKdPos = &getKdAttT()->mPos;
 
     mChanceAnimSetController = new Cmp::AnimSetController(mComponentHolder, 1, NULL);
     mChanceAnimSetController->setModel(mActorFullModel);
@@ -357,21 +361,13 @@ void EnemyBall::reset_(Cmn::Def::ResetType resetType) {
     mWasHitWall = 0;
     mPlayerHitTimer = 0;
 
-    *(void**)((char*)mSearchablePlayer + 56) = &mSearchDir;
+    *(void**)((char*)mSearchablePlayer + 56) = &mSearchOwnerMtx;
 }
 
 void EnemyBall::firstCalc_() {
     Cmn::KDUtl::AttT *att = getKdAttT();
-    sead::Vector3<float> *physFrontDir = &mEnemyPhysics->mFrontDir;
-
-    mPrevPos = att->mPos;
-
-    mSearchDir.mX = (1.0f * physFrontDir->mZ) - (0.0f * physFrontDir->mY);
-    mSearchDir.mY = (0.0f * physFrontDir->mX) - (physFrontDir->mZ * 0.0f);
-    mSearchDir.mZ = (physFrontDir->mY * 0.0f) - (1.0f * physFrontDir->mX);
-
-    mCrossDir = sead::Vector3<float>(0.0f, 1.0f, 0.0f);
-    mSearchOwnerFwd = *physFrontDir;
+    
+    calcSearchOwnerMtx_();
 
     mSearchablePlayer->search();
 
@@ -1081,7 +1077,7 @@ void EnemyBall::calcTrackPaintable_() {
 
 void EnemyBall::setObjColMuteki_() {
     Game::Cmp::EnemyObjCollision *objCol = mEnemyPhysics->mObjCollision;
-    u32 colNodeNum = *(u32*)((char*)objCol + 32);
+    u32 colNodeNum = objCol->getColNodeNum();
     if (!colNodeNum)
         return;
 
@@ -1154,10 +1150,7 @@ void Rollable::calc(const Rollable::CalcArg &arg) {
         vz *= inv;
     }
 
-    if (arg.mMode == 0) {
-        if (speed <= 0.0001f)
-            return;
-    } else if (arg.mMode == 1) {
+    if (arg.mMode == 0 || arg.mMode == 1) {
         if (speed <= 0.0001f)
             return;
     }
@@ -1171,13 +1164,11 @@ void Rollable::calc(const Rollable::CalcArg &arg) {
     case 3:
         mRollAngle = (speed * arg.mFactor) / mRadius;
         break;
-    case 5: {
+    case 5:
         mRollAngle *= arg.mFactor;
-        float absAngle = mRollAngle < 0.0f ? -mRollAngle : mRollAngle;
-        if (absAngle < 0.0001f)
+        if ((mRollAngle < 0.0f ? -mRollAngle : mRollAngle) < 0.0001f)
             mRollAngle = 0.0f;
         break;
-    }
     default:
         break;
     }

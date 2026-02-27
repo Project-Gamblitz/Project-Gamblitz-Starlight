@@ -16,7 +16,7 @@ namespace Cmp{
             CalcArg(){
                 mVelocity = sead::Vector3<float>::zero;
                 mMode = 0;
-                mFactor = 0.0f;
+                mFactor = 1.0f;
                 mExtraValue = 0.0f;
             };
             sead::Vector3<float> mVelocity;
