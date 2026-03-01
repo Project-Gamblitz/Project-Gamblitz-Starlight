@@ -13,7 +13,8 @@ namespace Game{
         void stateEnterBurst_();
     };
 
-    // Reimplementation of Game::SighterTarget::startAllMarking (removed in 5.5.2)
-    // Offsets are from 3.1.0 - verify against 5.5.2 SighterTarget layout
+    // Reimplementations of removed SighterTarget functions
+    // Offsets confirmed matching between 3.1.0 and 5.5.2 via calcMarked_
+    sead::Vector3<float> SighterTarget_calcMarkingEffectPos(Game::SighterTarget *sighterTarget);
     void SighterTarget_startAllMarking(Game::SighterTarget *sighterTarget, int a2, int a3);
 };

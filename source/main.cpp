@@ -617,53 +617,80 @@ void playerKingSquidCalcHook(Game::Player *player){
 	asm("MOV X8, X0");
 }
 
-// Reimplementation of Game::SighterTarget::startAllMarking(int, int) from 3.1.0
-// NOTE: SighterTarget field offsets are from 3.1.0 and may need adjustment for 5.5.2
+// Reimplementation of Game::SighterTarget::calcMarkingEffectPos_ (removed in 5.5.2)
+// Returns the marking effect position: direction * modelScale + offset
+// Offsets confirmed via 5.5.2 calcMarked_ (sub_7100B8A45C)
+sead::Vector3<float> Game::SighterTarget_calcMarkingEffectPos(Game::SighterTarget *sighterTarget) {
+	u8 *st = (u8 *)sighterTarget;
+
+	// Get merged params -> family params -> sub-object -> vtable call for model scale
+	// this + 0x4D0 -> [+0x10] + 0x5A0 -> vtable[0xD8/8=27]() returns float*
+	u64 mergedParams = *(u64 *)(st + 0x4D0);
+	u64 familyParams = *(u64 *)(mergedParams + 0x10);
+	u64 subObj = familyParams + 0x5A0;
+	float *scalePtr = ((float *(*)(u64))(*(u64 *)(*(u64 *)subObj + 0xD8)))(subObj);
+	float scale = *scalePtr;
+
+	// direction: bytes 900-908 (0x384-0x38C)
+	// offset pos: bytes 924-932 (0x39C-0x3A4)
+	sead::Vector3<float> result;
+	result.mX = scale * *(float *)(st + 0x384) + *(float *)(st + 0x39C);
+	result.mY = scale * *(float *)(st + 0x388) + *(float *)(st + 0x3A0);
+	result.mZ = scale * *(float *)(st + 0x38C) + *(float *)(st + 0x3A4);
+	return result;
+}
+
+// Reimplementation of Game::SighterTarget::startAllMarking(int, int) (removed in 5.5.2)
+// Offsets confirmed via 5.5.2 calcMarked_ (sub_7100B8A45C)
 void Game::SighterTarget_startAllMarking(Game::SighterTarget *sighterTarget, int a2, int a3) {
 	u8 *st = (u8 *)sighterTarget;
 
-	// Check state at 0x590 - skip if in states 2, 3, or 4
+	// Check state (DWORD 356 = 0x590) - skip if in states 2, 3, or 4
 	u32 state = *(u32 *)(st + 0x590);
 	if ((state - 2) < 3)
 		return;
 
 	// Store marking parameters
-	*(u32 *)(st + 0x66C) = a2;
-	*(u32 *)(st + 0x670) = (a3 >= 1) ? a3 : 1;
+	*(u32 *)(st + 0x66C) = a2;   // DWORD 411
+	*(u32 *)(st + 0x670) = (a3 >= 1) ? a3 : 1;  // DWORD 412
 
 	// Get controlled player
 	Game::Player *player = Game::PlayerMgr::sInstance->getControlledPerformer();
 
-	// Store a3 at 0x6A8
+	// Store a3 as countdown at byte 1704 (0x6A8)
 	*(u32 *)(st + 0x6A8) = a3;
 
-	// Get scale factor via nested object chain:
-	// this[0x4D0] -> [0x10] + 0x5A0 -> vtable[0xD8/8]() returns float*
-	u64 v7 = *(u64 *)(st + 0x4D0);
-	u64 subObj = *(u64 *)(v7 + 0x10) + 0x5A0;
-	float *scalePtr = ((float *(*)(u64))(*(u64 *)(*(u64 *)subObj + 0xD8)))(subObj);
-	float scale = *scalePtr;
+	// Calculate marking effect position
+	sead::Vector3<float> effectPos = Game::SighterTarget_calcMarkingEffectPos(sighterTarget);
 
-	// Compute target position: direction * scale + offset
-	float targetX = scale * *(float *)(st + 0x384) + *(float *)(st + 0x39C);
-	float targetY = scale * *(float *)(st + 0x388) + *(float *)(st + 0x3A0);
-	float targetZ = scale * *(float *)(st + 0x38C) + *(float *)(st + 0x3A4);
-	*(float *)(st + 0x6B8) = targetX;
-	*(float *)(st + 0x6BC) = targetY;
-	*(float *)(st + 0x6C0) = targetZ;
+	// Store effect position at bytes 1720-1728 (0x6B8-0x6C0)
+	*(sead::Vector3<float> *)(st + 0x6B8) = effectPos;
 
-	// Get player barrier center position
+	// Get player barrier center position, store at bytes 1708-1716 (0x6AC-0x6B4)
 	sead::Vector3<float> barrierPos;
 	player->calcBarrier_CenterPos(&barrierPos);
 	*(sead::Vector3<float> *)(st + 0x6AC) = barrierPos;
 
-	// Calculate distance between barrier center and target position
-	float dx = barrierPos.mX - targetX;
-	float dy = barrierPos.mY - targetY;
-	float dz = barrierPos.mZ - targetZ;
+	// Calculate distance between barrier center and effect position
+	float dx = barrierPos.mX - effectPos.mX;
+	float dy = barrierPos.mY - effectPos.mY;
+	float dz = barrierPos.mZ - effectPos.mZ;
 	float dist = sqrtf(dx * dx + dy * dy + dz * dz);
 
-	// Map distance to search line duration: [0..600] -> [2.0..5.0]
+	// Compute countdown frames from distance, matching startMarkingOne_Impl:
+	// [0..600] -> [20..60] frames
+	int countdown;
+	if (dist <= 0.0f)
+		countdown = 20;
+	else if (dist >= 600.0f)
+		countdown = 60;
+	else
+		countdown = (int)((dist * 40.0f / 600.0f) + 20.0f);
+
+	// Override countdown at byte 1704 (0x6A8) with distance-based value
+	*(u32 *)(st + 0x6A8) = countdown;
+
+	// Map distance to search line arc height: [0..600] -> [2.0..5.0]
 	float searchLineValue;
 	if (dist <= 0.0f) {
 		searchLineValue = 2.0f;
@@ -672,13 +699,15 @@ void Game::SighterTarget_startAllMarking(Game::SighterTarget *sighterTarget, int
 	} else {
 		searchLineValue = (dist * 3.0f / 600.0f) + 2.0f;
 	}
+
+	// Store search line value at byte 1732 (0x6C4)
 	*(float *)(st + 0x6C4) = searchLineValue;
 
 	// Emit "SearchLine" XLink effect
 	xlink2::Handle handle;
-	sighterTarget->mXLink->searchAndEmitWrap("SearchLine", false, &handle);
+	sighterTarget->mXLink->searchAndEmitWrap("MarkingEnd", false, &handle);
 
-	// Store handle
+	// Store handle at bytes 1736/1744 (0x6C8/0x6D0)
 	*(u64 *)(st + 0x6C8) = (u64)handle.mEvent;
 	*(u32 *)(st + 0x6D0) = handle.mEventId;
 }
@@ -688,13 +717,18 @@ void startAllMarking_ImplHook(Game::Player *player, int a1) {
 	// Call original startAllMarking_Impl
 	player->startAllMarking_Impl(a1);
 
-	// Iterate all active SighterTargets and call startAllMarking on each
+	// Iterate all active SighterTargets and call startAllMarking on enemy ones
+	Cmn::Def::Team myTeam = player->mTeam;
 	auto iterNode = Game::SighterTarget::getClassIterNodeStatic();
 	for (Game::SighterTarget *st = (Game::SighterTarget *)iterNode->derivedFrontActiveActor();
 		 st != NULL;
 		 st = (Game::SighterTarget *)iterNode->derivedNextActiveActor(st))
 	{
-		Game::SighterTarget_startAllMarking(st, a1 + 0x21C, a1);
+		// Only mark enemy SighterTargets (different team)
+		if (st->mTeam != myTeam) {
+			// a2 = marking ID, a3 = countdown frames (~1.5s at 60fps)
+			Game::SighterTarget_startAllMarking(st, a1 + 0x21C, 90);
+		}
 	}
 }
 
