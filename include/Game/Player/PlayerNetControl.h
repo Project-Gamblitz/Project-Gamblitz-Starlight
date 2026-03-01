@@ -49,6 +49,7 @@ namespace Game{
     class PlayerNetControl{
         public:
         static void (*calcReceive)(Game::PlayerNetControl*);
+        void sendSignal_AllMarking();
         Game::Player *mPlayer;
         Game::PlayerCloneHandle *mCloneHandle;
     };

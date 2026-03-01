@@ -68,6 +68,7 @@ namespace Game {
 		void startBarrier_Special();
 		void startSpecial_AllMarking();
 		void startAllMarking_Impl(int);
+		void receiveAllMarking(int);
 		void startSpecial_SuperArmor();
 		void startSpecial_Barrier();
 		void startSpecial_Jetpack();

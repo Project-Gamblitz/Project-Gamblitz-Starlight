@@ -848,3 +848,4 @@ _ZN3Cmn13ComponentBase13ComponentBaseEPNS_15ComponentHolderE = 0x75F30 - 0x2EBE0
 
 _ZN4Game6Player23startSkill_DeathMarkingEib = 0x01011268;
 _ZN4Game6Player20startMarkingOne_ImplEPS0_NS0_11MarkingTypeEii = 0x01028854 - 0x2EBE000; 
+_ZN4Game16PlayerNetControl21sendSignal_AllMarkingEv = 0x01101180 - 0x2EBE000;

@@ -732,6 +732,19 @@ void startAllMarking_ImplHook(Game::Player *player, int a1) {
 	}
 }
 
+// Reimplementation of Game::Player::startSpecial_AllMarking (removed in 5.5.2)
+void Game::Player::startSpecial_AllMarking() {
+	this->mPlayerNetControl->sendSignal_AllMarking();
+	startAllMarking_ImplHook(this, Game::MainMgr::sInstance->mPaintGameFrame);
+}
+
+// Reimplementation of Game::Player::receiveAllMarking (removed in 5.5.2)
+void Game::Player::receiveAllMarking(int a2) {
+	if (this->mIsRemote) {
+		startAllMarking_ImplHook(this, a2);
+	}
+}
+
 void markedHook(Game::Player *player, int a1,int a2,Game::Player::MarkingType a3,int a4,unsigned int a5){
 	Game::MainMgr::sInstance->mPaintGameFrame+=0x14;
 	player->startMarked_Bomb_Direct(0x21C, a4, 0);
