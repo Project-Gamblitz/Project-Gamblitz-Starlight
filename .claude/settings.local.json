@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep -l \"xlink2\\\\|XLink\")",
+      "Bash(xargs grep -l \"starlight\")"
+    ]
+  }
+}

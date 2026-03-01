@@ -79,6 +79,7 @@ void stateVictoryOrDefeatHook(Game::SeqVersusResult *vres){
 
 static void (*miniMapCamCalcImpl)(Game::MiniMapCamera *_this);
 static xlink2::UserInstanceSLink *(*startSkill_DeathMarkingImpl)(Game::Player*, unsigned int, char);
+static void (*startAllMarking_ImplOrig)(Game::Player*, int);
 void miniMapCamCalcHook(Game::MiniMapCamera *_this){
 	miniMapCamCalcImpl(_this);
 	float anim = tornadoMgr->cameraanim;
@@ -507,6 +508,9 @@ void init_starlion(){
 	startSkill_DeathMarkingImpl = (xlink2::UserInstanceSLink *(*)(Game::Player*, unsigned int, char))
 		ProcessMemory::MainAddr(0x01011268);
 
+	startAllMarking_ImplOrig = (void (*)(Game::Player*, int))
+		ProcessMemory::MainAddr(0x010197F0);
+
 }
 
 static bool isEmitting[10];
@@ -613,6 +617,87 @@ void playerKingSquidCalcHook(Game::Player *player){
 	asm("MOV X8, X0");
 }
 
+// Reimplementation of Game::SighterTarget::startAllMarking(int, int) from 3.1.0
+// NOTE: SighterTarget field offsets are from 3.1.0 and may need adjustment for 5.5.2
+void Game::SighterTarget_startAllMarking(Game::SighterTarget *sighterTarget, int a2, int a3) {
+	u8 *st = (u8 *)sighterTarget;
+
+	// Check state at 0x590 - skip if in states 2, 3, or 4
+	u32 state = *(u32 *)(st + 0x590);
+	if ((state - 2) < 3)
+		return;
+
+	// Store marking parameters
+	*(u32 *)(st + 0x66C) = a2;
+	*(u32 *)(st + 0x670) = (a3 >= 1) ? a3 : 1;
+
+	// Get controlled player
+	Game::Player *player = Game::PlayerMgr::sInstance->getControlledPerformer();
+
+	// Store a3 at 0x6A8
+	*(u32 *)(st + 0x6A8) = a3;
+
+	// Get scale factor via nested object chain:
+	// this[0x4D0] -> [0x10] + 0x5A0 -> vtable[0xD8/8]() returns float*
+	u64 v7 = *(u64 *)(st + 0x4D0);
+	u64 subObj = *(u64 *)(v7 + 0x10) + 0x5A0;
+	float *scalePtr = ((float *(*)(u64))(*(u64 *)(*(u64 *)subObj + 0xD8)))(subObj);
+	float scale = *scalePtr;
+
+	// Compute target position: direction * scale + offset
+	float targetX = scale * *(float *)(st + 0x384) + *(float *)(st + 0x39C);
+	float targetY = scale * *(float *)(st + 0x388) + *(float *)(st + 0x3A0);
+	float targetZ = scale * *(float *)(st + 0x38C) + *(float *)(st + 0x3A4);
+	*(float *)(st + 0x6B8) = targetX;
+	*(float *)(st + 0x6BC) = targetY;
+	*(float *)(st + 0x6C0) = targetZ;
+
+	// Get player barrier center position
+	sead::Vector3<float> barrierPos;
+	player->calcBarrier_CenterPos(&barrierPos);
+	*(sead::Vector3<float> *)(st + 0x6AC) = barrierPos;
+
+	// Calculate distance between barrier center and target position
+	float dx = barrierPos.mX - targetX;
+	float dy = barrierPos.mY - targetY;
+	float dz = barrierPos.mZ - targetZ;
+	float dist = sqrtf(dx * dx + dy * dy + dz * dz);
+
+	// Map distance to search line duration: [0..600] -> [2.0..5.0]
+	float searchLineValue;
+	if (dist <= 0.0f) {
+		searchLineValue = 2.0f;
+	} else if (dist >= 600.0f) {
+		searchLineValue = 5.0f;
+	} else {
+		searchLineValue = (dist * 3.0f / 600.0f) + 2.0f;
+	}
+	*(float *)(st + 0x6C4) = searchLineValue;
+
+	// Emit "SearchLine" XLink effect
+	xlink2::Handle handle;
+	sighterTarget->mXLink->searchAndEmitWrap("SearchLine", false, &handle);
+
+	// Store handle
+	*(u64 *)(st + 0x6C8) = (u64)handle.mEvent;
+	*(u32 *)(st + 0x6D0) = handle.mEventId;
+}
+
+// Hook for Game::Player::startAllMarking_Impl to add SighterTarget marking
+void startAllMarking_ImplHook(Game::Player *player, int a1) {
+	// Call original startAllMarking_Impl
+	player->startAllMarking_Impl(a1);
+
+	// Iterate all active SighterTargets and call startAllMarking on each
+	auto iterNode = Game::SighterTarget::getClassIterNodeStatic();
+	for (Game::SighterTarget *st = (Game::SighterTarget *)iterNode->derivedFrontActiveActor();
+		 st != NULL;
+		 st = (Game::SighterTarget *)iterNode->derivedNextActiveActor(st))
+	{
+		Game::SighterTarget_startAllMarking(st, a1 + 0x21C, a1);
+	}
+}
+
 void markedHook(Game::Player *player, int a1,int a2,Game::Player::MarkingType a3,int a4,unsigned int a5){
 	Game::MainMgr::sInstance->mPaintGameFrame+=0x14;
 	player->startMarked_Bomb_Direct(0x21C, a4, 0);
@@ -702,6 +787,8 @@ void hooks_init(){
 	npcHeapFix(NULL, NULL);
 	//getBombThrowSpanFrmHook(NULL, 0);
 	isInLauncherHook(NULL);
+	Game::SighterTarget_startAllMarking(NULL, 0, 0);
+	startAllMarking_ImplHook(NULL, 0);
 	markedHook(NULL, 0, 0, Game::Player::MarkingType::m1, 0, 0);
 	startSkill_DeathMarkingHook(NULL, 0, 0);
 	inkstrikeNetHook(NULL, 0, NULL, NULL, 0, 0);

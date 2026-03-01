@@ -91,6 +91,7 @@
 	RET
 004CF4F8 BL handleBulletCloneEventHook
 // All Marking
+0101334C BL startAllMarking_ImplHook
 01028854+F8 MOV W8, WZR
 01028854+144 B markedHook
 01028DB8 630080D2
