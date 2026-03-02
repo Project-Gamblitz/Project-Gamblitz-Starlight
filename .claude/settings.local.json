@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(xargs grep -l \"xlink2\\\\|XLink\")",
-      "Bash(xargs grep -l \"starlight\")"
+      "Bash(xargs grep -l \"starlight\")",
+      "Bash(claude mcp list)",
+      "Bash(C:\\\\Python314\\\\python.exe -c \":*)",
+      "Bash(/c/Python314/python.exe -c \":*)"
     ]
   }
 }

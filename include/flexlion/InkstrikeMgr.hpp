@@ -41,9 +41,12 @@ namespace Flexlion{
         void informShotInkstrike(Game::Player *player, sead::Vector3<float> pos, sead::Vector3<float> dest, int paintgamefrm);
         void onCalc();
         Lp::Sys::ModelArc *mTornadoArc;
+        Lp::Sys::ModelArc *mTornadoMonitorArc;
         TornadoState playerState[10];
         bool isAppliedWeapon[10];
         gsys::Model *mTornadoModel[10];
+        gsys::Model *mTornadoMonitorModel[10];
+        int mTankRootBoneIdx[10];
         BulletTornado *bullets[10];
         float bulletanim[10];
         bool isShot;

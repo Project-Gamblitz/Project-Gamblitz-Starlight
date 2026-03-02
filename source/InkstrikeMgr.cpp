@@ -116,9 +116,13 @@ namespace Flexlion{
         sInstance = this;
         memset(this, 0, sizeof(InkstrikeMgr));
         mTornadoArc = new Lp::Sys::ModelArc(sead::SafeStringBase<char>::create("Wsp_Tornado"), NULL, 0, NULL, NULL);
+        mTornadoMonitorArc = new Lp::Sys::ModelArc(sead::SafeStringBase<char>::create("Wsp_Tornado_Monitor"), NULL, 0, NULL, NULL);
         cameraheight = 300.0f; // TODO: Make a thing that you give edge coordinates for each map and it calculates this
         cameraanim = 0.0f;
-        for(int i = 0; i < 10; i++) bullets[i] = new BulletTornado();
+        for(int i = 0; i < 10; i++){
+            bullets[i] = new BulletTornado();
+            mTankRootBoneIdx[i] = -1;
+        }
     }
     void InkstrikeMgr::informShotInkstrike(Game::Player *player, sead::Vector3<float> pos, sead::Vector3<float> dest, int paintgamefrm){
         if(!bullets[player->mIndex]->isactive){
@@ -207,47 +211,55 @@ namespace Flexlion{
         Lp::Utl::ModelCreateArg arg;
         mTornadoModel[id] = Cmn::GfxUtl::createModel(player->mTeam, sead::SafeStringBase<char>::create("Tornado"), *mTornadoArc, arg, NULL);
         mTornadoModel[id]->bind(Game::MainMgr::sInstance->gfxMgr->modelScene);
+        mTornadoMonitorModel[id] = Cmn::GfxUtl::createModel(player->mTeam, sead::SafeStringBase<char>::create("Tornado_Monitor"), *mTornadoMonitorArc, arg, NULL);
+        mTornadoMonitorModel[id]->bind(Game::MainMgr::sInstance->gfxMgr->modelScene);
+        gsys::Model *fullModel = *player->mPlayerModel->mFullModel;
+        if(fullModel != NULL){
+            mTankRootBoneIdx[id] = fullModel->searchBone(sead::SafeStringBase<char>::create("tank_root"));
+        }
     }
     void InkstrikeMgr::playerFourthCalc(Game::Player *player){
         int id = player->mIndex;
-        if(mTornadoModel[id] == NULL || player->mPlayerCustomMgr == NULL){
+        if(mTornadoModel[id] == NULL || mTornadoMonitorModel[id] == NULL || player->mPlayerCustomMgr == NULL){
             return;
-        }
-        Cmn::PlayerCustomPart *tank = player->getTank();
-        if(tank == NULL){
-            tank = player->mPlayerCustomMgr->getMantle();
         }
         if(bullets[id]->isactive){
             bullets[id]->onRender();
             return;
         }
-        sead::Vector3<float> mtxrot = sead::Vector3<float>::zero;
-        sead::Vector3<float> mtxpos = sead::Vector3<float>::zero;
         switch(playerState[id]){
         case TornadoState::cNone:
             break;
         case TornadoState::cAim:
-            if(tank == NULL){
-                break;
+        {
+            // Attach Wsp_Tornado to the tank_root bone on the player model
+            gsys::Model *fullModel = *player->mPlayerModel->mFullModel;
+            if(fullModel != NULL && mTankRootBoneIdx[id] >= 0){
+                sead::Matrix34<float> tankBoneMtx;
+                gsys::ModelNW *modelNW = (gsys::ModelNW*)fullModel->mModelInfoPool->mUnit;
+                modelNW->getBoneWorldMatrix(&tankBoneMtx, mTankRootBoneIdx[id]);
+                mTornadoModel[id]->mtx = tankBoneMtx;
+                mTornadoModel[id]->mUpdateScale|=1;
+                mTornadoModel[id]->updateAnimationWorldMatrix_(3);
+                mTornadoModel[id]->requestDraw();
             }
-            if(tank->mActorFullModel == NULL){
-                break;
+            // Attach Wsp_Tornado_Monitor to the weapon bone (replacing current weapon)
+            Cmn::PlayerWeapon *weapon = player->mPlayerWeapon[0];
+            if(weapon != NULL){
+                sead::Matrix34<float> weaponBoneMtx;
+                weapon->getRootBoneMtx(&weaponBoneMtx);
+                weapon->setVisible(false);
+                mTornadoMonitorModel[id]->mtx = weaponBoneMtx;
+                mTornadoMonitorModel[id]->mUpdateScale|=1;
+                mTornadoMonitorModel[id]->updateAnimationWorldMatrix_(3);
+                mTornadoMonitorModel[id]->requestDraw();
             }
-            mTornadoModel[id]->mtx = tank->mActorFullModel->mtx;
-            mtxrot = Utils::getRotFromMtx(mTornadoModel[id]->mtx);
-            mtxpos = Utils::getMtxPos(&mTornadoModel[id]->mtx);
-            mtxpos.mX += sinf(mtxrot.mY) * carryingOffset;
-            mtxpos.mZ += cosf(mtxrot.mY) * carryingOffset;
-            Utils::setMtxPos(&mTornadoModel[id]->mtx, mtxpos);
-            mTornadoModel[id]->mUpdateScale|=1;
+            break;
+        }
+        case TornadoState::cShoot:
             mTornadoModel[id]->updateAnimationWorldMatrix_(3);
             mTornadoModel[id]->requestDraw();
             break;
-        case TornadoState::cShoot:
-            // Shouldn't be entered at all?
-            mTornadoModel[id]->updateAnimationWorldMatrix_(3);
-            mTornadoModel[id]->requestDraw();
-            break; 
         };
     }
 }
