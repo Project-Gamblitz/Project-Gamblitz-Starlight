@@ -8,7 +8,7 @@
 
 namespace Flexlion{
     enum TornadoState{
-        cNone, cAim, cShoot,
+        cNone, cAim, cShootPrepare, cShoot,
     };
     class BulletTornado{
         public:
@@ -47,6 +47,9 @@ namespace Flexlion{
         gsys::Model *mTornadoModel[10];
         gsys::Model *mTornadoMonitorModel[10];
         int mTankRootBoneIdx[10];
+        int mShootPrepareFrm[10];
+        int mShootFrm[10];
+        sead::Vector3<float> mPendingDest[10];
         BulletTornado *bullets[10];
         float bulletanim[10];
         bool isShot;

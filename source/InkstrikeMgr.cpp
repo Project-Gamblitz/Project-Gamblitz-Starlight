@@ -4,6 +4,7 @@ const int startflightdelay = 60; // delay from when a point is chosen to when th
 const int playerdelay = 120; // 60 frames Shoot_Tornado_St + 60 frames Shoot_Tornado
 const float flightheight = 300.0f;
 const float carryingOffset = -5.0f;
+const float tornadoTankZOffset = -3.0f;
 namespace Flexlion{
     BulletTornado::BulletTornado(){
         this->reset();
@@ -128,8 +129,6 @@ namespace Flexlion{
         if(!bullets[player->mIndex]->isactive){
             bullets[player->mIndex]->onActivate(player, mTornadoModel[player->mIndex], pos, dest, paintgamefrm);
             isAppliedWeapon[player->mIndex] = 0;
-            Prot::ObfStore(&player->mSpecialLeftFrame, 0);
-            playerState[player->mIndex] = TornadoState::cShoot;
         }
     }
     void InkstrikeMgr::onCalc(){
@@ -149,12 +148,9 @@ namespace Flexlion{
             playerState[id] = TornadoState::cAim;
             isAppliedWeapon[id] = 0;
         }
-        if(!bullets[id]->isactive and playerState[id] == TornadoState::cShoot){
-            isAppliedWeapon[id] = 0;
-            playerState[id] = TornadoState::cNone;
-        } else if(bullets[id]->isactive and playerState[id] == TornadoState::cAim){
-            isAppliedWeapon[id] = 0;
-            Prot::ObfStore(&player->mSpecialLeftFrame, 0);
+        // Handle remote players: bullet activated via network while still in cAim
+        if(bullets[id]->isactive and playerState[id] == TornadoState::cAim){
+            mShootFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
             playerState[id] = TornadoState::cShoot;
         }
     }
@@ -183,7 +179,7 @@ namespace Flexlion{
                 playerState[id] = TornadoState::cNone;
                 break;
             }
-            
+
             if(isCtrlPerformer and Utils::isShowMinimap() and Lp::Utl::getCtrl(0)->isHoldContinue(starlight::Controller::Buttons::A, 1) and cameraanim > 0.95f){
                 const float distmul = 2.0f;
                 float dist = sqrtf(miniMap->mCursorPos.mX * miniMap->mCursorPos.mX + miniMap->mCursorPos.mY * miniMap->mCursorPos.mY) * distmul;
@@ -192,18 +188,39 @@ namespace Flexlion{
                 miniMapAt.mY = cameraheight;
                 miniMapAt.mZ = sinf(deg) * dist * -1;
                 miniMapAt = Utils::calcGroundPos(player, miniMapAt);
-                this->informShotInkstrike(player, player->mPosition, miniMapAt, Game::MainMgr::sInstance->mPaintGameFrame);
                 if(isOnline) bulletCloneHandle->sendEvent_Shot(player->mIndex, player->mPosition, miniMapAt, Game::BulletCloneEvent::Type::BulletTypeInkstrike, 0);
-                player->resetPaintGauge(0, 0, 0, 0); // reset gauge when tornado shot
+                player->resetPaintGauge(0, 0, 0, 0);
                 isAppliedWeapon[id] = 0;
-                Prot::ObfStore(&player->mSpecialLeftFrame, 0);
+                mPendingDest[id] = miniMapAt;
+                mShootPrepareFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
+                playerState[id] = TornadoState::cShootPrepare;
+                // player->mPlayerMotion->startDemoAnim("Shoot_Tornado_St", 0.0f, 1.0f, false);
+            }
+            break;
+        case TornadoState::cShootPrepare:
+        {
+            Prot::ObfStore(&player->mSpecialLeftFrame, startflightdelay);
+            int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mShootPrepareFrm[id];
+            if(elapsed >= startflightdelay){
+                this->informShotInkstrike(player, player->mPosition, mPendingDest[id], Game::MainMgr::sInstance->mPaintGameFrame);
+                mShootFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
                 playerState[id] = TornadoState::cShoot;
+                // player->mPlayerMotion->startDemoAnim("Shoot_Tornado", 0.0f, 1.0f, false);
+            }
+            break;
+        }
+        case TornadoState::cShoot:
+        {
+            isAppliedWeapon[id] = 0;
+            Prot::ObfStore(&player->mSpecialLeftFrame, startflightdelay);
+            int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mShootFrm[id];
+            if(elapsed >= startflightdelay){
+                Prot::ObfStore(&player->mSpecialLeftFrame, 0);
+                playerState[id] = TornadoState::cNone;
                 player->informGetWeapon_Impl_(player->mMainWeaponId, player->mSubWeaponId, player->mSpecialWeaponId, 0);
             }
             break;
-        case TornadoState::cShoot:
-            isAppliedWeapon[id] = 0;
-            break;
+        }
         };
     }
     void InkstrikeMgr::registerPlayer(Game::Player *player){
@@ -231,6 +248,7 @@ namespace Flexlion{
         case TornadoState::cNone:
             break;
         case TornadoState::cAim:
+        case TornadoState::cShootPrepare:
         {
             // Attach Wsp_Tornado to the tank_root bone on the player model
             Cmn::PlayerCustomPart *tank = player->getTank();
@@ -251,6 +269,10 @@ namespace Flexlion{
                         tankBoneMtx.matrix[2][col] /= len;
                     }
                 }
+                // Apply Z axis offset along the bone's local Z direction
+                tankBoneMtx.matrix[0][3] += tankBoneMtx.matrix[0][2] * tornadoTankZOffset;
+                tankBoneMtx.matrix[1][3] += tankBoneMtx.matrix[1][2] * tornadoTankZOffset;
+                tankBoneMtx.matrix[2][3] += tankBoneMtx.matrix[2][2] * tornadoTankZOffset;
                 mTornadoModel[id]->mtx = tankBoneMtx;
                 mTornadoModel[id]->mUpdateScale|=1;
                 mTornadoModel[id]->updateAnimationWorldMatrix_(3);
