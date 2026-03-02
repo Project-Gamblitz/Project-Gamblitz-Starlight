@@ -14,7 +14,6 @@
 #include "starlight/input.hpp"
 #include "gsys/model.h"
 #include "Lp/Sys/modelarc.h"
-#include "lp/Utl.h"
 #include "sead/camera.h"
 #include "Lp/Sys/SceneMgr.h"
 #include "Cmn/Actor.h"

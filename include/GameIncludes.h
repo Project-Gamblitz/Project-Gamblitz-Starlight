@@ -7,7 +7,7 @@
 #include <string>
 #include "Prot/Prot.h"
 #include "Game/PlazaCoconutShot.h"
-#include "lp/Sys/dbgmode.h"
+#include "Lp/Sys/dbgmode.h"
 #include "Cmn/DbgMenuMgr.h"
 #include "sead/seadmenumgr.h"
 #include "nn/vfx/System.h"
