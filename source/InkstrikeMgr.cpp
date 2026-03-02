@@ -233,11 +233,24 @@ namespace Flexlion{
         case TornadoState::cAim:
         {
             // Attach Wsp_Tornado to the tank_root bone on the player model
-            gsys::Model *fullModel = *player->mPlayerModel->mFullModel;
-            if(fullModel != NULL && mTankRootBoneIdx[id] >= 0){
+            Cmn::PlayerCustomPart *tank = player->getTank();
+            if(tank == NULL) tank = player->mPlayerCustomMgr->getMantle();
+            if(tank != NULL){
                 sead::Matrix34<float> tankBoneMtx;
-                gsys::ModelNW *modelNW = (gsys::ModelNW*)fullModel->mModelInfoPool->mUnit;
-                modelNW->getBoneWorldMatrix(&tankBoneMtx, mTankRootBoneIdx[id]);
+                tank->getRootBoneMtx(&tankBoneMtx);
+                // Normalize rotation columns to strip bone scale, keep only position + rotation
+                for(int col = 0; col < 3; col++){
+                    float len = sqrtf(
+                        tankBoneMtx.matrix[0][col] * tankBoneMtx.matrix[0][col] +
+                        tankBoneMtx.matrix[1][col] * tankBoneMtx.matrix[1][col] +
+                        tankBoneMtx.matrix[2][col] * tankBoneMtx.matrix[2][col]
+                    );
+                    if(len > 0.0f){
+                        tankBoneMtx.matrix[0][col] /= len;
+                        tankBoneMtx.matrix[1][col] /= len;
+                        tankBoneMtx.matrix[2][col] /= len;
+                    }
+                }
                 mTornadoModel[id]->mtx = tankBoneMtx;
                 mTornadoModel[id]->mUpdateScale|=1;
                 mTornadoModel[id]->updateAnimationWorldMatrix_(3);
