@@ -29,3 +29,5 @@ scripts/.idea/*
 starlight_patch_*/
 Project-Gamblitz-Starlight*.nso
 /.claude
+/.claude
+.claude/settings.local.json

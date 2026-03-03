@@ -214,3 +214,5 @@
 // Resource Heap Size Bump (if using merged testfire ptcl)
 0039FA90 0008A252 // static res
 0039C044 0048A052 // effect
+// ACDC Fix
+00F92B34 1F2003D5

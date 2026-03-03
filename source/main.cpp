@@ -741,7 +741,7 @@ void updateCursorEffectHook(Game::MiniMap *miniMap) {
 			// Emit ArtilleryIcon effect
 			Lp::Sys::XLink *xlink = *(Lp::Sys::XLink **)(self + 800);
 			xlink2::Handle handle;
-			xlink->searchAndEmitWrap("DoronCursor", false, &handle); // Placeholder until I find a working selection Icon
+			xlink->searchAndEmitWrap("ArtilleryIcon", false, &handle); // Placeholder until I find a working selection Icon
 			*(u32*)(self + 3784) = handle.mEventId;
 			*(xlink2::Event**)(self + 3776) = handle.mEvent;
 			eventPtr = (u64)handle.mEvent;
