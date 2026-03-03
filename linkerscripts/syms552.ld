@@ -659,6 +659,7 @@ _ZN3Cmn9CameraMgr10swapCameraEPNS_10CameraBaseES2_ = 0x1C510 - 0x2EBE000;
 _ZNK4sead8Viewport5applyEPNS_11DrawContextERKNS_18LogicalFrameBufferE = 0x17372a4 - 0x2EBE000;
 _ZN3Cmn10CameraBase7setFovyEf = 0x18290 - 0x2EBE000;
 _ZNK4Game6HudMgr13isShowMiniMapEv = 0xA0B188 - 0x2EBE000;
+_ZN4Game7MiniMap10setVisibleEb = 0xA11308 - 0x2EBE000;
 _ZN2Lp3Utl13getBinFromArcEPKN4sead14DirectResourceERKNS1_14SafeStringBaseIcEEPNS1_10ArchiveRes8FileInfoE = 0x19f751c - 0x2EBE000;
 _ZNK3Cmn12ScheduleFest15loadDeliMapFileERKN4sead14SafeStringBaseIcEEPNS1_4HeapE = 0x326860 - 0x2EBE000;
 _ZN4Game6Player18applyWeaponChangedEb = 0xFEE43C - 0x2EBE000;

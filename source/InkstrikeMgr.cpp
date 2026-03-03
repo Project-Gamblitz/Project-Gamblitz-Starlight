@@ -194,7 +194,9 @@ namespace Flexlion{
                 mPendingDest[id] = miniMapAt;
                 mShootPrepareFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
                 playerState[id] = TornadoState::cShootPrepare;
-                // player->mPlayerMotion->startDemoAnim("Shoot_Tornado_St", 0.0f, 1.0f, false);
+                player->mPlayerMotion->startDemoAnim("Shoot_Tornado_St", 0.0f, 1.0f, false);
+                Game::MiniMap *mMap = Utils::getMinimap();
+                if(mMap != NULL) mMap->setVisible(false);
             }
             break;
         case TornadoState::cShootPrepare:
@@ -205,7 +207,7 @@ namespace Flexlion{
                 this->informShotInkstrike(player, player->mPosition, mPendingDest[id], Game::MainMgr::sInstance->mPaintGameFrame);
                 mShootFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
                 playerState[id] = TornadoState::cShoot;
-                // player->mPlayerMotion->startDemoAnim("Shoot_Tornado", 0.0f, 1.0f, false);
+                player->mPlayerMotion->startDemoAnim("Shoot_Tornado", 0.0f, 1.0f, false);
             }
             break;
         }
