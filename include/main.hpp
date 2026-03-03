@@ -19,7 +19,6 @@
 
 ushort GetCharKindHook(uintptr_t _this, ushort charKind);
 void handleSupershot();
-void handlePlayerEffects();
 int getSuperShotBurstWaitFrameHook(Game::BulletGachihoko *bullet);
 int getSuperShotBurstWarnFrameHook(Game::BulletGachihoko *bullet);
 void supershotJumpHook();

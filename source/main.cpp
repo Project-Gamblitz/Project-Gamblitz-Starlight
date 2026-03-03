@@ -50,8 +50,6 @@ extern "C" sead::ExpHeap *flexGetStarlightHeap(){
 	return mStarlightHeap;
 };
 
-//static bool justSwitched;
-
 static Starlion::KingSquidMgr *kingSquidMgr = NULL;
 static Cmn::CtrlChecker *ctrlChecker = NULL;
 static Starlion::S1Inkstrike *mS1Inkstrike = NULL;
@@ -122,13 +120,6 @@ bool Game::Utl::ActorFactoryBase::isNoActor() const{
 static bool tsthk = 0;
 
 static int custommgrjpt[27];
-//Cmn::EffectManualHandle *mBarrierEffectHandles[10];
-
-/*static void (*stateVictoryOrDefeatImpl)(Game::SeqVersusResult *);
-void stateVictoryOrDefeatHook(Game::SeqVersusResult *vres){
-	stateVictoryOrDefeatImpl(vres);
-	serverClient->changeState(ServerClient::CalcState::ServerMatchRes);
-};*/
 
 static void (*miniMapCamCalcImpl)(Game::MiniMapCamera *_this);
 static xlink2::UserInstanceSLink *(*startSkill_DeathMarkingImpl)(Game::Player*, unsigned int, char);
@@ -186,7 +177,6 @@ void renderEntrypoint(agl::DrawContext *drawContext, sead::TextWriter *textWrite
 	mDrawContext = drawContext;
 	mTextWriter = textWriter;
 	DrawUtils::setDrawContext(mDrawContext);
-	//DrawUtils::setTextWriter(mTextWriter);
 	DrawUtils::setColor(sead::Color4f::cWhite);
 	mTextWriter->mColor = sead::Color4f::cWhite;
 	sead::Heap *oldHeap;
@@ -211,10 +201,6 @@ void renderEntrypoint(agl::DrawContext *drawContext, sead::TextWriter *textWrite
 
     if(Collector::mController.isPressed(Controller::Buttons::LStick))
         showMenu = !showMenu;
-	
-	/*if(showMenu){
-		DrawUtils::drawBackground();
-	}*/
 
 	static bool initcustommushtable;
 	if(!initcustommushtable){
@@ -232,16 +218,13 @@ void renderEntrypoint(agl::DrawContext *drawContext, sead::TextWriter *textWrite
 			initcustommushtable = 1;
 		}
 	}
-	//serverClient->onCalc();
 	ctrlChecker->calc();
 	handleSupershot();
 	agentThreeHandle();
-	handlePlayerEffects();
 	kingSquidMgr->onCalc();
 	tornadoMgr->onCalc();
 
 	if(IS_DEV){
-	  //sceneChanger();
 	  if(showMenu){
 		mTextWriter->printf("Gamblitz Dev Build v.%s\n", DEV_VER);
 		mTextWriter->printf("Mod Version: %s\n", MOD_VER);
@@ -260,7 +243,6 @@ void renderEntrypoint(agl::DrawContext *drawContext, sead::TextWriter *textWrite
 	  }
     }
 }
-	//mS1Inkstrike->onRender();
 	static int renderstate = 0;
 	static int renderctr = 0;
 	char *scenename = Lp::Utl::getCurSceneName();
@@ -331,68 +313,6 @@ void handleSupershot(){
 		}
 	}
 }
-
-void handlePlayerEffects(){
-	static bool isInSpecialFreebombs[10] = {};
-	if(!Utils::isSceneLoaded()){
-		memset(isInSpecialFreebombs, 0, sizeof(isInSpecialFreebombs));
-		return;
-	}
-	xlink2::Handle tmp;
-	auto playerit = Game::Player::getClassIterNodeStatic();
-	for(Game::Player *ita = (Game::Player*)playerit->derivedFrontActor(); ita != NULL; ita = (Game::Player*)playerit->derivedNextActor(ita)){
-		if(ita->mSpecialWeaponId == 20 and ita->isInSpecial()){
-			ita->mBarrierEndFrm = Game::MainMgr::sInstance->mPaintGameFrame + Prot::ObfLoad(&ita->mSpecialLeftFrame);
-			ita->_B80 = -10;
-			//PlaySuperArmorVanish();
-		}
-		//Bomb Rush
-		if(ita->isInSpecial_FreeBombs() && !isInSpecialFreebombs[ita->mIndex]){
-			// ita->mXLink->searchAndPlayWrap("VNice_Girl", true, &tmp2); slink test
-			ita->mXLink->searchAndEmitWrap("RollerDash", true, &tmp);
-			ita->mXLink->searchAndEmitWrap("SpecialMode_00", true, &tmp);
-			ita->mXLink->searchAndEmitWrap("SpecialModeHead", true, &tmp);	
-			isInSpecialFreebombs[ita->mIndex] = true;
-		} 
-		else if(!ita->isInSpecial_FreeBombs() && isInSpecialFreebombs[ita->mIndex]) {
-			ita->mXLink->killAllEffect();
-			isInSpecialFreebombs[ita->mIndex] = false;
-		}
-		//Inkzooka
-		if(ita->isInSpecial() and ita->mSpecialWeaponId == 24){
-			ita->mXLink->searchAndEmitWrap("SpecialMode_00", true, &tmp);
-			ita->mXLink->searchAndEmitWrap("SpecialModeHead", true, &tmp);	
-		}
-		else if(ita->mSpecialWeaponId == 24 and !ita->isInSpecial()){
-			// ita->mXLink->searchAndPlayWrap("WaterCutter_PutBack", true, &tmp); //need to fix 
-		}
-		//Inkstrike
-		if(ita->isInSpecial() and ita->mSpecialWeaponId == 25){
-			ita->mXLink->searchAndEmitWrap("SpecialMode_00", true, &tmp);
-			ita->mXLink->searchAndEmitWrap("SpecialModeHead", true, &tmp);	
-		}
-		//Killer Wail
-		if(ita->isInSpecial() and ita->mSpecialWeaponId == 19){
-			ita->mXLink->searchAndEmitWrap("SpecialMode_00", true, &tmp);
-			ita->mXLink->searchAndEmitWrap("SpecialModeHead", true, &tmp);	
-		}
-		//Bubbler
-		if(ita->isInSpecial() and ita->mSpecialWeaponId == 20){
-			ita->mXLink->searchAndEmitWrap("SpecialMode_00", true, &tmp);
-			ita->mXLink->searchAndEmitWrap("SpecialModeHead", true, &tmp);	
-			// ita->mXLink->searchAndEmitWrap("SWpInkArmorSt", true, &tmp);	
-		}
-	};
-}
-
-/*void FreeBombEffecthook(){
-	Game::Player *player = Collector::mControlledPlayer;
-	if(player->isInSpecial_FreeBombs() and player->mSpecialWeaponId == 23){
-		xlink2::Handle tmp;
-        player->mXLink->searchAndEmitWrap("SWpInkArmor", false, &tmp);
-		}
-	return;
-}*/
 
 void supershotJumpHook(){
 	asm("CMP W20, #0");
@@ -518,8 +438,6 @@ void kingSquidAnimSetControllerHook(Game::AnimSetController *anim, gsys::Partial
 void init_starlion(){
 	exl::util::impl::InitMemLayout();
 	FsLogger::Initialize();
-    FsLogger::LogFormatDefaultDirect("[Gamblitz] 5.5.1 test\n");
-    FsLogger::LogFormatDefaultDirect("[Gamblitz] a\n");
 	FsLogger::LogFormatDefaultDirect("[Gamblitz] Initialized funcs/vars!\n");
 	if(IS_DEV){
 		FsLogger::LogFormatDefaultDirect("[Gamblitz Development Build]\nDev Build v.%s ", DEV_VER);
@@ -527,8 +445,6 @@ void init_starlion(){
 	}
 	Utils::rotateMtxY = (rotateMtxFunc)(ProcessMemory::MainAddr(0x159904));
 	Utils::rotateMtxX = (rotateMtxFunc)(ProcessMemory::MainAddr(0x1599B4));
-	//stateVictoryOrDefeatImpl = *(void (**)(Game::SeqVersusResult*))ProcessMemory::MainAddr(0x2D35E58);
-	//*(void (**)(Game::SeqVersusResult*))ProcessMemory::MainAddr(0x2D35E58) = stateVictoryOrDefeatHook;
 	miniMapCamCalcImpl = *(void (**)(Game::MiniMapCamera*))ProcessMemory::MainAddr(0x2AE8518);
 	*(void (**)(Game::MiniMapCamera*))ProcessMemory::MainAddr(0x2AE8518) = miniMapCamCalcHook;
 	Cmn::ActorVtable *playerVtable = (Cmn::ActorVtable*)ProcessMemory::MainAddr(0x2C0BAD8);
@@ -542,12 +458,8 @@ void init_starlion(){
 	kingSquidMgr = new Starlion::KingSquidMgr();
 	FsLogger::LogFormatDefaultDirect("[Gamblitz] Created KingSquidMgr, 0x%x free RAM.\n", Collector::mHeapMgr->getCurrentHeap()->getFreeSize());
 	mS1Inkstrike = new Starlion::S1Inkstrike();
-	//curlClient = new Flexlion::CurlClient();
-	//FsLogger::LogFormatDefaultDirect("[Gamblitz] Created CurlClient, 0x%x free RAM.\n", Collector::mHeapMgr->getCurrentHeap()->getFreeSize());
 	tornadoMgr = new Flexlion::InkstrikeMgr();
 	FsLogger::LogFormatDefaultDirect("[Gamblitz] Created InkstrikeMgr, 0x%x free RAM.\n", Collector::mHeapMgr->getCurrentHeap()->getFreeSize());
-	//serverClient = new ServerClient();
-	//FsLogger::LogFormatDefaultDirect("[Gamblitz] Created ServerClient, 0x%x free RAM.\n", Collector::mHeapMgr->getCurrentHeap()->getFreeSize());
 	_BYTE randomBuf[0x28];
 	memset(randomBuf, 0, sizeof(randomBuf));
 	sead::TaskConstructArg arg;
@@ -566,19 +478,14 @@ void init_starlion(){
 
 }
 
-static bool isEmitting[10];
+// static bool isEmitting[10];
 
 void playerModelSetupHook(Game::PlayerModel *pmodel){
 	pmodel->setup();
 	pmodel->mPlayer->mPlayerKingSquid = new Starlion::PlayerKingSquid(pmodel->mPlayer);
 	tornadoMgr->registerPlayer(pmodel->mPlayer);
 	int idx = pmodel->mPlayer->mIndex;
-	//mBarrierEffectHandles[idx] = new Cmn::EffectManualHandle;
-	//mBarrierEffectHandles[idx]->createReservationInfo(0x100);
-	//mBarrierEffectHandles[idx]->searchAndEmit("GuGachihokoBarrier", 0x100, 0);
-	//mBarrierEffectHandles[idx]->setTeamColor(pmodel->mPlayer->mTeam);
-	isEmitting[idx] = 0;
-	//todo: add bubbler activation effect "GuGachiHokoAppear" or "BuSwpAquaBallMounting", should appear everytime u activate bubbler and not just once
+	// isEmitting[idx] = 0;
 }
 
 int calcHokoDamageHook(Game::BulletGachihoko *bullet, int armortype, Cmn::Def::Team team, sead::Vector3<float> const& pos){
@@ -608,54 +515,6 @@ int calcAquaBallDamageHook(Game::BulletSpAquaBall *bullet, int armortype, Cmn::D
 	}
 	return res;
 }
-
-/*bool barrierEffectHook(Game::PlayerEffect* peffect, bool isEmit) {
-	int idx = peffect->mPlayer->mIndex;
-	nn::vfx::EmitterSet* set = NULL;
-	nn::vfx::Handle* handle = *(nn::vfx::Handle**)(((u64)mBarrierEffectHandles[idx]) + 0x20);
-	//PlaySuperArmorSt();
-	//PlaySuperArmorUse();
-	if ((*((u64*)handle)) != NULL) {
-		set = handle->GetEmitterSet();
-	}
-	if (isEmit) {
-		if (isEmitting[idx]) {
-			if (set != NULL) {
-				sead::Vector3<float> pos = peffect->mPlayer->mPosition;
-				pos.mY = peffect->mPlayer->getHeadPos().mY - 4.0f;
-				set->mPos1 = pos;
-				set->mPos2 = pos;
-				const float barrierscale = 0.8f;
-				nn::util::neon::MatrixRowMajor4x3fType mtx = { {
-					barrierscale,    0.0f,       		 0.0f, 				0.0f,
-					0.0f,    		 barrierscale,       0.0f,				0.0f,
-					0.0f,    		 0.0f,       		 barrierscale,		0.0f,
-					pos.mX, 		 pos.mY,			 pos.mZ,			0.0f,
-				} };
-				set->SetMatrix(mtx);
-				auto unkInfoHolder = set->_150;
-				for (auto unkInfoHolder = set->_150; unkInfoHolder != NULL; unkInfoHolder = unkInfoHolder->mIterNode) {
-					sead::Color4f color = Utils::getCurColor(peffect->mPlayer->mTeam);
-					unkInfoHolder->mColor1 = color;
-					unkInfoHolder->mColor2 = color;
-				}
-			}
-		}
-		else {
-			mBarrierEffectHandles[idx]->emitParticle(sead::Vector3<float>::zero, peffect->mPlayer);
-			mBarrierEffectHandles[idx]->setTeamColor(peffect->mPlayer->mTeam);
-			isEmitting[idx] = 1;
-		}
-	}
-	else {
-		if (isEmitting[idx] and set != NULL) {
-			set->mPos1 = { -10000.0f, -10000.0f, -10000.0f };
-			set->mPos2 = { -10000.0f, -10000.0f, -10000.0f };
-			set->mReqUpdatePos = 1;
-		}
-	}
-	return 0;
-}*/
 
 void playerKingSquidCalcHook(Game::Player *player){
 	Starlion::PlayerKingSquid *kingSquid = ((Starlion::PlayerKingSquid*)player->mPlayerKingSquid);
@@ -758,15 +617,26 @@ void Game::SighterTarget_startAllMarking(Game::SighterTarget *sighterTarget, int
 
 	// Emit "SearchLine" XLink effect
 	xlink2::Handle handle;
-	sighterTarget->mXLink->searchAndEmitWrap("MarkingEnd", false, &handle);
+	sighterTarget->mXLink->searchAndEmitWrap("SearchLine", false, &handle);
 
 	// Store handle at bytes 1736/1744 (0x6C8/0x6D0)
 	*(u64 *)(st + 0x6C8) = (u64)handle.mEvent;
 	*(u32 *)(st + 0x6D0) = handle.mEventId;
 }
 
+// Reimplementation of Game::PlayerEffect::emitAndPlay_SuperArmorInvoke but for AllMarking
+void emitAndPlay_AllMarkingInvoke(Game::PlayerEffect *effect) {
+	xlink2::Handle handle;
+	effect->mPlayer->mXLink->searchAndEmitWrap("SWpAllMarking", false, &handle);
+}
+
 // Hook for Game::Player::startAllMarking_Impl to add SighterTarget marking
 void startAllMarking_ImplHook(Game::Player *player, int a1) {
+	// Call AllMarking invoke effect
+	if(player->mPlayerEffect != NULL){
+		emitAndPlay_AllMarkingInvoke(player->mPlayerEffect);
+	}
+
 	// Call original startAllMarking_Impl
 	player->startAllMarking_Impl(a1);
 
@@ -801,10 +671,6 @@ void Game::Player::receiveAllMarking(int a2) {
 void markedHook(Game::Player *player, int a1,int a2,Game::Player::MarkingType a3,int a4,unsigned int a5){
 	Game::MainMgr::sInstance->mPaintGameFrame+=0x14;
 	player->startMarked_Bomb_Direct(0x21C, a4, 0);
-	// sightertarget->startMarkedBomb(a2);
-	//PlaySuperArmorUse();
-	//PlaySuperArmorSt();
-	PlayAllMarkingSt();
 	Game::MainMgr::sInstance->mPaintGameFrame-=0x14;
 }
 
@@ -877,7 +743,6 @@ void hooks_init(){
 	playerModelDrawHook(NULL, NULL);
 	krakenDiveHook(0);
 	isInKingSquidHook(NULL);
-	//barrierEffectNameHook();
 	renderEntrypoint(NULL, NULL);
 	extraBigLaserBulletHook(NULL);
 	jetPackJetHook(0);
@@ -886,7 +751,6 @@ void hooks_init(){
 	inkstrikeShotHook(NULL, NULL, 0, 0, NULL, NULL, 0);
 	bcatHook(0);
 	npcHeapFix(NULL, NULL);
-	//getBombThrowSpanFrmHook(NULL, 0);
 	isInLauncherHook(NULL);
 	Game::SighterTarget_startAllMarking(NULL, 0, 0);
 	startAllMarking_ImplHook(NULL, 0);
@@ -905,7 +769,6 @@ void hooks_init(){
 	specialSetupWithoutModelHook();
 	getSuperShotBurstWaitFrameHook(NULL);
 	getSuperShotBurstWarnFrameHook(NULL);
-	//barrierEffectHook(NULL, 0);
 	stepPaintTypeHook(NULL);
 	fixEffHook(NULL);
 	playerModelResourceLoadHook(NULL, NULL);
@@ -1100,10 +963,6 @@ int weaponFixHook(gsys::Model *model, sead::SafeStringBase<char> lol){
 	}
 }
 
-int ret69Hook(){
-	return 69;
-}
-
 void playerModelDrawHook(Cmn::PlayerWeapon *playerWeapon, sead::Matrix34<float> *mtx){
 	playerWeapon->getRootBoneMtx(mtx);
 	if(playerWeapon->iCustomPlayerInfo == NULL){ 
@@ -1148,82 +1007,6 @@ bool krakenDiveHook(Game::Player *player){
 	return kingSquid->mIsRush and Prot::ObfLoad(&player->mAerialState) != 0 and player->isInSpecial_KingSquid_Impl(0);
 }
 
-// void sceneChanger(){
-// 	// handle scene changer toggle
-//     static bool sceneChanger = false;
-//     if (Collector::mController.isPressed(Controller::Buttons::LStick)) {
-//         sceneChanger = !sceneChanger;
-// 	sead::SafeStringBase<char> sceneName;
-//     sceneName.mCharPtr = (char*)"Lobby/Lan";
-//     Lp::Utl::reqChangeScene(sceneName, NULL);
-// 	PlayEnable();
-//     }
-// }
-
-void PlayEnable(){
-	Game::PlayerMgr *playerMgr = Collector::mPlayerMgrInstance;
-	if(playerMgr != NULL){
-		Game::Player* player = playerMgr->getControlledPerformer();
-		if(player != NULL){
-			if(player->mPlayerEffect != NULL){
-				player->mPlayerEffect->emitAndPlay_GetArmor();
-			}
-		}
-	}
-}
-
-void PlaySuperArmorUse(){
-	Game::PlayerMgr *playerMgr = Collector::mPlayerMgrInstance;
-	if(playerMgr != NULL){
-		Game::Player* player = playerMgr->getControlledPerformer();
-		if(player != NULL){
-			if(player->mPlayerEffect != NULL){
-				player->mPlayerEffect->emitAndPlay_SuperArmorUse();
-			}
-		}
-	}
-}
-
-void PlaySuperArmorSt(){
-	Game::PlayerMgr *playerMgr = Collector::mPlayerMgrInstance;
-	if(playerMgr != NULL){
-		Game::Player* player = playerMgr->getControlledPerformer();
-		if(player != NULL){
-			if(player->mPlayerEffect != NULL){
-				player->mPlayerEffect->emitAndPlay_SuperArmorSt();
-				xlink2::Handle tmp;
-                player->mXLink->searchAndEmitWrap("AuraBody", false, &tmp);
-			}
-		}
-	}
-}
-
-void PlayAllMarkingSt(){
-	Game::PlayerMgr *playerMgr = Collector::mPlayerMgrInstance;
-	if(playerMgr != NULL){
-		Game::Player* player = playerMgr->getControlledPerformer();
-		if(player != NULL){
-			if(player->mPlayerEffect != NULL){
-				player->mPlayerEffect->emitAndPlay_SuperArmorSt();
-				xlink2::Handle tmp;
-                player->mXLink->searchAndEmitWrap("SWpAllMarking", false, &tmp);
-			}
-		}
-	}
-}
-
-void PlayBarrierOn(){
-	Game::PlayerMgr *playerMgr = Collector::mPlayerMgrInstance;
-	if(playerMgr != NULL){
-		Game::Player* player = playerMgr->getControlledPerformer();
-		if(player != NULL){
-			if(player->mPlayerEffect != NULL){
-				player->mPlayerEffect->emitAndPlay_BarrierOn();
-			}
-		}
-	}
-}
-
 void PlayFreeBombsEffect(){
 	Game::PlayerMgr *playerMgr = Collector::mPlayerMgrInstance;
 	if(playerMgr != NULL){
@@ -1232,18 +1015,6 @@ void PlayFreeBombsEffect(){
 			if(player->mPlayerEffect != NULL){
 				xlink2::Handle tmp;
                 player->mXLink->searchAndEmitWrap("RollerDash", false, &tmp);
-			}
-		}
-	}
-}
-
-void PlaySuperArmorVanish(){
-	Game::PlayerMgr *playerMgr = Collector::mPlayerMgrInstance;
-	if(playerMgr != NULL){
-		Game::Player* player = playerMgr->getControlledPerformer();
-		if(player != NULL){
-			if(player->mPlayerEffect != NULL){
-				player->mPlayerEffect->emitAndPlay_SuperArmorVanish();
 			}
 		}
 	}
@@ -1261,50 +1032,6 @@ void handlePlayerControl(){
     if (playerCamera == NULL) return;
 
     Game::PlayerGamePadData::FrameInput input;
-    // input.record(); // grab input data
-
-    // handle freefly toggle
-//     static bool freefly = false;
-//     if (Collector::mController.isPressed(Controller::Buttons::LStick)) {
-//         freefly = !freefly;
-//     }
-    
-//     static bool entered = false;
-//     if(freefly){
-//         mTextWriter->printf("Enabled Freefly!\n");
-// 		PlayEnable();
-//         static float x, y, z;
-//         sead::Vector3<float> *playerPos = &player->mPosition;
-//         if(!entered){
-//             x = playerPos->mX;
-//             y = playerPos->mY;
-//             z = playerPos->mZ;
-//         }
-
-//         int speed = 10;
-
-//         sead::Vector3<float> camPos = *playerCamera->mPosition;
-//         sead::Vector3<float> camLookAtPos = playerCamera->mLookAt;
-//         if(Collector::mController.isHeld(Controller::Buttons::B))
-//             y+=speed / 2;
-//         if(Collector::mController.isHeld(Controller::Buttons::ZL))
-//             y-=speed / 2;
-//         x-=playerCtrl->lpController->leftStick.mY * speed * sinf(atan2f(camPos.mX - camLookAtPos.mX, camPos.mZ - camLookAtPos.mZ));
-//         z-=playerCtrl->lpController->leftStick.mY * speed * cosf(atan2f(camPos.mX - camLookAtPos.mX, camPos.mZ - camLookAtPos.mZ));
-//         x+=playerCtrl->lpController->leftStick.mX * speed * cosf(atan2f(camPos.mX - camLookAtPos.mX, camPos.mZ - camLookAtPos.mZ));
-//         z-=playerCtrl->lpController->leftStick.mX * speed * sinf(atan2f(camPos.mX - camLookAtPos.mX, camPos.mZ - camLookAtPos.mZ));
-//         if(speed < 0)
-//             speed = 0;
-
-//         playerPos->mX = x;
-//         playerPos->mY = y;
-//         playerPos->mZ = z;
-//         entered = true;
-//     }
-//     else{
-//         entered = false;
-// 		PlayDisable();
-//     }
 }
 
 void barrierEffectNameHook(){
@@ -1313,25 +1040,6 @@ void barrierEffectNameHook(){
 	poop2 = poop;
 	asm("MOV X2, X0");
 }
-
-void enl::PiaMatchmakeCondition::makeRandomCryptoKey(int matchamekconditin,const u64 deword[], int hola){
-
-
-}
-
-void autoMatchTest(){
-
-
-}
-
-bool rivalOctohook(Cmn::Def::PlayerModelType modeltyape){
-    if(modeltyape == Cmn::Def::PlayerModelType::Rival or modeltyape == Cmn::Def::PlayerModelType::RivalOcta){
-        FsLogger::LogFormatDefaultDirect("[Gamblitz] rival what the actual fuck\n");
-        return true;
-    }
-    FsLogger::LogFormatDefaultDirect("[Gamblitz] nonono\n");
-        return false;
-};
 
 int main(int arg, char **argv){
 
