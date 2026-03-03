@@ -14,9 +14,10 @@
 *.pchtxt
 *.Nin_NX_NVN.szs
 .vscode/
-build*/
 temp/
 Spl2_RE/
+xlink/
+build*/
 debug/
 release/
 lib/
@@ -25,3 +26,6 @@ scripts/.idea/*
 !exported.txt
 .idea/workspace.xml
 /.idea
+starlight_patch_*/
+Project-Gamblitz-Starlight*.nso
+/.claude

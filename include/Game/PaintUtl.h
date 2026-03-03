@@ -4,6 +4,9 @@
 #include "Cmn/Def/Team.h"
 
 namespace Game {
+    enum PaintTexType {
+        Unknown = 0
+    };
     class ObjPaintIndex{
         public:
         u32 *mIndex;
@@ -23,6 +26,6 @@ namespace Game {
         static void requestAllPaintFloor(unsigned int, Cmn::Def::Team);
         static void requestAllPaintWall(unsigned int, Cmn::Def::Team);
         static void requestClearPaint(Game::ObjPaintIndex, bool);
-        static void requestColAndPaint(sead::Vector3<float> *, float, sead::Vector3<float> *, int, int, int, float, bool);
+        static void requestColAndPaint(sead::Vector3<float> const&, sead::Vector2<float> const&, sead::Vector3<float> const&, Game::PaintTexType, Cmn::Def::Team, sead::Vector3<float> const&, bool, int, float, bool);
     };
 };

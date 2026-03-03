@@ -62,6 +62,59 @@ template<>
 sead::Vector3<float> sead::Vector3<float>::zero = sead::Vector3<float>(0.0f, 0.0f, 0.0f);
 template<>
 sead::Vector3<float> sead::Vector3<float>::ey = sead::Vector3<float>(0.0f, 1.0f, 0.0f);
+namespace sead {
+	void Random::init()
+	{
+		init(nn::os::GetSystemTick());
+	}
+	
+	void Random::init(u32 seed)
+	{
+		const u32 mt_constant = 0x6C078965;
+		mX = mt_constant * (seed ^ (seed >> 30u)) + 1;
+		mY = mt_constant * (mX ^ (mX >> 30u)) + 2;
+		mZ = mt_constant * (mY ^ (mY >> 30u)) + 3;
+		mW = mt_constant * (mZ ^ (mZ >> 30u)) + 4;
+	}
+	
+	void Random::init(u32 seed_x, u32 seed_y, u32 seed_z, u32 seed_w)
+	{
+		if ((seed_x | seed_y | seed_z | seed_w) == 0)
+		{
+			seed_w = 0x48077044;
+			seed_z = 0x714ACB41;
+			seed_y = 0x6C078967;
+			seed_x = 1;
+		}
+		mX = seed_x;
+		mY = seed_y;
+		mZ = seed_z;
+		mW = seed_w;
+	}
+	
+	u32 Random::getU32()
+	{
+		u32 x = mX ^ (mX << 11u);
+		mX = mY;
+		mY = mZ;
+		mZ = mW;
+		mW = mW ^ (mW >> 19u) ^ x ^ (x >> 8u);
+		return mW;
+	}
+	
+	u64 Random::getU64()
+	{
+		return u64(getU32()) << 32u | getU32();
+	}
+	
+	void Random::getContext(u32* x, u32* y, u32* z, u32* w) const
+	{
+		*x = mX;
+		*y = mY;
+		*z = mZ;
+		*w = mW;
+	}
+}
 bool Game::Utl::ActorFactoryBase::isNoActor() const{
 	return false;
 }
@@ -69,7 +122,7 @@ bool Game::Utl::ActorFactoryBase::isNoActor() const{
 static bool tsthk = 0;
 
 static int custommgrjpt[27];
-Cmn::EffectManualHandle *mBarrierEffectHandles[10];
+//Cmn::EffectManualHandle *mBarrierEffectHandles[10];
 
 /*static void (*stateVictoryOrDefeatImpl)(Game::SeqVersusResult *);
 void stateVictoryOrDefeatHook(Game::SeqVersusResult *vres){
@@ -520,10 +573,10 @@ void playerModelSetupHook(Game::PlayerModel *pmodel){
 	pmodel->mPlayer->mPlayerKingSquid = new Starlion::PlayerKingSquid(pmodel->mPlayer);
 	tornadoMgr->registerPlayer(pmodel->mPlayer);
 	int idx = pmodel->mPlayer->mIndex;
-	mBarrierEffectHandles[idx] = new Cmn::EffectManualHandle; 
-	mBarrierEffectHandles[idx]->createReservationInfo(0x100);
-	mBarrierEffectHandles[idx]->searchAndEmit("GuGachihokoBarrier", 0x100, 0);
-	mBarrierEffectHandles[idx]->setTeamColor(pmodel->mPlayer->mTeam);
+	//mBarrierEffectHandles[idx] = new Cmn::EffectManualHandle;
+	//mBarrierEffectHandles[idx]->createReservationInfo(0x100);
+	//mBarrierEffectHandles[idx]->searchAndEmit("GuGachihokoBarrier", 0x100, 0);
+	//mBarrierEffectHandles[idx]->setTeamColor(pmodel->mPlayer->mTeam);
 	isEmitting[idx] = 0;
 	//todo: add bubbler activation effect "GuGachiHokoAppear" or "BuSwpAquaBallMounting", should appear everytime u activate bubbler and not just once
 }
@@ -556,7 +609,7 @@ int calcAquaBallDamageHook(Game::BulletSpAquaBall *bullet, int armortype, Cmn::D
 	return res;
 }
 
-bool barrierEffectHook(Game::PlayerEffect* peffect, bool isEmit) {
+/*bool barrierEffectHook(Game::PlayerEffect* peffect, bool isEmit) {
 	int idx = peffect->mPlayer->mIndex;
 	nn::vfx::EmitterSet* set = NULL;
 	nn::vfx::Handle* handle = *(nn::vfx::Handle**)(((u64)mBarrierEffectHandles[idx]) + 0x20);
@@ -602,7 +655,7 @@ bool barrierEffectHook(Game::PlayerEffect* peffect, bool isEmit) {
 		}
 	}
 	return 0;
-}
+}*/
 
 void playerKingSquidCalcHook(Game::Player *player){
 	Starlion::PlayerKingSquid *kingSquid = ((Starlion::PlayerKingSquid*)player->mPlayerKingSquid);
@@ -749,8 +802,9 @@ void markedHook(Game::Player *player, int a1,int a2,Game::Player::MarkingType a3
 	Game::MainMgr::sInstance->mPaintGameFrame+=0x14;
 	player->startMarked_Bomb_Direct(0x21C, a4, 0);
 	// sightertarget->startMarkedBomb(a2);
-	PlaySuperArmorUse();
-	PlaySuperArmorSt();
+	//PlaySuperArmorUse();
+	//PlaySuperArmorSt();
+	PlayAllMarkingSt();
 	Game::MainMgr::sInstance->mPaintGameFrame-=0x14;
 }
 
@@ -823,7 +877,7 @@ void hooks_init(){
 	playerModelDrawHook(NULL, NULL);
 	krakenDiveHook(0);
 	isInKingSquidHook(NULL);
-	barrierEffectNameHook();
+	//barrierEffectNameHook();
 	renderEntrypoint(NULL, NULL);
 	extraBigLaserBulletHook(NULL);
 	jetPackJetHook(0);
@@ -851,7 +905,7 @@ void hooks_init(){
 	specialSetupWithoutModelHook();
 	getSuperShotBurstWaitFrameHook(NULL);
 	getSuperShotBurstWarnFrameHook(NULL);
-	barrierEffectHook(NULL, 0);
+	//barrierEffectHook(NULL, 0);
 	stepPaintTypeHook(NULL);
 	fixEffHook(NULL);
 	playerModelResourceLoadHook(NULL, NULL);
@@ -1144,6 +1198,20 @@ void PlaySuperArmorSt(){
 	}
 }
 
+void PlayAllMarkingSt(){
+	Game::PlayerMgr *playerMgr = Collector::mPlayerMgrInstance;
+	if(playerMgr != NULL){
+		Game::Player* player = playerMgr->getControlledPerformer();
+		if(player != NULL){
+			if(player->mPlayerEffect != NULL){
+				player->mPlayerEffect->emitAndPlay_SuperArmorSt();
+				xlink2::Handle tmp;
+                player->mXLink->searchAndEmitWrap("SWpAllMarking", false, &tmp);
+			}
+		}
+	}
+}
+
 void PlayBarrierOn(){
 	Game::PlayerMgr *playerMgr = Collector::mPlayerMgrInstance;
 	if(playerMgr != NULL){
@@ -1244,14 +1312,6 @@ void barrierEffectNameHook(){
 	const char *poop2;
 	poop2 = poop;
 	asm("MOV X2, X0");
-}
-
-void sead::Random::init(u32 seed){
-    const u32 mt_constant = 0xCEB9D8D9;
-    mSeed1 = mt_constant * (seed ^ (seed >> 30u)) + 1;
-    mSeed2 = mt_constant * (mSeed2 ^ (mSeed2 >> 30u)) + 2;
-    mSeed3 = mt_constant * (mSeed3 ^ (mSeed3 >> 30u)) + 3;
-    mSeed4 = mt_constant * (mSeed4 ^ (mSeed4 >> 30u)) + 4;
 }
 
 void enl::PiaMatchmakeCondition::makeRandomCryptoKey(int matchamekconditin,const u64 deword[], int hola){
