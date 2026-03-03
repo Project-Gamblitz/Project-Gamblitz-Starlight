@@ -206,3 +206,6 @@
 //02417124 "balls"
 //Create a PB on VSLobby
 014947C0 1F2003D5
+// Resource Heap Size Bump (if using merged testfire ptcl)
+0039FA90 0008A252 // static res
+0039C044 0048A052 // effect

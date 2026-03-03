@@ -667,16 +667,16 @@ void EnemyBall::calcRollable_(bool isOnGround) {
     Cmn::KDUtl::AttT *att = getKdAttT();
 
     Cmp::Rollable::CalcArg arg;
-    arg.mVelocity.mX = att->mPos.mX - mPrevPos.mX;
-    arg.mVelocity.mY = att->mPos.mY - mPrevPos.mY;
-    arg.mVelocity.mZ = att->mPos.mZ - mPrevPos.mZ;
+    arg.mVelocity.mX = att->mPos.mX - mKdMtx2.mPos.mX;
+    arg.mVelocity.mY = att->mPos.mY - mKdMtx2.mPos.mY;
+    arg.mVelocity.mZ = att->mPos.mZ - mKdMtx2.mPos.mZ;
 
     if (isOnGround) {
         arg.mMode = 0;
     } else {
         float rollSpeed = mRollable->mRollAngle;
         arg.mMode = 5;
-        arg.mFactor = 0.999f;
+        arg.mFactor = 0.9999f;
         if (rollSpeed < 0.05f)
             mRollable->mRollAngle = 0.05f;
     }
@@ -707,9 +707,9 @@ float EnemyBall::getRotSpeed_() const {
 
 void EnemyBall::calcCheckGndColMoveSphere_() {
     Cmn::KDUtl::AttT *att = getKdAttT();
-    float dx = att->mPos.mX - mPrevPos.mX;
-    float dy = att->mPos.mY - mPrevPos.mY;
-    float dz = att->mPos.mZ - mPrevPos.mZ;
+    float dx = att->mPos.mX - mKdMtx2.mPos.mX;
+    float dy = att->mPos.mY - mKdMtx2.mPos.mY;
+    float dz = att->mPos.mZ - mKdMtx2.mPos.mZ;
     float distSq = dx * dx + dy * dy + dz * dz;
 
     float radius = getFamilyParams()->mTrackPaintRadius.mValue;
@@ -808,6 +808,7 @@ void EnemyBall::onHitWall_() {
     mDrownState = 0;
     mAnimSetController->start("Roll");
     mBulletKnockbackable->reset();
+    mRollable->reset();
     mHitKeepOutTimer = 0;
 }
 
@@ -832,6 +833,7 @@ void EnemyBall::onHitKeepOutWall_(sead::Vector3<float> const& prevVel) {
     mDrownState = 0;
     mAnimSetController->start("Roll");
     mBulletKnockbackable->reset();
+    mRollable->reset();
     mHitKeepOutTimer = 0;
 }
 
@@ -854,6 +856,7 @@ void EnemyBall::onHitImpl_(sead::Vector3<float> const& hitPos, sead::Vector3<flo
     mDrownState = 0;
     mAnimSetController->start("Roll");
     mBulletKnockbackable->reset();
+    mRollable->reset();
     mHitKeepOutTimer = 0;
 }
 
@@ -876,10 +879,10 @@ void EnemyBall::interactCol(Game::CollisionEventArg const& arg) {
         return;
 
     typedef bool (*CheckRTTIFn)(void *, void *);
-    CheckRTTIFn checkRTTI = (CheckRTTIFn)(*(u64 *)(*(u64 *)other + 192));
+    CheckRTTIFn checkRTTI = (CheckRTTIFn)(*(u64 *)(*(u64 *)other + 0xC0));
 
     if (checkRTTI(other, Game::Player::sRTTI)) {
-        interactColPlayer_((Game::Player *)other);
+        interactColPlayer_((Game::Player *)other); 
     } else if (checkRTTI(other, Game::Bullet::sRTTI)) {
         interactColBullet_((Game::Bullet *)other);
     }
@@ -965,7 +968,7 @@ void EnemyBall::interactColBullet_(Game::Bullet *bullet) {
     float crossZ = (vy * 0.0f) - (vx * 1.0f);
 
     typedef float* (*GetBulletVelFn)(void*);
-    float *bulletVel = ((GetBulletVelFn)(*(u64*)(*(u64*)bullet + 680)))(bullet);
+    float *bulletVel = ((GetBulletVelFn)(*(u64*)(*(u64*)bullet + 0x300)))(bullet);
     float bvx = bulletVel[0];
     float bvz = bulletVel[2];
     float bvLen = sqrtf(bvx * bvx + bvz * bvz);
@@ -1012,12 +1015,20 @@ void EnemyBall::paintHitBullet_() {
 
     sead::Vector3<float> *nrmGnd = mEnemyPhysics->getNrmGnd();
     Cmn::KDUtl::AttT *att = getKdAttT();
+    sead::Vector2<float> size(bulletPaintRad, bulletPaintRad);
+    sead::Vector3<float> randomVel(
+        (sead::GlobalRandom::sInstance->getU32() >> 9) * (1.0f / 8388608.0f),
+        (sead::GlobalRandom::sInstance->getU32() >> 9) * (1.0f / 8388608.0f),
+        (sead::GlobalRandom::sInstance->getU32() >> 9) * (1.0f / 8388608.0f)
+    ); // (?)
     Game::PaintUtl::requestColAndPaint(
-        &att->mPos,
-        bulletPaintRad,
-        nrmGnd,
-        (int)mTeam,
-        1,
+        att->mPos,
+        size,
+        randomVel,
+        Game::PaintTexType::Unknown,
+        mTeam,
+        *nrmGnd,
+        true,
         -1,
         -1.0f,
         false);

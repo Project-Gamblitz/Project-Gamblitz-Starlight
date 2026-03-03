@@ -18,7 +18,7 @@ namespace sead
     public:
         virtual ~SafeStringBase() {};
         virtual sead::SafeStringBase<T> operator=(sead::SafeStringBase<T> const &);
-        virtual sead::SafeStringBase<T> operator=(T *cool){
+        inline sead::SafeStringBase<T> operator=(T *cool){
             this->mCharPtr = cool;
             return *this;
         }
@@ -91,7 +91,7 @@ namespace sead
             strcpy(this->mCharPtr, str);
             return *this;
         };
-        virtual void assureTerminationImpl_(){
+        virtual void assureTerminationImpl_() const{
             this->mCharPtr[this->mBufferSize - 1] = 0;
         };
         _BYTE buffer[T];

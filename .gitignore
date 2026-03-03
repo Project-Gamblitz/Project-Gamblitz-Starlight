@@ -14,9 +14,10 @@
 *.pchtxt
 *.Nin_NX_NVN.szs
 .vscode/
-build*/
 temp/
 Spl2_RE/
+xlink/
+build*/
 debug/
 release/
 lib/

@@ -33,7 +33,8 @@ namespace Game {
 		float mtx12;
 		float mtx22;
         sead::Vector3<float> mPos;
-		_BYTE _3A8[0x60];
+		Cmn::KDUtl::MtxT mKdMtx2;
+		_BYTE _3D8[0x30];
 		sead::Vector3<float> mScale;
 		int _414;
 	};
