@@ -111,6 +111,7 @@ void sceneChanger();
 void PlayEnable();
 void PlaySuperArmorUse();
 void PlaySuperArmorSt();
+void PlayAllMarkingSt();
 void PlayBarrierOn();
 void PlaySuperArmorVanish();
 void PlayFreeBombsEffect();

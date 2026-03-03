@@ -122,7 +122,7 @@ bool Game::Utl::ActorFactoryBase::isNoActor() const{
 static bool tsthk = 0;
 
 static int custommgrjpt[27];
-Cmn::EffectManualHandle *mBarrierEffectHandles[10];
+//Cmn::EffectManualHandle *mBarrierEffectHandles[10];
 
 /*static void (*stateVictoryOrDefeatImpl)(Game::SeqVersusResult *);
 void stateVictoryOrDefeatHook(Game::SeqVersusResult *vres){
@@ -573,10 +573,10 @@ void playerModelSetupHook(Game::PlayerModel *pmodel){
 	pmodel->mPlayer->mPlayerKingSquid = new Starlion::PlayerKingSquid(pmodel->mPlayer);
 	tornadoMgr->registerPlayer(pmodel->mPlayer);
 	int idx = pmodel->mPlayer->mIndex;
-	mBarrierEffectHandles[idx] = new Cmn::EffectManualHandle; 
-	mBarrierEffectHandles[idx]->createReservationInfo(0x100);
-	mBarrierEffectHandles[idx]->searchAndEmit("GuGachihokoBarrier", 0x100, 0);
-	mBarrierEffectHandles[idx]->setTeamColor(pmodel->mPlayer->mTeam);
+	//mBarrierEffectHandles[idx] = new Cmn::EffectManualHandle;
+	//mBarrierEffectHandles[idx]->createReservationInfo(0x100);
+	//mBarrierEffectHandles[idx]->searchAndEmit("GuGachihokoBarrier", 0x100, 0);
+	//mBarrierEffectHandles[idx]->setTeamColor(pmodel->mPlayer->mTeam);
 	isEmitting[idx] = 0;
 	//todo: add bubbler activation effect "GuGachiHokoAppear" or "BuSwpAquaBallMounting", should appear everytime u activate bubbler and not just once
 }
@@ -609,7 +609,7 @@ int calcAquaBallDamageHook(Game::BulletSpAquaBall *bullet, int armortype, Cmn::D
 	return res;
 }
 
-bool barrierEffectHook(Game::PlayerEffect* peffect, bool isEmit) {
+/*bool barrierEffectHook(Game::PlayerEffect* peffect, bool isEmit) {
 	int idx = peffect->mPlayer->mIndex;
 	nn::vfx::EmitterSet* set = NULL;
 	nn::vfx::Handle* handle = *(nn::vfx::Handle**)(((u64)mBarrierEffectHandles[idx]) + 0x20);
@@ -655,7 +655,7 @@ bool barrierEffectHook(Game::PlayerEffect* peffect, bool isEmit) {
 		}
 	}
 	return 0;
-}
+}*/
 
 void playerKingSquidCalcHook(Game::Player *player){
 	Starlion::PlayerKingSquid *kingSquid = ((Starlion::PlayerKingSquid*)player->mPlayerKingSquid);
@@ -755,8 +755,9 @@ void markedHook(Game::Player *player, int a1,int a2,Game::Player::MarkingType a3
 	Game::MainMgr::sInstance->mPaintGameFrame+=0x14;
 	player->startMarked_Bomb_Direct(0x21C, a4, 0);
 	// sightertarget->startMarkedBomb(a2);
-	PlaySuperArmorUse();
-	PlaySuperArmorSt();
+	//PlaySuperArmorUse();
+	//PlaySuperArmorSt();
+	PlayAllMarkingSt();
 	Game::MainMgr::sInstance->mPaintGameFrame-=0x14;
 }
 
@@ -829,7 +830,7 @@ void hooks_init(){
 	playerModelDrawHook(NULL, NULL);
 	krakenDiveHook(0);
 	isInKingSquidHook(NULL);
-	barrierEffectNameHook();
+	//barrierEffectNameHook();
 	renderEntrypoint(NULL, NULL);
 	extraBigLaserBulletHook(NULL);
 	jetPackJetHook(0);
@@ -857,7 +858,7 @@ void hooks_init(){
 	specialSetupWithoutModelHook();
 	getSuperShotBurstWaitFrameHook(NULL);
 	getSuperShotBurstWarnFrameHook(NULL);
-	barrierEffectHook(NULL, 0);
+	//barrierEffectHook(NULL, 0);
 	stepPaintTypeHook(NULL);
 	fixEffHook(NULL);
 	playerModelResourceLoadHook(NULL, NULL);
@@ -1145,6 +1146,20 @@ void PlaySuperArmorSt(){
 				player->mPlayerEffect->emitAndPlay_SuperArmorSt();
 				xlink2::Handle tmp;
                 player->mXLink->searchAndEmitWrap("AuraBody", false, &tmp);
+			}
+		}
+	}
+}
+
+void PlayAllMarkingSt(){
+	Game::PlayerMgr *playerMgr = Collector::mPlayerMgrInstance;
+	if(playerMgr != NULL){
+		Game::Player* player = playerMgr->getControlledPerformer();
+		if(player != NULL){
+			if(player->mPlayerEffect != NULL){
+				player->mPlayerEffect->emitAndPlay_SuperArmorSt();
+				xlink2::Handle tmp;
+                player->mXLink->searchAndEmitWrap("SWpAllMarking", false, &tmp);
 			}
 		}
 	}
