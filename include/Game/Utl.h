@@ -37,5 +37,6 @@ namespace Game {
             };
         };
         extern bool isRivalOrRivalOcta(Game::Player const&);
+        extern bool isSpectatorStation();
     };
 };

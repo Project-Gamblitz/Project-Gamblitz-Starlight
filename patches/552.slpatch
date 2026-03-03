@@ -65,7 +65,7 @@
 // No map error
 00376BF0 09000014
 // lan players show up in Plaza
-00376F80 1F2003D5
+//00376F80 1F2003D5
 // start game on timeout
 0036E304 21028052
 // skip news scratches
@@ -97,6 +97,8 @@
 01028DB8 630080D2
 01028DFC 630080D2
 01028D70 630080D2
+// MiniMap Cursor Effect
+00A136D8 BL updateCursorEffectHook
 // DeathMarking
 0113641C BL startSkill_DeathMarkingHook
 // Team Changer Crash Fix
@@ -140,16 +142,16 @@
 //01002410+22D0 BL PlaySuperArmorUse
 //0101947C+E4 BL PlaySuperArmorUse
 // bye nintendo
-0252030A "bye nintendo1"
-0241BDCC "bye nintendo2"
-02489E15 "bye nintendo3"
-024B68B1 "bye nintendo4"
-024ADD97 "bye nintendo5"
-024B1980 "bye nintendo6"
-02415E61 "bye nintendo7"
-024B12DE "bye nintendo8"
-0248933A "bye nintendo9"
-02489357 "bye nintendo0"
+//0252030A "bye nintendo1"
+//0241BDCC "bye nintendo2"
+//02489E15 "bye nintendo3"
+//024B68B1 "bye nintendo4"
+//024ADD97 "bye nintendo5"
+//024B1980 "bye nintendo6"
+//02415E61 "bye nintendo7"
+//024B12DE "bye nintendo8"
+//0248933A "bye nintendo9"
+//02489357 "bye nintendo0"
 // Force Fest Result 
 //011414F4 20008052
 //Last Fest Result Ice Cream vs Cake
@@ -167,10 +169,10 @@
 //Disable automatic camera movement [YoshiCrystal]
 010403D0 1F2003D5
 //Skip friend list on PB and League [YoshiCrystal]
-//0149C924 20008052
+0149C924 20008052
 // Lan on Versus Lobby and change local to lan
-0149D070 03000014
-0149D080 08000014
+//0149D070 03000014
+//0149D080 08000014
 // One Player Private Battles [OatmealDome]
 00371E78 1F2003D51F2003D509000014
 00379338 1F2003D51F2003D509000014
@@ -178,10 +180,10 @@
 014DEFD0 1F2003D5
 014DFB14 21008052
 //Save Game on LAN Match [Custom Splatfest Patch]
-01365890 20008052
+//01365890 20008052
 //Fix MatchingSave [Custom Splatfest Patch]
-00376F80 20008052
-01365694 20008052
+//00376F80 20008052
+//01365694 20008052
 //Find anyone on ranked matching
 00333270 0C000014
 //Rival Unpatch [YoshiCrystal]
@@ -208,7 +210,7 @@
 //0036AE8C 20008052
 //02417124 "balls"
 //Create a PB on VSLobby
-014947C0 1F2003D5
+//014947C0 1F2003D5
 // Resource Heap Size Bump (if using merged testfire ptcl)
 0039FA90 0008A252 // static res
 0039C044 0048A052 // effect

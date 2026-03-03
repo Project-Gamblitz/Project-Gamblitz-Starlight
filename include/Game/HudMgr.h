@@ -16,6 +16,8 @@ namespace Game {
     class MiniMap{
         public:
         void setVisible(bool);
+        void setLayerVisible(bool);
+        void fadeAllEffect();
         _BYTE _0[0x368];
         Game::MiniMapCamera *mMiniMapCamera;
         _BYTE _370[0xE98 - 0x370];

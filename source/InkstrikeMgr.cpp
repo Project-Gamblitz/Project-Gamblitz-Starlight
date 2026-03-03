@@ -194,9 +194,17 @@ namespace Flexlion{
                 mPendingDest[id] = miniMapAt;
                 mShootPrepareFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
                 playerState[id] = TornadoState::cShootPrepare;
-                player->mPlayerMotion->startDemoAnim("Shoot_Tornado_St", 0.0f, 1.0f, false);
+                // player->mPlayerMotion->startDemoAnim("Shoot_Tornado_St", 0.0f, 1.0f, false);
                 Game::MiniMap *mMap = Utils::getMinimap();
-                if(mMap != NULL) mMap->setVisible(false);
+                if(mMap != NULL){
+                    Lp::Sys::XLink *mapXLink = *(Lp::Sys::XLink **)((u8*)mMap + 0x320);
+                    if(mapXLink != NULL){
+                        xlink2::Handle decideHandle;
+                        mapXLink->searchAndPlayWrap("Decide", false, &decideHandle);
+                    }
+                    mMap->setVisible(false);
+                    mMap->fadeAllEffect();
+                }
             }
             break;
         case TornadoState::cShootPrepare:
@@ -207,7 +215,7 @@ namespace Flexlion{
                 this->informShotInkstrike(player, player->mPosition, mPendingDest[id], Game::MainMgr::sInstance->mPaintGameFrame);
                 mShootFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
                 playerState[id] = TornadoState::cShoot;
-                player->mPlayerMotion->startDemoAnim("Shoot_Tornado", 0.0f, 1.0f, false);
+                // player->mPlayerMotion->startDemoAnim("Shoot_Tornado", 0.0f, 1.0f, false);
             }
             break;
         }
@@ -220,6 +228,10 @@ namespace Flexlion{
                 Prot::ObfStore(&player->mSpecialLeftFrame, 0);
                 playerState[id] = TornadoState::cNone;
                 player->informGetWeapon_Impl_(player->mMainWeaponId, player->mSubWeaponId, player->mSpecialWeaponId, 0);
+                if(isCtrlPerformer){
+                    Game::MiniMap *mMap = Utils::getMinimap();
+                    if(mMap != NULL) mMap->setVisible(true);
+                }
             }
             break;
         }

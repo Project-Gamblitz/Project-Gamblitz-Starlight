@@ -124,6 +124,8 @@ static int custommgrjpt[27];
 static void (*miniMapCamCalcImpl)(Game::MiniMapCamera *_this);
 static xlink2::UserInstanceSLink *(*startSkill_DeathMarkingImpl)(Game::Player*, unsigned int, char);
 static void (*startAllMarking_ImplOrig)(Game::Player*, int);
+static void (*updateCursorEffectOrig)(Game::MiniMap*);
+static bool gWasArtilleryCursor = false;
 void miniMapCamCalcHook(Game::MiniMapCamera *_this){
 	miniMapCamCalcImpl(_this);
 	float anim = tornadoMgr->cameraanim;
@@ -476,6 +478,9 @@ void init_starlion(){
 	startAllMarking_ImplOrig = (void (*)(Game::Player*, int))
 		ProcessMemory::MainAddr(0x010197F0);
 
+	updateCursorEffectOrig = (void (*)(Game::MiniMap*))
+		ProcessMemory::MainAddr(0x00A146E4);
+
 }
 
 void playerModelSetupHook(Game::PlayerModel *pmodel){
@@ -692,6 +697,73 @@ xlink2::UserInstanceSLink *startSkill_DeathMarkingHook(Game::Player *player, uns
 }
 
 
+void updateCursorEffectHook(Game::MiniMap *miniMap) {
+	Game::Player *player = Game::PlayerMgr::sInstance->getControlledPerformer();
+	bool useArtillery = (player != NULL && tornadoMgr->playerState[player->mIndex] == Flexlion::TornadoState::cAim);
+
+	u8 *self = (u8*)miniMap;
+
+	// If cursor type changed, fade old effect and invalidate handle
+	if(useArtillery != gWasArtilleryCursor) {
+		u64 oldEvent = *(u64*)(self + 3776);
+		if(oldEvent != 0 && *(u32*)(oldEvent + 32) == *(u32*)(self + 3784)) {
+			((xlink2::Event*)oldEvent)->fade(-1);
+		}
+		*(u64*)(self + 3776) = 0;
+		*(u32*)(self + 3784) = 0;
+		gWasArtilleryCursor = useArtillery;
+	}
+
+	if(!useArtillery) {
+		// Normal case - original function uses "DoronCursor"
+		updateCursorEffectOrig(miniMap);
+		return;
+	}
+
+	// Artillery case - reimplement with "ArtilleryIcon"
+	// Visibility check (matching original at offsets 3161, getGameBigState, isSpectatorStation)
+	bool showCursor = false;
+	if(*(self + 3161)) {
+		int bigState = Game::MainMgr::sInstance->getGameBigState();
+		if(bigState != 3) {
+			if(bigState == 4)
+				showCursor = false;
+			else
+				showCursor = !Game::Utl::isSpectatorStation();
+		}
+	}
+
+	u64 eventPtr = *(u64*)(self + 3776);
+	bool isValid = (eventPtr != 0) && (*(u32*)(eventPtr + 32) == *(u32*)(self + 3784));
+
+	if(showCursor) {
+		if(!isValid) {
+			// Emit ArtilleryIcon effect
+			Lp::Sys::XLink *xlink = *(Lp::Sys::XLink **)(self + 800);
+			xlink2::Handle handle;
+			xlink->searchAndEmitWrap("DoronCursor", false, &handle); // Placeholder until I find a working selection Icon
+			*(u32*)(self + 3784) = handle.mEventId;
+			*(xlink2::Event**)(self + 3776) = handle.mEvent;
+			eventPtr = (u64)handle.mEvent;
+			isValid = (eventPtr != 0) && (*(u32*)(eventPtr + 32) == *(u32*)(self + 3784));
+		}
+		if(eventPtr != 0 && isValid) {
+			// Update cursor position (matching original offsets 3736/3740)
+			u8 *ev = (u8*)eventPtr;
+			u32 cursorY = *(u32*)(self + 3740);
+			*(u32*)(ev + 168) = *(u32*)(self + 3736);
+			*(u32*)(ev + 188) = 0x3F800000; // 1.0f
+			int flags = *(int*)(ev + 384);
+			*(u64*)(ev + 172) = (u64)cursorY; // writes cursorY to +172, 0 to +176
+			*(u64*)(ev + 180) = 0x3F8000003F800000LL; // 1.0f, 1.0f
+			*(int*)(ev + 384) = flags | 4;
+		}
+	} else if(eventPtr != 0 && isValid) {
+		// Fade the cursor effect (matching original: event->fade(-1))
+		((xlink2::Event*)eventPtr)->fade(-1);
+	}
+}
+
 void inkstrikeNetHook(u64 *x0, u32 w1, u64 *x2, u64 *x3, u32 w4, u32 w5){
 	if(!tornadoMgr->isShot) ((void (*)(u64*, u32, u64*, u64*, u32, u32))ProcessMemory::MainAddr(0x4CEE6C))(x0, w1, x2, x3, w4, w5);
 }
@@ -752,6 +824,7 @@ void hooks_init(){
 	Game::SighterTarget_startAllMarking(NULL, 0, 0);
 	startAllMarking_ImplHook(NULL, 0);
 	markedHook(NULL, 0, 0, Game::Player::MarkingType::m1, 0, 0);
+	updateCursorEffectHook(NULL);
 	startSkill_DeathMarkingHook(NULL, 0, 0);
 	inkstrikeNetHook(NULL, 0, NULL, NULL, 0, 0);
 	playerModelSetupHook(NULL);
@@ -969,12 +1042,6 @@ void playerModelDrawHook(Cmn::PlayerWeapon *playerWeapon, sead::Matrix34<float> 
 	if(player == NULL){
 		return;
 	}
-	/*if(mS1Inkstrike->isBulletActive[player->mIndex] and ((*((u64*)((*(u64*)playerWeapon) + (0x8)))) == ProcessMemory::MainAddr(0x1AF438))){ // Second check is vtable for PlayerWeaponSuperMissile
-		memcpy(mtx, &mS1Inkstrike->mtxs[player->mIndex], sizeof(sead::Matrix34<float>));
-		Utils::rotateMtxY(mtx, 90.0f / 180.0f * MATH_PI);
-	}*/
-	
-	//memcpy(&bufMtx, mtx, sizeof(sead::Matrix34<float>));
 }
 
 bool clamCalcSleepHook(Game::VictoryClamHolding *clam){
@@ -1002,19 +1069,6 @@ bool krakenDiveHook(Game::Player *player){
 		return 0;
 	}
 	return kingSquid->mIsRush and Prot::ObfLoad(&player->mAerialState) != 0 and player->isInSpecial_KingSquid_Impl(0);
-}
-
-void PlayFreeBombsEffect(){
-	Game::PlayerMgr *playerMgr = Collector::mPlayerMgrInstance;
-	if(playerMgr != NULL){
-		Game::Player* player = playerMgr->getControlledPerformer();
-		if(player != NULL){
-			if(player->mPlayerEffect != NULL){
-				xlink2::Handle tmp;
-                player->mXLink->searchAndEmitWrap("RollerDash", false, &tmp);
-			}
-		}
-	}
 }
 
 void handlePlayerControl(){

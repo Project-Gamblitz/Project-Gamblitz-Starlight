@@ -38,5 +38,6 @@ namespace xlink2{
   class Event{
     public:
     bool calc();
+    void fade(int);
   };
 };

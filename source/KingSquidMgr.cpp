@@ -67,9 +67,6 @@ namespace Starlion{
         mKingSquidAnim = new Game::PlayerAnimCtrlSet(mKingSquidModel, 0, *mPlayer->mPlayerInfo);
     }
     void PlayerKingSquid::enter(){
-        //mEffectManualHandle->searchAndEmit("BiWpSpnrDPFulFlashOnetime", 0x168, 0);
-        // GuWpSpnrHalfFlash, GuWpSpnrFulFlash, BiWpSpnrDPFulFlashOnetime (discarted), BiSwpStampThrow
-        //mEffectManualHandle->setTeamColor(mPlayer->mTeam);
 	}
     void PlayerKingSquid::calc(){
         Game::MainMgr *mainMgr = Game::MainMgr::sInstance;
@@ -102,7 +99,7 @@ namespace Starlion{
         //mPlayerMotion->startEventAnim((Game::PlayerMotion::AnimID)0x173, 0.0f, 1.0f);
         if(mPlayer->isInSpecial_KingSquid_Impl(0)){
             if(mPlayerModel->mSquidModel != mKingSquidModel){
-                mEffectManualHandle->searchAndEmit("BuPlayerModeSp1Time", 0x168, 0);
+                // mEffectManualHandle->searchAndEmit("BuPlayerModeSp1Time", 0x168, 0);
                 sead::Vector3<float> pos;
                 pos.mX = mPlayer->mPosition.mX + (*(float*)(((u64)mPlayer)));
                 pos.mY = mPlayer->mPosition.mY + (*(float*)(((u64)mPlayer)));
@@ -110,8 +107,8 @@ namespace Starlion{
                 sead::Matrix34<float> effMtx;
                 memcpy(&effMtx, &mKingSquidModel->mtx, sizeof(sead::Matrix34<float>));
                 Utils::setMtxPos(&effMtx, pos);
-                mEffectManualHandle->setTeamColor(mPlayer->mTeam);
-                mEffectManualHandle->emitParticle(effMtx, mPlayer);  
+                // mEffectManualHandle->setTeamColor(mPlayer->mTeam);
+                // mEffectManualHandle->emitParticle(effMtx, mPlayer);  
                 mPlayerModel->mSquidModel = mKingSquidModel;
                 mPlayer->mPlayerJointSquid = mPlayerJointKingSquid;
                 mPlayerMotion->mSquidAnimCtrlSet = mKingSquidAnim;
@@ -120,9 +117,9 @@ namespace Starlion{
                 mKingSquidAnimCtrl->reset();
                 mSquidAnimCtrl->reset();
                 mPlayerMotion->reset(1, Game::PlayerMotion::ResetMode::cDefault);
-                xlink2::Handle tmp;
-                mPlayer->mXLink->searchAndEmitWrap("SpecialMode_00_00", false, &tmp);
-                mPlayer->mXLink->searchAndPlayWrap("_Add_MissionLastBoss_00", false, &tmp);
+                // xlink2::Handle tmp;
+                // mPlayer->mXLink->searchAndEmitWrap("SpecialMode_00_00", false, &tmp);
+                // mPlayer->mXLink->searchAndPlayWrap("_Add_MissionLastBoss_00", false, &tmp);
                 mPlayer->dropHoldingClamAll_ForSpecial();
                 if(!mWasInSquid){
                     PlayerKingSquid::enter();
