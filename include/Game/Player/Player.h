@@ -67,6 +67,7 @@ namespace Game {
 		void clearRequest_Shot();
 		void startBarrier_Special();
 		void startSpecial_AllMarking();
+		void startAllMarking_Impl(int);
 		void startSpecial_SuperArmor();
 		void startSpecial_Barrier();
 		void startSpecial_Jetpack();
@@ -91,6 +92,7 @@ namespace Game {
 		void fillInkMagazine();
 		void startMarked_Common(int, int, int, Game::Player::MarkingType);
 		void startMarked_Sender(int, int, Game::Player::MarkingType, int, unsigned int);
+		void calcBarrier_CenterPos(sead::Vector3<float> *out) const;
 		bool isInSpecial() const;
 		bool isInSuperArmor() const;
 		bool IsInBarrier() const;

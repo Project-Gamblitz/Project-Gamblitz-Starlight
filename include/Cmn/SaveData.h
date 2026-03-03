@@ -2,9 +2,9 @@
 
 #include <array>
 
-#include "def/Gear.h"
-#include "def/Weapon.h"
-#include "lp/Sys/iusehionode.h"
+#include "Def/Gear.h"
+#include "Def/Weapon.h"
+#include "Lp/Sys/iusehionode.h"
 #include "sead/time.h"
 #include "types.h"
 

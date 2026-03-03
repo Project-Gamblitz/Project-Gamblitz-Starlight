@@ -6,7 +6,7 @@
 #include "gsys/model.h"
 #include "Cmn/Def/Team.h"
 #include "sead/string.h"
-#include "lp/Sys/modelarc.h"
+#include "Lp/Sys/modelarc.h"
 #include "gsys/model.h"
 #include "sead/heap.h"
 #include "agl/TextureData.h"
