@@ -5,11 +5,7 @@
       "Bash(xargs grep -l \"starlight\")",
       "Bash(claude mcp list)",
       "Bash(C:\\\\Python314\\\\python.exe -c \":*)",
-      "Bash(/c/Python314/python.exe -c \":*)",
-      "mcp__ida-pro-mcp__list_funcs",
-      "mcp__ida-pro-mcp__decompile",
-      "mcp__ida-pro-mcp__disasm",
-      "Bash(grep -A 30 \"Game::Actor::getClassIterNodeStatic\\\\|Game::Obj::getClassIterNodeStatic\" /c/Users/Nacho/Documents/GitHub/Project-Gamblitz-Starlight/source/*.cpp)"
+      "Bash(/c/Python314/python.exe -c \":*)"
     ]
   }
 }

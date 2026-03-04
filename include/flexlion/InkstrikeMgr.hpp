@@ -2,7 +2,6 @@
 
 #include "Utils.hpp"
 #include "Cmn/PlayerWeapon.h"
-#include "Cmn/Actor.h"
 #include "Prot/Prot.h"
 #include "sead/list.h"
 #define TORNADO_SPECIAL_ID 25
@@ -57,11 +56,5 @@ namespace Flexlion{
         float cameraanim;
         float cameraheight;
         bool isBulletDeinit;
-        // XLink for BulletSuperArtillery effects/sounds
-        Cmn::Actor *mXLinkActor;
-        gsys::Model *mXLinkModelSlot; // swappable model pointer for XLinkIUser
-        xlink2::Handle mJetSmokeHandle[10];
-        void initTornadoXLink();
-        void setXLinkModel(int playerIdx);
     };
 }

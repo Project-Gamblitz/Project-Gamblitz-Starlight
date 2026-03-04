@@ -1,22 +1,4 @@
 #include "flexlion/InkstrikeMgr.hpp"
-#include "sead/heap.h"
-
-// --- Tornado XLink vtable patching ---
-// Cmn::ActorVtable slot indices (from include/Cmn/Actor.h):
-//   54 = isUseXlink, 57 = isCreateSlink, 58 = getXlinkName
-static u64 sTornadoVtable[69]; // cloned ActorVtable with patched entries
-static bool sVtableInited = false;
-
-static const char* tornadoGetXlinkName(void*) {
-    return "BulletSuperArtillery";
-}
-static bool tornadoReturnTrue(void*) {
-    return true;
-}
-static void tornadoNoOp(void*) {
-    // no-op: we manage model registration manually
-}
-
 const int flighttime = 150;
 const int startflightdelay = 60; // delay from when a point is chosen to when the tornado is actually launched. (Spot is selected in the map -> wait 60 frames -> launch tornado)
 const int playerdelay = 120; // 60 frames Shoot_Tornado_St + 60 frames Shoot_Tornado
@@ -131,52 +113,6 @@ namespace Flexlion{
         pos = respos;
     }
     InkstrikeMgr *InkstrikeMgr::sInstance = NULL;
-
-    void InkstrikeMgr::initTornadoXLink(){
-        // Create a minimal Cmn::Actor as an XLink host
-        // The game's constructor sets up both the Actor vtable and the XLinkIUser vtable
-        mXLinkActor = new Cmn::Actor();
-        mXLinkActor->mHeap = sead::HeapMgr::sInstance->getCurrentHeap();
-
-        // Clone the primary vtable and patch XLink-related slots
-        if(!sVtableInited){
-            u64 *origVtable = (u64*)((Lp::Sys::Actor*)mXLinkActor)->vtable;
-            memcpy(sTornadoVtable, origVtable, sizeof(sTornadoVtable));
-            sTornadoVtable[54] = (u64)tornadoReturnTrue;      // isUseXlink = true
-            sTornadoVtable[57] = (u64)tornadoReturnTrue;      // isCreateSlink = true
-            sTornadoVtable[58] = (u64)tornadoGetXlinkName;    // getXlinkName = "BulletSuperArtillery"
-            sTornadoVtable[59] = (u64)tornadoNoOp;             // onXlinkSetupModels = no-op
-            sVtableInited = true;
-        }
-        ((Lp::Sys::Actor*)mXLinkActor)->vtable = (u64)sTornadoVtable;
-
-        // Get the XLinkIUser sub-object (second base class at offset 0x2E8 in Cmn::Actor)
-        Lp::Sys::XLinkIUser *iuser = (Lp::Sys::XLinkIUser*)((u8*)mXLinkActor + 0x2E8);
-        sead::Heap *heap = mXLinkActor->mHeap;
-
-        // Point XLinkIUser model array to our swappable model slot
-        mXLinkModelSlot = NULL;
-        iuser->XLinkIUser_ModelCount = 1;
-        iuser->XLinkIUser_ModelArryPtr = &mXLinkModelSlot;
-
-        // Create and initialize XLink
-        Lp::Sys::XLink *xlink = new Lp::Sys::XLink();
-
-        Lp::Sys::XLinkCreateArg arg(iuser, heap);
-        u8 *argBytes = (u8*)&arg;
-        argBytes[0x30] = 1; // modelCount = 1 (Wsp_Tornado)
-        argBytes[0x31] = 0; // actionSlotCount
-        argBytes[0x32] = 0; // propertyCount
-        argBytes[0x33] = 1; // createELink = true
-        argBytes[0x34] = 1; // createSLink = true
-
-        xlink->create(arg);
-        xlink->setupResource(heap);
-        xlink->loadAndSetupSoundResource(true);
-
-        mXLinkActor->mXLink = xlink;
-    }
-
     InkstrikeMgr::InkstrikeMgr(){
         sInstance = this;
         memset(this, 0, sizeof(InkstrikeMgr));
@@ -205,10 +141,6 @@ namespace Flexlion{
         }
         isBulletDeinit = 0;
         for(int i = 0; i < 10; i++) bullets[i]->onCalc();
-        // Tick XLink for tornado effects/sounds
-        if(mXLinkActor != NULL && mXLinkActor->mXLink != NULL){
-            mXLinkActor->mXLink->calc();
-        }
     }
     void InkstrikeMgr::detectChangeState(Game::Player *player){
         int id = player->mIndex;
@@ -245,12 +177,6 @@ namespace Flexlion{
         case TornadoState::cAim:
             if(!player->isInSpecial()){
                 playerState[id] = TornadoState::cNone;
-                // Kill JetSmoke if it was somehow active
-                if(mJetSmokeHandle[id].mEvent != NULL){
-                    ((xlink2::Event*)mJetSmokeHandle[id].mEvent)->fade(-1);
-                    mJetSmokeHandle[id].mEvent = NULL;
-                    mJetSmokeHandle[id].mEventId = 0;
-                }
                 break;
             }
 
@@ -268,12 +194,7 @@ namespace Flexlion{
                 mPendingDest[id] = miniMapAt;
                 mShootPrepareFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
                 playerState[id] = TornadoState::cShootPrepare;
-                player->mPlayerMotion->startDemoAnim("Shoot_Tornado_St", 0.0f, 1.0f, false);
-                // Emit JetSmoke effect (hold=true, persists until killed)
-                if(mXLinkActor != NULL && mXLinkActor->mXLink != NULL){
-                    setXLinkModel(id);
-                    mXLinkActor->mXLink->searchAndEmitWrap("JetSmoke", true, &mJetSmokeHandle[id]);
-                }
+                // player->mPlayerMotion->startDemoAnim("Shoot_Tornado_St", 0.0f, 1.0f, false);
                 Game::MiniMap *mMap = Utils::getMinimap();
                 if(mMap != NULL){
                     Lp::Sys::XLink *mapXLink = *(Lp::Sys::XLink **)((u8*)mMap + 0x320);
@@ -294,13 +215,7 @@ namespace Flexlion{
                 this->informShotInkstrike(player, player->mPosition, mPendingDest[id], Game::MainMgr::sInstance->mPaintGameFrame);
                 mShootFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
                 playerState[id] = TornadoState::cShoot;
-                player->mPlayerMotion->startDemoAnim("Shoot_Tornado", 0.0f, 1.0f, false);
-                // Emit JetSplash effect (one-shot)
-                if(mXLinkActor != NULL && mXLinkActor->mXLink != NULL){
-                    setXLinkModel(id);
-                    xlink2::Handle jetSplashHandle;
-                    mXLinkActor->mXLink->searchAndEmitWrap("JetSplash", false, &jetSplashHandle);
-                }
+                // player->mPlayerMotion->startDemoAnim("Shoot_Tornado", 0.0f, 1.0f, false);
             }
             break;
         }
@@ -312,12 +227,6 @@ namespace Flexlion{
             if(elapsed >= startflightdelay){
                 Prot::ObfStore(&player->mSpecialLeftFrame, 0);
                 playerState[id] = TornadoState::cNone;
-                // Kill JetSmoke effect
-                if(mJetSmokeHandle[id].mEvent != NULL){
-                    ((xlink2::Event*)mJetSmokeHandle[id].mEvent)->fade(-1);
-                    mJetSmokeHandle[id].mEvent = NULL;
-                    mJetSmokeHandle[id].mEventId = 0;
-                }
                 player->informGetWeapon_Impl_(player->mMainWeaponId, player->mSubWeaponId, player->mSpecialWeaponId, 0);
                 if(isCtrlPerformer){
                     Game::MiniMap *mMap = Utils::getMinimap();
@@ -328,14 +237,7 @@ namespace Flexlion{
         }
         };
     }
-    void InkstrikeMgr::setXLinkModel(int playerIdx){
-        mXLinkModelSlot = mTornadoModel[playerIdx];
-    }
     void InkstrikeMgr::registerPlayer(Game::Player *player){
-        // Lazy-init XLink on first player registration (game is fully loaded at this point)
-        if(mXLinkActor == NULL){
-            initTornadoXLink();
-        }
         int id = player->mIndex;
         Lp::Utl::ModelCreateArg arg;
         mTornadoModel[id] = Cmn::GfxUtl::createModel(player->mTeam, sead::SafeStringBase<char>::create("Tornado"), *mTornadoArc, arg, NULL);
