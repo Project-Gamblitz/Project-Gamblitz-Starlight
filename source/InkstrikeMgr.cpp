@@ -106,7 +106,18 @@ namespace Flexlion{
             Prot::ObfStore(&player->mSpecialLeftFrame, startflightdelay);
             int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mShootPrepareFrm[id];
             if(elapsed >= startflightdelay){
-                this->informShotInkstrike(player, player->mPosition, mPendingDest[id], Game::MainMgr::sInstance->mPaintGameFrame);
+                // Get launch position from ink tank bone
+                sead::Vector3<float> launchPos = player->mPosition;
+                Cmn::PlayerCustomPart *tank = player->getTank();
+                if(tank == NULL) tank = player->mPlayerCustomMgr->getMantle();
+                if(tank != NULL){
+                    sead::Matrix34<float> tankBoneMtx;
+                    tank->getRootBoneMtx(&tankBoneMtx);
+                    launchPos.mX = tankBoneMtx.matrix[0][3];
+                    launchPos.mY = tankBoneMtx.matrix[1][3];
+                    launchPos.mZ = tankBoneMtx.matrix[2][3];
+                }
+                this->informShotInkstrike(player, launchPos, mPendingDest[id], Game::MainMgr::sInstance->mPaintGameFrame);
                 mShootFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
                 playerState[id] = TornadoState::cShoot;
             }
