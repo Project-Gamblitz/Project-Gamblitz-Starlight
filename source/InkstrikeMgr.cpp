@@ -30,6 +30,7 @@ namespace Flexlion{
                         bullets[i]->doSleep();
                     }
                 }
+                resetBSAStatics();
                 isBulletDeinit = 1;
             }
             return;

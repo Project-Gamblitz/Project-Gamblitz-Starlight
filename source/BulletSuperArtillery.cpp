@@ -43,8 +43,8 @@ void initBSAVtable(BulletSuperArtillery *bsa) {
         sBSAVtable.onSleep = (u64)((void (*)(BulletSuperArtillery *))&BulletSuperArtillery::vtOnSleep);
         sBSAVtable.setXlinkLocalPropertyDefinition = (u64)((int (*)(BulletSuperArtillery *, int))&BulletSuperArtillery::vtSetXLinkLocalPropertyDef);
         sBSAVtable.countXlinkLocalProperty = (u64)((int (*)(BulletSuperArtillery *))&BulletSuperArtillery::vtCountXLinkLocalProperty);
-        sBSAVtable.executeStateMachine = (u64)((void (*)(BulletSuperArtillery *))&BulletSuperArtillery::vtExecuteStateMachine);
-        sBSAVtable.changeFirstState = (u64)((void (*)(BulletSuperArtillery *))&BulletSuperArtillery::vtChangeFirstState);
+        // executeStateMachine and changeFirstState vtable entries are never called by the
+        // actor system — state machine is driven from firstCalc (see BulletChargerOverChargeTornado)
         sInitVtable = true;
     }
     *vtable = &sBSAVtable;
@@ -63,6 +63,11 @@ struct EnumEntry {
 static _BYTE sUserPropBuf[0x78];
 static EnumEntry sUserEntries[2];
 static bool sUserPropInit = false;
+
+void resetBSAStatics() {
+    sInitVtable = false;
+    sUserPropInit = false;
+}
 
 static void initUserProperty() {
     if (sUserPropInit) return;
@@ -181,7 +186,8 @@ const char *BulletSuperArtillery::vtGetClassName(BulletSuperArtillery *self) {
 }
 
 void BulletSuperArtillery::vtFirstCalc(BulletSuperArtillery *self) {
-    // State machine handles logic via executeStateMachine
+    if (!self->mFlightActive && !self->mHasBurst) return;
+    self->mStateMachine.executeState();
 }
 
 void BulletSuperArtillery::vtFourthCalc(BulletSuperArtillery *self) {
@@ -193,6 +199,11 @@ void BulletSuperArtillery::vtOnActivate(BulletSuperArtillery *self, bool) {
     Lp::Sys::XLink *xlink = self->getXLink();
     if (xlink) {
         xlink->setLocalPropertyValue(0, 0.0f);
+    }
+    // Start state machine at initial state — the system never calls changeFirstState,
+    // so we must set the initial state ourselves upon activation
+    if (self->mFlightActive) {
+        self->mStateMachine.changeState(cState_Pronounce);
     }
 }
 
@@ -210,16 +221,6 @@ int BulletSuperArtillery::vtSetXLinkLocalPropertyDef(BulletSuperArtillery *self,
 
 int BulletSuperArtillery::vtCountXLinkLocalProperty(BulletSuperArtillery *self) {
     return 1; // "User"
-}
-
-void BulletSuperArtillery::vtExecuteStateMachine(BulletSuperArtillery *self) {
-    if (!self->mFlightActive && !self->mHasBurst) return;
-    self->mStateMachine.executeState();
-}
-
-void BulletSuperArtillery::vtChangeFirstState(BulletSuperArtillery *self) {
-    if (!self->mFlightActive) return;
-    self->mStateMachine.changeState(cState_Pronounce);
 }
 
 // ============================================================

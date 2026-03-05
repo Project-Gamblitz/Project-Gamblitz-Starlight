@@ -53,8 +53,6 @@ public:
     static void vtOnSleep(BulletSuperArtillery *self);
     static int vtSetXLinkLocalPropertyDef(BulletSuperArtillery *self, int idx);
     static int vtCountXLinkLocalProperty(BulletSuperArtillery *self);
-    static void vtExecuteStateMachine(BulletSuperArtillery *self);
-    static void vtChangeFirstState(BulletSuperArtillery *self);
 
     // State machine callbacks
     void stateEnterPronounce();
@@ -81,5 +79,6 @@ public:
 };
 
 void initBSAVtable(BulletSuperArtillery *bsa);
+void resetBSAStatics();
 
 } // namespace Flexlion
