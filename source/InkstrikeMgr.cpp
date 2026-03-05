@@ -26,8 +26,8 @@ namespace Flexlion{
         if(Game::MainMgr::sInstance == NULL or !Utils::isSceneLoaded()){
             if(!isBulletDeinit){
                 for(int i = 0; i < 10; i++){
-                    if(bullets[i] != NULL && bullets[i]->isActive()){
-                        bullets[i]->doSleep();
+                    if(bullets[i] != NULL){
+                        bullets[i]->reset();
                     }
                 }
                 resetBSAStatics();
