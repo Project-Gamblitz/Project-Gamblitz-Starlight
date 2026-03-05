@@ -30,6 +30,7 @@ namespace Flexlion {
 // ============================================================
 
 static bool sInitVtable = false;
+static u64 sOrigXlinkCalc = 0;
 Cmn::ActorVtable sBSAVtable;
 
 void initBSAVtable(BulletSuperArtillery *bsa) {
@@ -43,8 +44,10 @@ void initBSAVtable(BulletSuperArtillery *bsa) {
         sBSAVtable.onSleep = (u64)((void (*)(BulletSuperArtillery *))&BulletSuperArtillery::vtOnSleep);
         sBSAVtable.setXlinkLocalPropertyDefinition = (u64)((int (*)(BulletSuperArtillery *, int))&BulletSuperArtillery::vtSetXLinkLocalPropertyDef);
         sBSAVtable.countXlinkLocalProperty = (u64)((int (*)(BulletSuperArtillery *))&BulletSuperArtillery::vtCountXLinkLocalProperty);
-        // executeStateMachine and changeFirstState vtable entries are never called by the
-        // actor system — state machine is driven from firstCalc (see BulletChargerOverChargeTornado)
+        sBSAVtable.getXLinkMtx = (u64)((sead::Matrix34<float> *(*)(BulletSuperArtillery *))&BulletSuperArtillery::vtGetXLinkMtx);
+        sBSAVtable.calcElinkEvent = (u64)((void (*)(BulletSuperArtillery *, const void *))&BulletSuperArtillery::vtCalcElinkEvent);
+        sOrigXlinkCalc = sBSAVtable.xlinkCalc;
+        sBSAVtable.xlinkCalc = (u64)((void (*)(BulletSuperArtillery *))&BulletSuperArtillery::vtXlinkCalc);
         sInitVtable = true;
     }
     *vtable = &sBSAVtable;
@@ -119,6 +122,10 @@ BulletSuperArtillery::BulletSuperArtillery() {
     mStartFrm = 0;
     mFlightActive = false;
     mHasBurst = false;
+    mXLinkMtx = sead::Matrix34<float>::ident;
+    mLaserESet = NULL;
+    mLaserIconESet = NULL;
+    mCaptureEmitCounter = 0;
 }
 
 // ============================================================
@@ -175,6 +182,9 @@ void BulletSuperArtillery::reset() {
     mStartFrm = 0;
     mFlightActive = false;
     mHasBurst = false;
+    mLaserESet = NULL;
+    mLaserIconESet = NULL;
+    mCaptureEmitCounter = 0;
 }
 
 // ============================================================
@@ -223,13 +233,60 @@ int BulletSuperArtillery::vtCountXLinkLocalProperty(BulletSuperArtillery *self) 
     return 1; // "User"
 }
 
+sead::Matrix34<float> *BulletSuperArtillery::vtGetXLinkMtx(BulletSuperArtillery *self) {
+    return &self->mXLinkMtx;
+}
+
+void BulletSuperArtillery::vtCalcElinkEvent(BulletSuperArtillery *self, const void *eventArg) {
+    if (self->mCaptureEmitCounter <= 0) return;
+    // EventArg layout (from emitEffect_ analysis):
+    //   +32: nn::vfx::Handle* (points to the just-emitted effect's handle)
+    nn::vfx::Handle *vfxHandle = *(nn::vfx::Handle **)((u8 *)eventArg + 32);
+    if (vfxHandle != NULL) {
+        nn::vfx::EmitterSet *eset = vfxHandle->GetEmitterSet();
+        if (eset != NULL) {
+            // cState_Pronounce triggers: LaserIcon (1st), Laser (2nd), JetSplash (3rd)
+            // Capture both LaserIcon and Laser for target repositioning
+            if (self->mCaptureEmitCounter == 2) {
+                self->mLaserIconESet = eset;
+            } else if (self->mCaptureEmitCounter == 1) {
+                self->mLaserESet = eset;
+            }
+        }
+    }
+    self->mCaptureEmitCounter--;
+}
+
+void BulletSuperArtillery::vtXlinkCalc(BulletSuperArtillery *self) {
+    // Call original xlinkCalc first (updates effect positions to model matrix)
+    ((void (*)(BulletSuperArtillery *))sOrigXlinkCalc)(self);
+    // Override Laser and LaserIcon EmitterSet positions to target landing point
+    if (self->mLaserESet != NULL || self->mLaserIconESet != NULL) {
+        nn::util::neon::MatrixRowMajor4x3fType targetMtx;
+        memset(&targetMtx, 0, sizeof(targetMtx));
+        targetMtx.matrix[0][0] = 1.0f;
+        targetMtx.matrix[1][1] = 1.0f;
+        targetMtx.matrix[2][2] = 1.0f;
+        targetMtx.matrix[0][3] = self->mTo.mX;
+        targetMtx.matrix[1][3] = self->mTo.mY;
+        targetMtx.matrix[2][3] = self->mTo.mZ;
+        if (self->mLaserESet != NULL)
+            self->mLaserESet->SetMatrix(targetMtx);
+        if (self->mLaserIconESet != NULL)
+            self->mLaserIconESet->SetMatrix(targetMtx);
+    }
+}
+
 // ============================================================
 // State machine callbacks
 // ============================================================
 
 void BulletSuperArtillery::stateEnterPronounce() {
-    // XLink triggers cState_Pronounce effects:
-    // LaserIcon (landing indicator), Laser, JetSplash
+    // Capture the first 2 effects emitted (LaserIcon + Laser) for target repositioning
+    // cState_Pronounce triggers: LaserIcon, Laser, JetSplash — skip JetSplash (stays on tornado)
+    mCaptureEmitCounter = 2;
+    mLaserESet = NULL;
+    mLaserIconESet = NULL;
 }
 
 void BulletSuperArtillery::statePronounce() {
@@ -371,6 +428,9 @@ void BulletSuperArtillery::updateModelMatrix() {
 void BulletSuperArtillery::doSleep() {
     mHasBurst = false;
     mFlightActive = false;
+    mLaserESet = NULL;
+    mLaserIconESet = NULL;
+    mCaptureEmitCounter = 0;
     asLpActor()->reserveSleepAll_(Lp::Sys::Actor::ListNodeKind::None);
 }
 
