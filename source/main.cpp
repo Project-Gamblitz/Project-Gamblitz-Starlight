@@ -778,8 +778,8 @@ sead::Vector3<float> inkstrikeBombVelHook(Game::PlayerInkAction *inkAction){
 }
 
 void inkstrikeShotHook(Game::BulletSpSuperBall *ball, Game::Player *sender, int senderId, int senderId2, sead::Vector3<float> *startpos, Game::SuperBallShotArg2 *arg2, int poop){
-	Flexlion::BulletTornado *bullet = tornadoMgr->bullets[sender->mIndex];
-	if(bullet and tornadoMgr->isShot) *startpos = bullet->pos;
+	Flexlion::BulletSuperArtillery *bullet = tornadoMgr->bullets[sender->mIndex];
+	if(bullet and tornadoMgr->isShot) *startpos = bullet->mPos;
 	ball->shot(sender, senderId, senderId2, startpos, arg2, poop);
 }
 

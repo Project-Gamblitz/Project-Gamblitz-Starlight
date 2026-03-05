@@ -1,146 +1,40 @@
 #include "flexlion/InkstrikeMgr.hpp"
-const int flighttime = 150;
-const int startflightdelay = 60; // delay from when a point is chosen to when the tornado is actually launched. (Spot is selected in the map -> wait 60 frames -> launch tornado)
+const int startflightdelay = 60; // delay from when a point is chosen to when the tornado is actually launched
 const int playerdelay = 120; // 60 frames Shoot_Tornado_St + 60 frames Shoot_Tornado
-const float flightheight = 300.0f;
-const float carryingOffset = -5.0f;
 const float tornadoTankZOffset = -3.0f;
 namespace Flexlion{
-    BulletTornado::BulletTornado(){
-        this->reset();
-    }
-    void BulletTornado::reset(){
-        startfrm = 0;
-        sender = NULL;
-        model = NULL;
-        isactive = 0;
-        from = sead::Vector3<float>::zero;
-        to = sead::Vector3<float>::zero;
-        rot = sead::Vector3<float>::zero;
-        pos = sead::Vector3<float>::zero;
-        superball = NULL;
-        isShot = 0;
-    }
-    void BulletTornado::onActivate(Game::Player *Sender, gsys::Model *Model, sead::Vector3<float> src, sead::Vector3<float> dst, int paintgamefrm){
-        this->reset();
-        startfrm = paintgamefrm;
-        sender = Sender;
-        model = Model;
-        from = src;
-        to = dst;
-        rot.mX = 0.0f;
-        rot.mZ = 0.0f;
-        rot.mY = atan2f(from.mX - to.mX, from.mZ - to.mZ) + MATH_PI; 
-        if(rot.mY > MATH_PI * 2.0f) rot.mY -= MATH_PI * 2.0f;
-        isactive = 1;
-    }
-    void BulletTornado::onRender(){
-        if(!isactive) return;
-        model->mtx = {{ 
-            cosf(rot.mY) * cosf(rot.mZ),
-            sinf(rot.mX) * sinf(rot.mY) * cosf(rot.mZ) - sinf(rot.mZ) * cosf(rot.mX),
-            cosf(rot.mX) * sinf(rot.mY) * cosf(rot.mZ) + sinf(rot.mZ) * sinf(rot.mX),
-            pos.mX,
-            sinf(rot.mZ) * cosf(rot.mY),
-            sinf(rot.mX) * sinf(rot.mY) * sinf(rot.mZ) + cosf(rot.mZ) * cosf(rot.mX),
-            cosf(rot.mX) * sinf(rot.mY) * sinf(rot.mZ) - cosf(rot.mZ) * sinf(rot.mX),
-            pos.mY,
-            -sinf(rot.mY),
-            sinf(rot.mX) * cosf(rot.mY),
-            cosf(rot.mX) * cosf(rot.mY),
-            pos.mZ
-        }};
-        model->mUpdateScale|=1;
-        model->updateAnimationWorldMatrix_(3);
-        model->requestDraw();
-    }
-    void BulletTornado::calcBurst(){
-        if(superball == NULL) return;
-        auto ballIter = Game::BulletSpSuperBall::getClassIterNodeStatic();
-        bool s = 0;
-        for(Game::BulletSpSuperBall *bullet = (Game::BulletSpSuperBall *)ballIter->derivedFrontActiveActor(); bullet != NULL; bullet = (Game::BulletSpSuperBall *)ballIter->derivedNextActiveActor(bullet)){
-            if(superball == bullet){
-                s = 1;
-                break;
-            }
-        }
-        if(!s){
-            this->reset();
-            return;
-        }
-        if(superball->mIsHitGnd and superball->mCore != NULL){
-        sead::Matrix34<float> *matrix = &superball->mCore->mMatrix;
-        *matrix = {{
-            0.7f,		       0.0f,       		 0.0f, 				matrix->matrix[0][3],
-            0.0f,    		 3.0f,      		 0.0f,				matrix->matrix[1][3],
-            0.0f,    		 0.0f,       		 0.7f,				matrix->matrix[2][3]
-        }};
-        }
-    }
-    void BulletTornado::burst(){
-        Game::PlayerSuperBall *playerSuperBall = sender->mPlayerSuperBall;
-        Game::PlayerInkAction *InkAction = sender->mPlayerInkAction;
-        Game::BulletMgr *bulletMgr = Game::MainMgr::sInstance->mBulletMgr;
-        if(playerSuperBall != NULL and InkAction != NULL and bulletMgr != NULL){
-            if(playerSuperBall->mBullet == NULL){
-                playerSuperBall->mBullet = (Game::BulletSpSuperBall*)bulletMgr->activateOneCancelUnnecessary(0x76, sender->mIsRemote == 0, pos, sead::Vector3<float>::zero, -1);
-                superball = playerSuperBall->mBullet;
-            }
-            if(playerSuperBall->mBullet != NULL){
-                playerSuperBall->mBullet->Initialize(sender->mIndex, &pos);
-                InkstrikeMgr::sInstance->isShot = 1;
-                InkAction->shotSuperBall();
-                InkstrikeMgr::sInstance->isShot = 0;
-                playerSuperBall->reset();
-                playerSuperBall->mBullet = NULL;
-            }
-        }
-        isactive = 0;
-    }
-    void BulletTornado::onCalc(){
-        this->calcBurst();
-        if(!isactive) return;
-        if(Game::MainMgr::sInstance->mPaintGameFrame - startfrm >= flighttime){
-            this->burst();
-            return;
-        }
-        float anim = float(Game::MainMgr::sInstance->mPaintGameFrame - startfrm) / float(flighttime);
-        sead::Vector3<float> respos;
-        respos.mY = from.mY * (1.0f - anim) + to.mY * anim + sinf(anim * MATH_PI) * flightheight;
-        respos.mX = from.mX * (1.0f - anim) + to.mX * anim;
-        respos.mZ = from.mZ * (1.0f - anim) + to.mZ * anim;
-        rot.mX = atan2f(sqrtf(powf(abs(respos.mX - pos.mX), 2) + powf(abs(respos.mZ - pos.mZ), 2)), respos.mY - pos.mY);
-        pos = respos;
-    }
     InkstrikeMgr *InkstrikeMgr::sInstance = NULL;
     InkstrikeMgr::InkstrikeMgr(){
         sInstance = this;
         memset(this, 0, sizeof(InkstrikeMgr));
         mTornadoArc = new Lp::Sys::ModelArc(sead::SafeStringBase<char>::create("Wsp_Tornado"), NULL, 0, NULL, NULL);
         mTornadoMonitorArc = new Lp::Sys::ModelArc(sead::SafeStringBase<char>::create("Wsp_Tornado_Monitor"), NULL, 0, NULL, NULL);
-        cameraheight = 300.0f; // TODO: Make a thing that you give edge coordinates for each map and it calculates this
+        cameraheight = 300.0f;
         cameraanim = 0.0f;
         for(int i = 0; i < 10; i++){
-            bullets[i] = new BulletTornado();
+            bullets[i] = NULL;
             mTankRootBoneIdx[i] = -1;
         }
     }
     void InkstrikeMgr::informShotInkstrike(Game::Player *player, sead::Vector3<float> pos, sead::Vector3<float> dest, int paintgamefrm){
-        if(!bullets[player->mIndex]->isactive){
-            bullets[player->mIndex]->onActivate(player, mTornadoModel[player->mIndex], pos, dest, paintgamefrm);
+        if(bullets[player->mIndex] != NULL && !bullets[player->mIndex]->isActive()){
+            bullets[player->mIndex]->launch(player, pos, dest, paintgamefrm);
             isAppliedWeapon[player->mIndex] = 0;
         }
     }
     void InkstrikeMgr::onCalc(){
         if(Game::MainMgr::sInstance == NULL or !Utils::isSceneLoaded()){
             if(!isBulletDeinit){
-                for(int i = 0; i < 10; i++) bullets[i]->reset();
+                for(int i = 0; i < 10; i++){
+                    if(bullets[i] != NULL && bullets[i]->isActive()){
+                        bullets[i]->doSleep();
+                    }
+                }
                 isBulletDeinit = 1;
             }
             return;
         }
         isBulletDeinit = 0;
-        for(int i = 0; i < 10; i++) bullets[i]->onCalc();
     }
     void InkstrikeMgr::detectChangeState(Game::Player *player){
         int id = player->mIndex;
@@ -149,7 +43,7 @@ namespace Flexlion{
             isAppliedWeapon[id] = 0;
         }
         // Handle remote players: bullet activated via network while still in cAim
-        if(bullets[id]->isactive and playerState[id] == TornadoState::cAim){
+        if(bullets[id] != NULL && bullets[id]->isActive() && playerState[id] == TornadoState::cAim){
             mShootFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
             playerState[id] = TornadoState::cShoot;
         }
@@ -183,7 +77,7 @@ namespace Flexlion{
             if(isCtrlPerformer and Utils::isShowMinimap() and Lp::Utl::getCtrl(0)->isHoldContinue(starlight::Controller::Buttons::A, 1) and cameraanim > 0.95f){
                 const float distmul = 2.0f;
                 float dist = sqrtf(miniMap->mCursorPos.mX * miniMap->mCursorPos.mX + miniMap->mCursorPos.mY * miniMap->mCursorPos.mY) * distmul;
-                float deg = atan2f(miniMap->mCursorPos.mY, miniMap->mCursorPos.mX) + MATH_PI * 0.25f; // some maps also need an additional + MATH_PI * 0.25f (90 degrees), needs to be somehow accessible
+                float deg = atan2f(miniMap->mCursorPos.mY, miniMap->mCursorPos.mX) + MATH_PI * 0.25f;
                 miniMapAt.mX = cosf(deg) * dist;
                 miniMapAt.mY = cameraheight;
                 miniMapAt.mZ = sinf(deg) * dist * -1;
@@ -194,7 +88,6 @@ namespace Flexlion{
                 mPendingDest[id] = miniMapAt;
                 mShootPrepareFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
                 playerState[id] = TornadoState::cShootPrepare;
-                // player->mPlayerMotion->startDemoAnim("Shoot_Tornado_St", 0.0f, 1.0f, false);
                 Game::MiniMap *mMap = Utils::getMinimap();
                 if(mMap != NULL){
                     Lp::Sys::XLink *mapXLink = *(Lp::Sys::XLink **)((u8*)mMap + 0x320);
@@ -215,7 +108,6 @@ namespace Flexlion{
                 this->informShotInkstrike(player, player->mPosition, mPendingDest[id], Game::MainMgr::sInstance->mPaintGameFrame);
                 mShootFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
                 playerState[id] = TornadoState::cShoot;
-                // player->mPlayerMotion->startDemoAnim("Shoot_Tornado", 0.0f, 1.0f, false);
             }
             break;
         }
@@ -248,14 +140,20 @@ namespace Flexlion{
         if(fullModel != NULL){
             mTankRootBoneIdx[id] = fullModel->searchBone(sead::SafeStringBase<char>::create("tank_root"));
         }
+        // Create the BulletSuperArtillery actor for this player
+        bullets[id] = BulletSuperArtillery::create(
+            (Lp::Sys::Actor *)player,
+            mTornadoModel[id],
+            player->mTeam
+        );
     }
     void InkstrikeMgr::playerFourthCalc(Game::Player *player){
         int id = player->mIndex;
         if(mTornadoModel[id] == NULL || mTornadoMonitorModel[id] == NULL || player->mPlayerCustomMgr == NULL){
             return;
         }
-        if(bullets[id]->isactive){
-            bullets[id]->onRender();
+        // When the bullet actor is active, it handles model rendering via its own fourthCalc
+        if(bullets[id] != NULL && bullets[id]->isActive()){
             return;
         }
         switch(playerState[id]){
@@ -306,8 +204,7 @@ namespace Flexlion{
             break;
         }
         case TornadoState::cShoot:
-            mTornadoModel[id]->updateAnimationWorldMatrix_(3);
-            mTornadoModel[id]->requestDraw();
+            // During shoot phase, the BSA actor handles the model
             break;
         };
     }
