@@ -20,11 +20,8 @@ namespace Game {
         void fadeAllEffect();
         _BYTE _0[0x368];
         Game::MiniMapCamera *mMiniMapCamera;
-        float mOrthoHalfW;  // 0x370 - set by setOrthoTBLRScale
-        float mOrthoHalfH;  // 0x374
-        _BYTE _378[0xE98 - 0x378];
-        sead::Vector2<float> mCursorPos; // 0xE98 - final cursor position in canvas coords
-        sead::Vector2<float> mPlayerCanvasCenter; // 0xEA0 - player's position on the minimap canvas
+        _BYTE _370[0xE98 - 0x370];
+        sead::Vector2<float> mCursorPos;
     };
     class HudMgr{
         public:

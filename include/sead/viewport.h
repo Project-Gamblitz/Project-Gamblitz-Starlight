@@ -10,9 +10,6 @@
 
 namespace sead
 {
-    class Projection;
-    class Camera;
-
     class Viewport
     {
     public:
@@ -21,7 +18,7 @@ namespace sead
         virtual ~Viewport();
 
         void project(sead::Vector2<f32> *, sead::Vector3<f32> const &) const;
-        void unproject(sead::Vector3<f32> *, sead::Vector2<f32> const &, sead::Projection const &, sead::Camera const &) const;
+       // void project(sead::Vector2<f32> *, sead::Vector3<f32> const &) const;
 
         f32 _8;
         f32 Viewport_xC;

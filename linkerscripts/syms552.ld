@@ -657,11 +657,7 @@ _ZN4gsys16CopyLayerTextureC2Ev = 0x17da040 - 0x2EBE000;
 _ZN4gsys16CopyLayerTexture10initializeEPNS_5LayerENS0_6FormatEPN4sead4HeapE = 0x17da3a4 - 0x2EBE000;
 _ZN3Cmn9CameraMgr10swapCameraEPNS_10CameraBaseES2_ = 0x1C510 - 0x2EBE000;
 _ZNK4sead8Viewport5applyEPNS_11DrawContextERKNS_18LogicalFrameBufferE = 0x17372a4 - 0x2EBE000;
-_ZN3Cmn10CameraBase7setFovyEf = 0x00018290 - 0x2EBE000;
-
-_ZN3Cmn10CameraBase6lookAtERKN4sead7Vector3IfEES5_S5_ = 0x18684 - 0x2EBE000;
-
-_ZNK4sead8Viewport9unprojectEPNS_7Vector3IfEERKNS_7Vector2IfEERKNS_10ProjectionERKNS_6CameraE = 0x01737754 - 0x2EBE000;
+_ZN3Cmn10CameraBase7setFovyEf = 0x18290 - 0x2EBE000;
 _ZNK4Game6HudMgr13isShowMiniMapEv = 0xA0B188 - 0x2EBE000;
 _ZN4Game7MiniMap10setVisibleEb = 0xA11308 - 0x2EBE000;
 _ZN4Game7MiniMap15setLayerVisibleEb = 0xA156A4 - 0x2EBE000;
