@@ -43,8 +43,6 @@ void initBSAVtable(BulletSuperArtillery *bsa) {
         sBSAVtable.onSleep = (u64)((void (*)(BulletSuperArtillery *))&BulletSuperArtillery::vtOnSleep);
         sBSAVtable.setXlinkLocalPropertyDefinition = (u64)((int (*)(BulletSuperArtillery *, int))&BulletSuperArtillery::vtSetXLinkLocalPropertyDef);
         sBSAVtable.countXlinkLocalProperty = (u64)((int (*)(BulletSuperArtillery *))&BulletSuperArtillery::vtCountXLinkLocalProperty);
-        // executeStateMachine and changeFirstState vtable entries are never called by the
-        // actor system — state machine is driven from firstCalc (see BulletChargerOverChargeTornado)
         sInitVtable = true;
     }
     *vtable = &sBSAVtable;
@@ -119,6 +117,7 @@ BulletSuperArtillery::BulletSuperArtillery() {
     mStartFrm = 0;
     mFlightActive = false;
     mHasBurst = false;
+    mXLinkMtx = sead::Matrix34<float>::ident;
 }
 
 // ============================================================
@@ -195,13 +194,25 @@ void BulletSuperArtillery::vtFourthCalc(BulletSuperArtillery *self) {
 }
 
 void BulletSuperArtillery::vtOnActivate(BulletSuperArtillery *self, bool) {
+    // Build mXLinkMtx as identity with translation = target landing position.
+    // The xlink2 system reads from this matrix for boneless effects (Laser, LaserIcon).
+    // Bone-attached effects (JetSmoke=root, JetSplash=screw) use bone matrices and are unaffected.
+    self->mXLinkMtx = {{
+        1.0f, 0.0f, 0.0f, self->mTo.mX,
+        0.0f, 1.0f, 0.0f, self->mTo.mY,
+        0.0f, 0.0f, 1.0f, self->mTo.mZ
+    }};
+
+    // Update the UserInstance root matrix pointer so calcMtx uses our mXLinkMtx
+    // for effects without a bone assignment (inline setRootMtx logic)
+    self->setXLinkRootMtx();
+
     // Set XLink "User" property value (0 = Player)
     Lp::Sys::XLink *xlink = self->getXLink();
     if (xlink) {
         xlink->setLocalPropertyValue(0, 0.0f);
     }
-    // Start state machine at initial state — the system never calls changeFirstState,
-    // so we must set the initial state ourselves upon activation
+    // Start state machine at initial state
     if (self->mFlightActive) {
         self->mStateMachine.changeState(cState_Pronounce);
     }
@@ -223,16 +234,52 @@ int BulletSuperArtillery::vtCountXLinkLocalProperty(BulletSuperArtillery *self) 
     return 1; // "User"
 }
 
+// Inline reimplementation of xlink2::UserInstance::setRootMtx.
+// Updates the UserInstance's default matrix pointer (+64) and patches all
+// ModelAssetConnections that were using the old pointer, so boneless effects
+// (Laser, LaserIcon) read from our mXLinkMtx while bone effects are untouched.
+void BulletSuperArtillery::setXLinkRootMtx() {
+    Lp::Sys::XLink *xlink = getXLink();
+    if (!xlink) return;
+
+    // Lp::Sys::XLink+8 = xlink2::UserInstanceELink*
+    u8 *userInst = *(u8 **)((u8 *)xlink + 8);
+    if (!userInst) return;
+
+    sead::Matrix34<float> **rootMtxPtr = (sead::Matrix34<float> **)(userInst + 64);
+    sead::Matrix34<float> *oldMtx = *rootMtxPtr;
+    sead::Matrix34<float> *newMtx = &mXLinkMtx;
+    if (oldMtx == newMtx) return;
+
+    // Connection array struct at UserInstance + 32 or +40 (depending on flag bit 0 at +208)
+    u8 flag = *(userInst + 208) & 1;
+    u8 *connStruct = *(u8 **)(userInst + 32 + flag * 8);
+    if (connStruct && *(connStruct + 32)) {
+        int count = *(int *)connStruct;
+        u8 *connArray = *(u8 **)(connStruct + 8);
+        for (int i = 0; i < count; i++) {
+            u8 *conn = connArray + 24 * i;
+            // Only update connections that pointed to the old default matrix
+            if (*(sead::Matrix34<float> **)(conn + 8) == oldMtx) {
+                *(sead::Matrix34<float> **)(conn + 8) = newMtx;
+                *(conn + 16) = 0; // row-major flag
+            }
+        }
+    }
+
+    *rootMtxPtr = newMtx;
+    *(userInst + 72) = 0; // row-major flag
+}
+
 // ============================================================
 // State machine callbacks
 // ============================================================
 
 void BulletSuperArtillery::stateEnterPronounce() {
-    // XLink triggers cState_Pronounce effects:
-    // LaserIcon (landing indicator), Laser, JetSplash
 }
 
 void BulletSuperArtillery::statePronounce() {
+    calcFlight();
     int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mStartFrm;
     if (elapsed >= BSA_PRONOUNCE_DURATION) {
         mStateMachine.changeState(cState_Wait);

@@ -3,6 +3,7 @@
 #include "Cmn/Actor.h"
 #include "Lp/Utl.h"
 #include "sead/vector.h"
+#include "sead/matrix.h"
 
 namespace Game {
     class Player;
@@ -34,6 +35,7 @@ public:
     int mStartFrm;
     bool mFlightActive;
     bool mHasBurst;
+    sead::Matrix34<float> mXLinkMtx;
 
     Lp::Utl::StateMachine mStateMachine;
 
@@ -53,6 +55,7 @@ public:
     static void vtOnSleep(BulletSuperArtillery *self);
     static int vtSetXLinkLocalPropertyDef(BulletSuperArtillery *self, int idx);
     static int vtCountXLinkLocalProperty(BulletSuperArtillery *self);
+    void setXLinkRootMtx();
 
     // State machine callbacks
     void stateEnterPronounce();

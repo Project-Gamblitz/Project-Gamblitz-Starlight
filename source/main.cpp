@@ -129,16 +129,21 @@ static bool gWasArtilleryCursor = false;
 void miniMapCamCalcHook(Game::MiniMapCamera *_this){
 	miniMapCamCalcImpl(_this);
 	float anim = tornadoMgr->cameraanim;
-	_this->mPosition.mX *= 1.0f - anim;
-	_this->mPosition.mX+=0.05f * anim;
-	_this->mPosition.mY *= 1.0f - anim;
-	_this->mPosition.mY+=tornadoMgr->cameraheight * anim;
-	_this->mPosition.mZ *= 1.0f - anim;
-	_this->mPosition.mZ+=0.05f * anim;
-	_this->mAt.mX *= 1.0f - anim;
-	_this->mAt.mY *= 1.0f - anim;
-	_this->mAt.mZ *= 1.0f - anim;
-	_this->mUp.mY *= 1.0f - anim;
+	if(anim <= 0.0f) return;
+	// Blend camera to top-down view centered on the current at point
+	float topY = tornadoMgr->cameraheight;
+	sead::Vector3<float> pos = _this->mPosition;
+	sead::Vector3<float> at = _this->mAt;
+	sead::Vector3<float> up = _this->mUp;
+	pos.mX += (at.mX - pos.mX) * anim;
+	pos.mY += (topY - pos.mY) * anim;
+	pos.mZ += (at.mZ - pos.mZ) * anim;
+	at.mY *= (1.0f - anim);
+	// Blend up toward (0, 0, -1) for a north-up top-down view
+	up.mX += (0.0f - up.mX) * anim;
+	up.mY += (0.0f - up.mY) * anim;
+	up.mZ += (-1.0f - up.mZ) * anim;
+	_this->lookAt(pos, at, up);
 }
 
 static void (*handleBulletCloneEventImpl)(Game::BulletCloneHandle *cloneHandle, Game::Player *player, Game::BulletCloneEvent *event, int clonefrm);
