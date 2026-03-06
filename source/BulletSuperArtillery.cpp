@@ -234,40 +234,18 @@ int BulletSuperArtillery::vtCountXLinkLocalProperty(BulletSuperArtillery *self) 
     return 1; // "User"
 }
 
-// Inline reimplementation of xlink2::UserInstance::setRootMtx.
-// Updates the UserInstance's default matrix pointer (+64) and patches all
-// ModelAssetConnections that were using the old pointer, so boneless effects
-// (Laser, LaserIcon) read from our mXLinkMtx while bone effects are untouched.
+// Update the UserInstance's root matrix pointer (+64) to point at our mXLinkMtx.
+// Only changes the default pointer — does NOT patch individual ModelAssetConnections,
+// since the game never calls setRootMtx (no xrefs) and patching connections breaks
+// effect rendering for JetSmoke/Bomb.
 void BulletSuperArtillery::setXLinkRootMtx() {
     Lp::Sys::XLink *xlink = getXLink();
     if (!xlink) return;
 
-    // Lp::Sys::XLink+8 = xlink2::UserInstanceELink*
     u8 *userInst = *(u8 **)((u8 *)xlink + 8);
     if (!userInst) return;
 
-    sead::Matrix34<float> **rootMtxPtr = (sead::Matrix34<float> **)(userInst + 64);
-    sead::Matrix34<float> *oldMtx = *rootMtxPtr;
-    sead::Matrix34<float> *newMtx = &mXLinkMtx;
-    if (oldMtx == newMtx) return;
-
-    // Connection array struct at UserInstance + 32 or +40 (depending on flag bit 0 at +208)
-    u8 flag = *(userInst + 208) & 1;
-    u8 *connStruct = *(u8 **)(userInst + 32 + flag * 8);
-    if (connStruct && *(connStruct + 32)) {
-        int count = *(int *)connStruct;
-        u8 *connArray = *(u8 **)(connStruct + 8);
-        for (int i = 0; i < count; i++) {
-            u8 *conn = connArray + 24 * i;
-            // Only update connections that pointed to the old default matrix
-            if (*(sead::Matrix34<float> **)(conn + 8) == oldMtx) {
-                *(sead::Matrix34<float> **)(conn + 8) = newMtx;
-                *(conn + 16) = 0; // row-major flag
-            }
-        }
-    }
-
-    *rootMtxPtr = newMtx;
+    *(sead::Matrix34<float> **)(userInst + 64) = &mXLinkMtx;
     *(userInst + 72) = 0; // row-major flag
 }
 
