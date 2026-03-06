@@ -76,12 +76,18 @@ namespace Flexlion{
             }
 
             if(isCtrlPerformer and Utils::isShowMinimap() and Lp::Utl::getCtrl(0)->isHoldContinue(starlight::Controller::Buttons::A, 1) and cameraanim > 0.95f){
-                const float distmul = 2.0f;
-                float dist = sqrtf(miniMap->mCursorPos.mX * miniMap->mCursorPos.mX + miniMap->mCursorPos.mY * miniMap->mCursorPos.mY) * distmul;
-                float deg = atan2f(miniMap->mCursorPos.mY, miniMap->mCursorPos.mX) + MATH_PI * 0.25f;
-                miniMapAt.mX = cosf(deg) * dist;
+                // Convert cursor canvas position to world coordinates using the
+                // minimap camera's viewport unproject (canvas → screen → camera → world)
+                Game::MiniMapCamera *cam = miniMap->mMiniMapCamera;
+                sead::Viewport *viewport = (sead::Viewport*)((u8*)cam->cameraMgr + 0x5B8);
+                sead::Projection *proj = cam->mProjection;
+                sead::Camera *seadCam = cam->getCamera();
+
+                sead::Vector2<float> cursorCanvas = miniMap->mCursorPos;
+                viewport->unproject(&miniMapAt, cursorCanvas, *proj, *seadCam);
+
+                // Snap to actual terrain height
                 miniMapAt.mY = cameraheight;
-                miniMapAt.mZ = sinf(deg) * dist * -1;
                 miniMapAt = Utils::calcGroundPos(player, miniMapAt);
                 if(isOnline) bulletCloneHandle->sendEvent_Shot(player->mIndex, player->mPosition, miniMapAt, Game::BulletCloneEvent::Type::BulletTypeInkstrike, 0);
                 player->resetPaintGauge(0, 0, 0, 0);
