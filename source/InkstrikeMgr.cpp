@@ -70,6 +70,15 @@ namespace Flexlion{
         case TornadoState::cNone:
             break;
         case TornadoState::cAim:
+            if(player->isInTrouble_Dying()){
+                // Player died without choosing a spot — cancel special
+                playerState[id] = TornadoState::cNone;
+                if(isCtrlPerformer){
+                    Game::MiniMap *mMap = Utils::getMinimap();
+                    if(mMap != NULL) mMap->setVisible(true);
+                }
+                break;
+            }
             if(!player->isInSpecial()){
                 // Special ran out without choosing a spot — shoot at player position
                 sead::Vector3<float> fallbackDest = player->mPosition;
@@ -142,7 +151,7 @@ namespace Flexlion{
             isAppliedWeapon[id] = 0;
             Prot::ObfStore(&player->mSpecialLeftFrame, startflightdelay);
             int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mShootFrm[id];
-            if(elapsed >= startflightdelay){
+            if(elapsed >= startflightdelay || player->isInTrouble_Dying()){
                 Prot::ObfStore(&player->mSpecialLeftFrame, 0);
                 playerState[id] = TornadoState::cNone;
                 player->informGetWeapon_Impl_(player->mMainWeaponId, player->mSubWeaponId, player->mSpecialWeaponId, 0);
@@ -157,6 +166,13 @@ namespace Flexlion{
     }
     void InkstrikeMgr::playerThirdCalc(Game::Player *player){
         int id = player->mIndex;
+        if(player->isInTrouble_Dying()){
+            // Clear shoot animations when dying
+            if(player->mPlayerMotion->animSeq_3C == 46 || player->mPlayerMotion->animSeq_3C == 47){
+                player->mPlayerMotion->animSeq_3C = -1;
+            }
+            return;
+        }
         int desiredAnim = -1;
         switch(playerState[id]){
         case TornadoState::cShootPrepare:
