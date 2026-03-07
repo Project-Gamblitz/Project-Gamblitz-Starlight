@@ -119,7 +119,7 @@ namespace Flexlion{
         {
             Prot::ObfStore(&player->mSpecialLeftFrame, startflightdelay);
             int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mShootPrepareFrm[id];
-            if(elapsed >= startflightdelay){
+            if(elapsed >= startflightdelay || player->isInTrouble_Dying()){
                 // Get launch position from ink tank bone
                 sead::Vector3<float> launchPos = player->mPosition;
                 Cmn::PlayerCustomPart *tank = player->getTank();
