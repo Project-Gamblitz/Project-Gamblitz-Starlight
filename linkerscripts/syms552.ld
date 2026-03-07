@@ -352,6 +352,7 @@ _ZN4Game5Actor22getClassIterNodeStaticEv = 0x2C884 - 0x2EBE000;
 _ZNK4Game6Player25isInStepPaintFriend_ForceEv = 0x10281F4 - 0x2EBE000;
 _ZNK4Game17PlayerAnimCtrlSet7isValidEii = 0x1031A7C - 0x2EBE000;
 _ZN4Game12PlayerMotion14startEventAnimENS0_6AnimIDEff = 0x10F2A8C - 0x2EBE000;
+_ZN4Game12PlayerMotion19startOneTime_InsertENS0_6AnimIDE = 0x010F6258 - 0x2EBE000;
 _ZN4Game9BulletMgr12createActorsEv = 0x4DEEF8 - 0x2EBE000;
 _ZN3Cmn9StaticMem17reqBackSceneBySysEv = 0xB9258 - 0x2EBE000;
 _ZN4sead5nnsdk15PrintStackTraceEPN2nn2os17UserExceptionInfoE = 0x1aa99e4 - 0x2EBE000;

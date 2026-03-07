@@ -151,10 +151,16 @@ void handleBulletCloneEventHook(Game::BulletCloneHandle *cloneHandle, Game::Play
 }
 
 static void (*playerFirstCalcOg)(Game::Player*);
+static void (*playerThirdCalcOg)(Game::Player*);
 static void (*playerFourthCalcOg)(Game::Player*);
 void playerFirstCalcHook(Game::Player *player){
 	playerFirstCalcOg(player);
 	tornadoMgr->playerFirstCalc(player);
+}
+
+void playerThirdCalcHook(Game::Player *player){
+	playerThirdCalcOg(player);
+	tornadoMgr->playerThirdCalc(player);
 }
 
 void playerFourthCalcHook(Game::Player *player){
@@ -451,8 +457,10 @@ void init_starlion(){
 	*(void (**)(Game::MiniMapCamera*))ProcessMemory::MainAddr(0x2AE8518) = miniMapCamCalcHook;
 	Cmn::ActorVtable *playerVtable = (Cmn::ActorVtable*)ProcessMemory::MainAddr(0x2C0BAD8);
 	playerFirstCalcOg = (void (*)(Game::Player*))playerVtable->firstCalc;
+	playerThirdCalcOg = (void (*)(Game::Player*))playerVtable->thirdCalc;
 	playerFourthCalcOg = (void (*)(Game::Player*))playerVtable->fourthCalc;
 	playerVtable->firstCalc = (u64)playerFirstCalcHook;
+	playerVtable->thirdCalc = (u64)playerThirdCalcHook;
 	playerVtable->fourthCalc = (u64)playerFourthCalcHook;
 	handleBulletCloneEventImpl = (void (*)(Game::BulletCloneHandle *, Game::Player *, Game::BulletCloneEvent *, int))ProcessMemory::MainAddr(0x4CF54C);
 	DrawUtils::makeTudou();
@@ -784,7 +792,7 @@ void inkstrikeShotHook(Game::BulletSpSuperBall *ball, Game::Player *sender, int 
 }
 
 bool isInInkstrikeCarryHook(Game::Player *player){
-	return (player->isInSpecial() and player->mSpecialWeaponId == TORNADO_SPECIAL_ID) and tornadoMgr->playerState[player->mIndex] != Flexlion::TornadoState::cShoot;
+	return (player->isInSpecial() and player->mSpecialWeaponId == TORNADO_SPECIAL_ID) and tornadoMgr->playerState[player->mIndex] != Flexlion::TornadoState::cNone;
 }
 
 sead::Heap *npcHeapHook(sead::HeapMgr *a1, sead::Heap *a2){

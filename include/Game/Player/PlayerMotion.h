@@ -13,6 +13,7 @@ namespace Game {
             
         };
         void startEventAnim(Game::PlayerMotion::AnimID, float, float);
+        int startOneTime_Insert(Game::PlayerMotion::AnimID);
         void startUserDemoAnim(char const*,int,int);
         void startDemoAnim(char const*, float, float, bool);
         void reset(bool,Game::PlayerMotion::ResetMode);

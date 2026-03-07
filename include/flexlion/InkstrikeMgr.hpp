@@ -19,6 +19,7 @@ namespace Flexlion{
         void registerPlayer(Game::Player *player);
         void playerFourthCalc(Game::Player *player);
         void playerFirstCalc(Game::Player *player);
+        void playerThirdCalc(Game::Player *player);
         void informShotInkstrike(Game::Player *player, sead::Vector3<float> pos, sead::Vector3<float> dest, int paintgamefrm);
         void onCalc();
         Lp::Sys::ModelArc *mTornadoArc;

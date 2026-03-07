@@ -141,6 +141,19 @@ namespace Flexlion{
         }
         };
     }
+    void InkstrikeMgr::playerThirdCalc(Game::Player *player){
+        int id = player->mIndex;
+        switch(playerState[id]){
+        case TornadoState::cShootPrepare:
+            player->mPlayerMotion->startOneTime_Insert((Game::PlayerMotion::AnimID)38);
+            break;
+        case TornadoState::cShoot:
+            player->mPlayerMotion->startOneTime_Insert((Game::PlayerMotion::AnimID)39);
+            break;
+        default:
+            break;
+        }
+    }
     void InkstrikeMgr::registerPlayer(Game::Player *player){
         int id = player->mIndex;
         Lp::Utl::ModelCreateArg arg;
