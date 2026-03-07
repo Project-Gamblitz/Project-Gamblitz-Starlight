@@ -145,10 +145,10 @@ namespace Flexlion{
         int id = player->mIndex;
         switch(playerState[id]){
         case TornadoState::cShootPrepare:
-            player->mPlayerMotion->startOneTime_Insert((Game::PlayerMotion::AnimID)38);
+            player->mPlayerMotion->startOneTime_Insert((Game::PlayerMotion::AnimID)46);
             break;
         case TornadoState::cShoot:
-            player->mPlayerMotion->startOneTime_Insert((Game::PlayerMotion::AnimID)39);
+            player->mPlayerMotion->startOneTime_Insert((Game::PlayerMotion::AnimID)47);
             break;
         default:
             break;
