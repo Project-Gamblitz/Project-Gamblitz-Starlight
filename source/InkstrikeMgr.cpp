@@ -71,7 +71,21 @@ namespace Flexlion{
             break;
         case TornadoState::cAim:
             if(!player->isInSpecial()){
-                playerState[id] = TornadoState::cNone;
+                // Special ran out without choosing a spot — shoot at player position
+                sead::Vector3<float> fallbackDest = player->mPosition;
+                fallbackDest.mY += cameraheight;
+                fallbackDest = Utils::calcGroundPos(player, fallbackDest);
+                if(isOnline) bulletCloneHandle->sendEvent_Shot(player->mIndex, player->mPosition, fallbackDest, Game::BulletCloneEvent::Type::BulletTypeInkstrike, 0);
+                player->resetPaintGauge(0, 0, 0, 0);
+                isAppliedWeapon[id] = 0;
+                mPendingDest[id] = fallbackDest;
+                mShootPrepareFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
+                playerState[id] = TornadoState::cShootPrepare;
+                Game::MiniMap *mMap = Utils::getMinimap();
+                if(mMap != NULL){
+                    mMap->setVisible(false);
+                    mMap->fadeAllEffect();
+                }
                 break;
             }
 
