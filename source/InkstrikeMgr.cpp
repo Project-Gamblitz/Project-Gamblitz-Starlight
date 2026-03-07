@@ -143,15 +143,19 @@ namespace Flexlion{
     }
     void InkstrikeMgr::playerThirdCalc(Game::Player *player){
         int id = player->mIndex;
+        int desiredAnim = -1;
         switch(playerState[id]){
         case TornadoState::cShootPrepare:
-            player->mPlayerMotion->startOneTime_Insert((Game::PlayerMotion::AnimID)46);
+            desiredAnim = 46;
             break;
         case TornadoState::cShoot:
-            player->mPlayerMotion->startOneTime_Insert((Game::PlayerMotion::AnimID)47);
+            desiredAnim = 47;
             break;
         default:
             break;
+        }
+        if(desiredAnim != -1 && player->mPlayerMotion->animSeq_3C != desiredAnim){
+            player->mPlayerMotion->startOneTime_Insert((Game::PlayerMotion::AnimID)desiredAnim);
         }
     }
     void InkstrikeMgr::registerPlayer(Game::Player *player){
