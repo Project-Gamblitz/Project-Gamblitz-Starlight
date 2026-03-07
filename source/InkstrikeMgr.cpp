@@ -181,10 +181,9 @@ namespace Flexlion{
         if(mTornadoModel[id] == NULL || mTornadoMonitorModel[id] == NULL || player->mPlayerCustomMgr == NULL){
             return;
         }
-        // When the bullet actor is active, it handles model rendering via its own fourthCalc
-        if(bullets[id] != NULL && bullets[id]->isActive()){
-            return;
-        }
+        // When the bullet actor is active, it handles tornado model rendering via its own fourthCalc
+        // but we still need to render the monitor during cShoot
+        bool bulletActive = bullets[id] != NULL && bullets[id]->isActive();
         switch(playerState[id]){
         case TornadoState::cNone:
             break;
@@ -192,32 +191,43 @@ namespace Flexlion{
         case TornadoState::cShootPrepare:
         {
             // Attach Wsp_Tornado to the tank_root bone on the player model
-            Cmn::PlayerCustomPart *tank = player->getTank();
-            if(tank == NULL) tank = player->mPlayerCustomMgr->getMantle();
-            if(tank != NULL){
-                sead::Matrix34<float> tankBoneMtx;
-                tank->getRootBoneMtx(&tankBoneMtx);
-                // Normalize rotation columns to strip bone scale, keep only position + rotation
-                for(int col = 0; col < 3; col++){
-                    float len = sqrtf(
-                        tankBoneMtx.matrix[0][col] * tankBoneMtx.matrix[0][col] +
-                        tankBoneMtx.matrix[1][col] * tankBoneMtx.matrix[1][col] +
-                        tankBoneMtx.matrix[2][col] * tankBoneMtx.matrix[2][col]
-                    );
-                    if(len > 0.0f){
-                        tankBoneMtx.matrix[0][col] /= len;
-                        tankBoneMtx.matrix[1][col] /= len;
-                        tankBoneMtx.matrix[2][col] /= len;
+            if(!bulletActive){
+                Cmn::PlayerCustomPart *tank = player->getTank();
+                if(tank == NULL) tank = player->mPlayerCustomMgr->getMantle();
+                if(tank != NULL){
+                    sead::Matrix34<float> tankBoneMtx;
+                    tank->getRootBoneMtx(&tankBoneMtx);
+                    // Normalize rotation columns to strip bone scale, keep only position + rotation
+                    for(int col = 0; col < 3; col++){
+                        float len = sqrtf(
+                            tankBoneMtx.matrix[0][col] * tankBoneMtx.matrix[0][col] +
+                            tankBoneMtx.matrix[1][col] * tankBoneMtx.matrix[1][col] +
+                            tankBoneMtx.matrix[2][col] * tankBoneMtx.matrix[2][col]
+                        );
+                        if(len > 0.0f){
+                            tankBoneMtx.matrix[0][col] /= len;
+                            tankBoneMtx.matrix[1][col] /= len;
+                            tankBoneMtx.matrix[2][col] /= len;
+                        }
                     }
+                    // Apply Z axis offset along the bone's local Z direction
+                    tankBoneMtx.matrix[0][3] += tankBoneMtx.matrix[0][2] * tornadoTankZOffset;
+                    tankBoneMtx.matrix[1][3] += tankBoneMtx.matrix[1][2] * tornadoTankZOffset;
+                    tankBoneMtx.matrix[2][3] += tankBoneMtx.matrix[2][2] * tornadoTankZOffset;
+                    // Scramble effect during cShootPrepare
+                    if(playerState[id] == TornadoState::cShootPrepare){
+                        int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mShootPrepareFrm[id];
+                        float intensity = (float)elapsed / (float)startflightdelay; // ramps up 0→1
+                        float scramble = sinf(elapsed * 2.5f) * intensity * 1.5f;
+                        tankBoneMtx.matrix[0][3] += tankBoneMtx.matrix[0][0] * scramble;
+                        tankBoneMtx.matrix[1][3] += tankBoneMtx.matrix[1][0] * scramble;
+                        tankBoneMtx.matrix[2][3] += tankBoneMtx.matrix[2][0] * scramble;
+                    }
+                    mTornadoModel[id]->mtx = tankBoneMtx;
+                    mTornadoModel[id]->mUpdateScale|=1;
+                    mTornadoModel[id]->updateAnimationWorldMatrix_(3);
+                    mTornadoModel[id]->requestDraw();
                 }
-                // Apply Z axis offset along the bone's local Z direction
-                tankBoneMtx.matrix[0][3] += tankBoneMtx.matrix[0][2] * tornadoTankZOffset;
-                tankBoneMtx.matrix[1][3] += tankBoneMtx.matrix[1][2] * tornadoTankZOffset;
-                tankBoneMtx.matrix[2][3] += tankBoneMtx.matrix[2][2] * tornadoTankZOffset;
-                mTornadoModel[id]->mtx = tankBoneMtx;
-                mTornadoModel[id]->mUpdateScale|=1;
-                mTornadoModel[id]->updateAnimationWorldMatrix_(3);
-                mTornadoModel[id]->requestDraw();
             }
             // Attach Wsp_Tornado_Monitor to the weapon bone (replacing current weapon)
             Cmn::PlayerWeapon *weapon = player->mPlayerWeapon[0];
@@ -233,8 +243,20 @@ namespace Flexlion{
             break;
         }
         case TornadoState::cShoot:
-            // During shoot phase, the BSA actor handles the model
+        {
+            // Keep monitor visible during shoot animation
+            Cmn::PlayerWeapon *weapon = player->mPlayerWeapon[0];
+            if(weapon != NULL){
+                sead::Matrix34<float> weaponBoneMtx;
+                weapon->getRootBoneMtx(&weaponBoneMtx);
+                weapon->setVisible(false);
+                mTornadoMonitorModel[id]->mtx = weaponBoneMtx;
+                mTornadoMonitorModel[id]->mUpdateScale|=1;
+                mTornadoMonitorModel[id]->updateAnimationWorldMatrix_(3);
+                mTornadoMonitorModel[id]->requestDraw();
+            }
             break;
+        }
         };
     }
 }
