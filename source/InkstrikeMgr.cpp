@@ -89,14 +89,22 @@ namespace Flexlion{
                 break;
             }
             if(!player->isInSpecial()){
-                // Special ran out without choosing a spot — cancel, don't launch
-                playerState[id] = TornadoState::cNone;
-                if(bullets[id] != NULL && bullets[id]->isActive()){
-                    bullets[id]->cancel();
-                }
+                // Special gauge ran out without choosing a spot — auto-fire at player position
+                sead::Vector3<float> autoDest = player->mPosition;
+                autoDest.mY = 3000.0f;
+                autoDest = Utils::calcGroundPos(player, autoDest);
+                if(isOnline) bulletCloneHandle->sendEvent_Shot(player->mIndex, player->mPosition, autoDest, Game::BulletCloneEvent::Type::BulletTypeInkstrike, 0);
+                isAppliedWeapon[id] = 0;
+                mPendingDest[id] = autoDest;
+                mShootPrepareFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
+                playerState[id] = TornadoState::cShootPrepare;
+                if(bullets[id] != NULL) bullets[id]->mStateMachine.changeState(BSAState::cState_Wait);
                 if(isCtrlPerformer){
                     Game::MiniMap *mMap = Utils::getMinimap();
-                    if(mMap != NULL) mMap->setVisible(true);
+                    if(mMap != NULL){
+                        mMap->setVisible(false);
+                        mMap->fadeAllEffect();
+                    }
                 }
                 break;
             }
