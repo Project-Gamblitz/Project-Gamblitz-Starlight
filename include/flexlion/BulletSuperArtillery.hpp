@@ -16,7 +16,8 @@ enum BSAState {
     cState_Pronounce = 0,
     cState_Wait = 1,
     cState_Burst = 2,
-    cState_Count = 3,
+    cState_Aim = 3,
+    cState_Count = 4,
 };
 
 class BulletSuperArtillery {
@@ -43,7 +44,9 @@ public:
 
     static BulletSuperArtillery *create(Lp::Sys::Actor *parent, gsys::Model *model, Cmn::Def::Team team);
 
-    void launch(Game::Player *sender, sead::Vector3<float> src, sead::Vector3<float> dst, int paintgamefrm);
+    void prepare(Game::Player *sender);
+    void launch(sead::Vector3<float> src, sead::Vector3<float> dst, int paintgamefrm);
+    void cancel();
     bool isActive() const;
     void reset();
 
@@ -64,8 +67,11 @@ public:
     void stateWait();
     void stateEnterBurst();
     void stateBurst();
+    void stateEnterAim();
+    void stateAim();
 
     // Helpers
+    void calcTankBone();
     void calcFlight();
     void doBurst();
     void calcBurstFollow();

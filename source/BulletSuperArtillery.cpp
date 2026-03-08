@@ -6,22 +6,28 @@
 #include "Game/Player/PlayerSuperBall.h"
 #include "Game/Player/PlayerInkAction.h"
 #include "Game/MainMgr.h"
+#include "Cmn/PlayerWeapon.h"
 
 extern "C" {
     void _ZN3Cmn5ActorC2Ev(void *);
     void _ZN6xlink222EnumPropertyDefinitionC2EPKcb(void *, const char *, bool);
     void _ZN6xlink222EnumPropertyDefinition12setEntryBuf_EiPNS0_5EntryE(void *, int, void *);
     void _ZN6xlink222EnumPropertyDefinition5entryEiPKc(void *, int, const char *);
+    void _ZN2Lp3Sys5XLink12killAllSoundEv(void *xlink);
+    // VTV symbols for manual F32PropertyDefinition construction
+    extern u8 _ZTVN6xlink221F32PropertyDefinitionE[];
+    extern u8 _ZTVN4sead22BufferedSafeStringBaseIcEE[];
 }
 #define CmnActorCtor _ZN3Cmn5ActorC2Ev
 #define EnumPropDefCtor _ZN6xlink222EnumPropertyDefinitionC2EPKcb
 #define EnumPropDefSetEntryBuf _ZN6xlink222EnumPropertyDefinition12setEntryBuf_EiPNS0_5EntryE
 #define EnumPropDefEntry _ZN6xlink222EnumPropertyDefinition5entryEiPKc
+#define XLinkKillAllSound _ZN2Lp3Sys5XLink12killAllSoundEv
 
 // Flight parameters
-const int BSA_PRONOUNCE_DURATION = 15;
 const int BSA_FLIGHT_TIME = 150;
 const float BSA_FLIGHT_HEIGHT = 300.0f;
+const float tornadoTankZOffset = -3.0f;
 
 namespace Flexlion {
 
@@ -62,9 +68,15 @@ static _BYTE sUserPropBuf[0x78];
 static EnumEntry sUserEntries[2];
 static bool sUserPropInit = false;
 
+// F32PropertyDefinition for "BulletDistance" (manually constructed, no ctor symbol available)
+// Layout: +0 vtable, +8 sead string vtable, +16 buf ptr, +24 capacity, +28 name
+static _BYTE sDistPropBuf[0x60] __attribute__((aligned(8)));
+static bool sDistPropInit = false;
+
 void resetBSAStatics() {
     sInitVtable = false;
     sUserPropInit = false;
+    sDistPropInit = false;
 }
 
 static void initUserProperty() {
@@ -77,6 +89,22 @@ static void initUserProperty() {
     EnumPropDefEntry(sUserPropBuf, 0, "Player");
     EnumPropDefEntry(sUserPropBuf, 1, "Enemy");
     sUserPropInit = true;
+}
+
+static void initDistProperty() {
+    if (sDistPropInit) return;
+    memset(sDistPropBuf, 0, sizeof(sDistPropBuf));
+    // F32PropertyDefinition vtable = _ZTV + 0x10
+    *(u64 *)(sDistPropBuf + 0) = (u64)(_ZTVN6xlink221F32PropertyDefinitionE + 0x10);
+    // Embedded sead::BufferedSafeStringBase<char> vtable = _ZTV + 0x10
+    *(u64 *)(sDistPropBuf + 8) = (u64)(_ZTVN4sead22BufferedSafeStringBaseIcEE + 0x10);
+    // Buffer pointer → name chars at +28
+    *(u64 *)(sDistPropBuf + 16) = (u64)(sDistPropBuf + 28);
+    // Buffer capacity
+    *(u32 *)(sDistPropBuf + 24) = 64;
+    // Name
+    memcpy(sDistPropBuf + 28, "BulletDistance", 15);
+    sDistPropInit = true;
 }
 
 // ============================================================
@@ -105,6 +133,10 @@ BulletSuperArtillery::BulletSuperArtillery() {
     mStateMachine.registStateName(cState_Burst, sead::SafeStringBase<char>("cState_Burst"));
     mStateMachine.mStateBuffer[cState_Burst] = Lp::Utl::StateMachine::Delegate<BulletSuperArtillery>(
         this, &BulletSuperArtillery::stateEnterBurst, &BulletSuperArtillery::stateBurst, NULL);
+
+    mStateMachine.registStateName(cState_Aim, sead::SafeStringBase<char>("cState_Aim"));
+    mStateMachine.mStateBuffer[cState_Aim] = Lp::Utl::StateMachine::Delegate<BulletSuperArtillery>(
+        this, &BulletSuperArtillery::stateEnterAim, &BulletSuperArtillery::stateAim, NULL);
 
     // Zero custom fields
     mSender = NULL;
@@ -143,8 +175,21 @@ BulletSuperArtillery *BulletSuperArtillery::create(Lp::Sys::Actor *parent, gsys:
 // Public API
 // ============================================================
 
-void BulletSuperArtillery::launch(Game::Player *sender, sead::Vector3<float> src, sead::Vector3<float> dst, int paintgamefrm) {
+void BulletSuperArtillery::prepare(Game::Player *sender) {
     mSender = sender;
+    mFrom = sead::Vector3<float>::zero;
+    mTo = sead::Vector3<float>::zero;
+    mPos = sead::Vector3<float>::zero;
+    mRot = sead::Vector3<float>::zero;
+    mStartFrm = 0;
+    mFlightActive = false;
+    mHasBurst = false;
+    mSuperball = NULL;
+
+    asLpActor()->reserveActivate(true);
+}
+
+void BulletSuperArtillery::launch(sead::Vector3<float> src, sead::Vector3<float> dst, int paintgamefrm) {
     mFrom = src;
     mTo = dst;
     mStartFrm = paintgamefrm;
@@ -154,10 +199,20 @@ void BulletSuperArtillery::launch(Game::Player *sender, sead::Vector3<float> src
     mRot.mY = atan2f(src.mX - dst.mX, src.mZ - dst.mZ) + MATH_PI;
     if (mRot.mY > MATH_PI * 2.0f) mRot.mY -= MATH_PI * 2.0f;
     mFlightActive = true;
-    mHasBurst = false;
-    mSuperball = NULL;
 
-    asLpActor()->reserveActivate(true);
+    // Update xlink root matrix to target position
+    mXLinkMtx = {{
+        1.0f, 0.0f, 0.0f, mTo.mX,
+        0.0f, 1.0f, 0.0f, mTo.mY,
+        0.0f, 0.0f, 1.0f, mTo.mZ
+    }};
+    setXLinkRootMtx();
+
+    mStateMachine.changeState(cState_Pronounce);
+}
+
+void BulletSuperArtillery::cancel() {
+    doSleep();
 }
 
 bool BulletSuperArtillery::isActive() const {
@@ -185,37 +240,33 @@ const char *BulletSuperArtillery::vtGetClassName(BulletSuperArtillery *self) {
 }
 
 void BulletSuperArtillery::vtFirstCalc(BulletSuperArtillery *self) {
-    if (!self->mFlightActive && !self->mHasBurst) return;
     self->mStateMachine.executeState();
 }
 
 void BulletSuperArtillery::vtFourthCalc(BulletSuperArtillery *self) {
-    self->updateModelMatrix();
+    if (self->mFlightActive) {
+        self->updateModelMatrix();
+    } else if (!self->mHasBurst) {
+        // cState_Wait: render tornado at player's tank bone
+        self->calcTankBone();
+    }
 }
 
 void BulletSuperArtillery::vtOnActivate(BulletSuperArtillery *self, bool) {
-    // Build mXLinkMtx as identity with translation = target landing position.
-    // The xlink2 system reads from this matrix for boneless effects (Laser, LaserIcon).
-    // Bone-attached effects (JetSmoke=root, JetSplash=screw) use bone matrices and are unaffected.
-    self->mXLinkMtx = {{
-        1.0f, 0.0f, 0.0f, self->mTo.mX,
-        0.0f, 1.0f, 0.0f, self->mTo.mY,
-        0.0f, 0.0f, 1.0f, self->mTo.mZ
-    }};
-
-    // Update the UserInstance root matrix pointer so calcMtx uses our mXLinkMtx
-    // for effects without a bone assignment (inline setRootMtx logic)
-    self->setXLinkRootMtx();
-
-    // Set XLink "User" property value (0 = Player)
+    // Set XLink local property values
     Lp::Sys::XLink *xlink = self->getXLink();
     if (xlink) {
+        // Property 0: "User" (0.0 = Player)
         xlink->setLocalPropertyValue(0, 0.0f);
+        // Property 1: "BulletDistance" (set later in launch())
+        xlink->setLocalPropertyValue(1, 0.0f);
     }
-    // Start state machine at initial state
-    if (self->mFlightActive) {
-        self->mStateMachine.changeState(cState_Pronounce);
-    }
+
+    // Update the UserInstance root matrix pointer so calcMtx uses our mXLinkMtx
+    self->setXLinkRootMtx();
+
+    // Start in cState_Aim (idle aiming, no xlink effects)
+    self->mStateMachine.changeState(cState_Aim);
 }
 
 void BulletSuperArtillery::vtOnSleep(BulletSuperArtillery *self) {
@@ -223,15 +274,16 @@ void BulletSuperArtillery::vtOnSleep(BulletSuperArtillery *self) {
 }
 
 int BulletSuperArtillery::vtSetXLinkLocalPropertyDef(BulletSuperArtillery *self, int idx) {
-    // Cmn::Actor base returns idx unchanged (no-op for actors without components)
     initUserProperty();
+    initDistProperty();
     Lp::Sys::XLinkIUser *xlinkUser = (Lp::Sys::XLinkIUser *)(self->_actorBase + 0x2E8);
     xlinkUser->pushLocalPropertyDefinition((xlink2::PropertyDefinition *)sUserPropBuf);
-    return idx + 1;
+    xlinkUser->pushLocalPropertyDefinition((xlink2::PropertyDefinition *)sDistPropBuf);
+    return idx + 2;
 }
 
 int BulletSuperArtillery::vtCountXLinkLocalProperty(BulletSuperArtillery *self) {
-    return 1; // "User"
+    return 2; // "User" + "BulletDistance"
 }
 
 // Inline reimplementation of xlink2::UserInstance::setRootMtx.
@@ -281,26 +333,20 @@ void BulletSuperArtillery::stateEnterPronounce() {
 void BulletSuperArtillery::statePronounce() {
     calcFlight();
     int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mStartFrm;
-    if (elapsed >= BSA_PRONOUNCE_DURATION) {
-        mStateMachine.changeState(cState_Wait);
-    }
-}
-
-void BulletSuperArtillery::stateEnterWait() {
-    // XLink triggers cState_Wait effects:
-    // JetSmoke (trail, starts at frame 15 of state)
-}
-
-void BulletSuperArtillery::stateWait() {
-    calcFlight();
-    int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mStartFrm;
     if (elapsed >= BSA_FLIGHT_TIME) {
         mStateMachine.changeState(cState_Burst);
     }
 }
 
+void BulletSuperArtillery::stateEnterWait() {
+}
+
+void BulletSuperArtillery::stateWait() {
+    // During cState_Wait, model is rendered at tank bone via calcTankBone in fourthCalc
+    // State transitions to cState_Pronounce when launch() is called
+}
+
 void BulletSuperArtillery::stateEnterBurst() {
-    // XLink triggers cState_Burst effects: Bomb (explosion)
     doBurst();
 }
 
@@ -308,9 +354,64 @@ void BulletSuperArtillery::stateBurst() {
     calcBurstFollow();
 }
 
+void BulletSuperArtillery::stateEnterAim() {
+}
+
+void BulletSuperArtillery::stateAim() {
+}
+
 // ============================================================
 // Helpers
 // ============================================================
+
+void BulletSuperArtillery::calcTankBone() {
+    if (mSender == NULL || mTornadoModel == NULL) return;
+
+    Cmn::PlayerCustomPart *tank = mSender->getTank();
+    if (tank == NULL) tank = mSender->mPlayerCustomMgr->getMantle();
+    if (tank == NULL) return;
+
+    sead::Matrix34<float> tankBoneMtx;
+    tank->getRootBoneMtx(&tankBoneMtx);
+
+    // Normalize rotation columns to strip bone scale, keep only position + rotation
+    for (int col = 0; col < 3; col++) {
+        float len = sqrtf(
+            tankBoneMtx.matrix[0][col] * tankBoneMtx.matrix[0][col] +
+            tankBoneMtx.matrix[1][col] * tankBoneMtx.matrix[1][col] +
+            tankBoneMtx.matrix[2][col] * tankBoneMtx.matrix[2][col]
+        );
+        if (len > 0.0f) {
+            tankBoneMtx.matrix[0][col] /= len;
+            tankBoneMtx.matrix[1][col] /= len;
+            tankBoneMtx.matrix[2][col] /= len;
+        }
+    }
+
+    // Apply Z axis offset along the bone's local Z direction
+    tankBoneMtx.matrix[0][3] += tankBoneMtx.matrix[0][2] * tornadoTankZOffset;
+    tankBoneMtx.matrix[1][3] += tankBoneMtx.matrix[1][2] * tornadoTankZOffset;
+    tankBoneMtx.matrix[2][3] += tankBoneMtx.matrix[2][2] * tornadoTankZOffset;
+
+    // Scramble effect during cShootPrepare (InkstrikeMgr state)
+    InkstrikeMgr *mgr = InkstrikeMgr::sInstance;
+    if (mgr != NULL) {
+        int id = mSender->mIndex;
+        if (mgr->playerState[id] == TornadoState::cShootPrepare) {
+            int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mgr->mShootPrepareFrm[id];
+            float intensity = (float)elapsed / 60.0f; // ramps up 0→1 over startflightdelay
+            float scramble = sinf(elapsed * 2.5f) * intensity * 1.5f;
+            tankBoneMtx.matrix[0][3] += tankBoneMtx.matrix[0][0] * scramble;
+            tankBoneMtx.matrix[1][3] += tankBoneMtx.matrix[1][0] * scramble;
+            tankBoneMtx.matrix[2][3] += tankBoneMtx.matrix[2][0] * scramble;
+        }
+    }
+
+    mTornadoModel->mtx = tankBoneMtx;
+    mTornadoModel->mUpdateScale |= 1;
+    mTornadoModel->updateAnimationWorldMatrix_(3);
+    mTornadoModel->requestDraw();
+}
 
 void BulletSuperArtillery::calcFlight() {
     int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mStartFrm;
@@ -333,6 +434,20 @@ void BulletSuperArtillery::calcFlight() {
 
 void BulletSuperArtillery::doBurst() {
     if (mSender == NULL) return;
+
+    // Set BulletDistance = distance from controlled player (listener proxy) to burst pos, capped at 128
+    Lp::Sys::XLink *xlink = getXLink();
+    if (xlink) {
+        Game::Player *listener = Game::PlayerMgr::sInstance->getControlledPerformer();
+        if (listener) {
+            float dx = listener->mPosition.mX - mPos.mX;
+            float dy = listener->mPosition.mY - mPos.mY;
+            float dz = listener->mPosition.mZ - mPos.mZ;
+            float dist = sqrtf(dx * dx + dy * dy + dz * dz);
+            if (dist > 128.0f) dist = 128.0f;
+            xlink->setLocalPropertyValue(1, dist);
+        }
+    }
 
     Game::PlayerSuperBall *playerSuperBall = mSender->mPlayerSuperBall;
     Game::PlayerInkAction *inkAction = mSender->mPlayerInkAction;
@@ -393,7 +508,7 @@ void BulletSuperArtillery::calcBurstFollow() {
 }
 
 void BulletSuperArtillery::updateModelMatrix() {
-    if (!mFlightActive && !mHasBurst) return;
+    if (!mFlightActive) return;
     if (mTornadoModel == NULL) return;
 
     mTornadoModel->mtx = {{
@@ -416,6 +531,10 @@ void BulletSuperArtillery::updateModelMatrix() {
 }
 
 void BulletSuperArtillery::doSleep() {
+    Lp::Sys::XLink *xlink = getXLink();
+    if (xlink) {
+        XLinkKillAllSound(xlink);
+    }
     mHasBurst = false;
     mFlightActive = false;
     asLpActor()->reserveSleepAll_(Lp::Sys::Actor::ListNodeKind::None);
