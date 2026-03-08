@@ -333,7 +333,8 @@ void BulletSuperArtillery::stateEnterPronounce() {
 void BulletSuperArtillery::statePronounce() {
     calcFlight();
     int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mStartFrm;
-    if (elapsed >= BSA_FLIGHT_TIME) {
+    int flightTime = (mSender != NULL && mSender->isInTrouble_Dying()) ? 150 : BSA_FLIGHT_TIME;
+    if (elapsed >= flightTime) {
         mStateMachine.changeState(cState_Burst);
     }
 }
@@ -415,7 +416,8 @@ void BulletSuperArtillery::calcTankBone() {
 
 void BulletSuperArtillery::calcFlight() {
     int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mStartFrm;
-    float anim = float(elapsed) / float(BSA_FLIGHT_TIME);
+    int flightTime = (mSender != NULL && mSender->isInTrouble_Dying()) ? 150 : BSA_FLIGHT_TIME;
+    float anim = float(elapsed) / float(flightTime);
     if (anim > 1.0f) anim = 1.0f;
 
     sead::Vector3<float> respos;

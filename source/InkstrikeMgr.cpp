@@ -157,21 +157,22 @@ namespace Flexlion{
             break;
         }
         case TornadoState::cShoot:
-        {
-            isAppliedWeapon[id] = 0;
-            Prot::ObfStore(&player->mSpecialLeftFrame, startflightdelay);
-            int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mShootFrm[id];
-            if(elapsed >= startflightdelay || player->isInTrouble_Dying()){
-                Prot::ObfStore(&player->mSpecialLeftFrame, 0);
-                playerState[id] = TornadoState::cNone;
-                player->informGetWeapon_Impl_(player->mMainWeaponId, player->mSubWeaponId, player->mSpecialWeaponId, 0);
-                if(isCtrlPerformer){
-                    Game::MiniMap *mMap = Utils::getMinimap();
-                    if(mMap != NULL) mMap->setVisible(true);
-                }
-            }
-            break;
-        }
+		{
+			isAppliedWeapon[id] = 0;
+			int flightDelay = player->isInTrouble_Dying() ? 10 : startflightdelay;
+			Prot::ObfStore(&player->mSpecialLeftFrame, flightDelay);
+			int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mShootFrm[id];
+			if(elapsed >= flightDelay){
+				Prot::ObfStore(&player->mSpecialLeftFrame, 0);
+				playerState[id] = TornadoState::cNone;
+				player->informGetWeapon_Impl_(player->mMainWeaponId, player->mSubWeaponId, player->mSpecialWeaponId, 0);
+				if(isCtrlPerformer){
+					Game::MiniMap *mMap = Utils::getMinimap();
+					if(mMap != NULL) mMap->setVisible(true);
+				}
+			}
+			break;
+		}
         };
     }
     void InkstrikeMgr::playerThirdCalc(Game::Player *player){
