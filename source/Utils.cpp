@@ -34,8 +34,19 @@ Game::MiniMap *Utils::getMinimap(){
 sead::Vector3<float> Utils::calcGroundPos(Game::Player *player, sead::Vector3<float> pos){
 	if(player->mPlayerSuperLanding == NULL) return pos;
 	sead::Vector3<float> oldpos = player->mPosition;
-	player->mPosition = pos;
-	player->mPlayerSuperLanding->calcLandingPos();
+	// calcLandingPos raycasts down ~500 units from player position.
+	// Iterate from high to low in 450-unit steps to cover the full vertical range.
+	// mLandingDist == 500.0 means no ground was found (max distance reached).
+	sead::Vector3<float> probe = pos;
+	for(float startY = 3000.0f; startY >= -500.0f; startY -= 450.0f){
+		probe.mY = startY;
+		player->mPosition = probe;
+		player->mPlayerSuperLanding->calcLandingPos();
+		if(player->mPlayerSuperLanding->mLandingDist < 499.0f){
+			player->mPosition = oldpos;
+			return player->mPlayerSuperLanding->mLandingPos;
+		}
+	}
 	player->mPosition = oldpos;
 	return player->mPlayerSuperLanding->mLandingPos;
 }

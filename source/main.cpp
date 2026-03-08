@@ -129,16 +129,35 @@ static bool gWasArtilleryCursor = false;
 void miniMapCamCalcHook(Game::MiniMapCamera *_this){
 	miniMapCamCalcImpl(_this);
 	float anim = tornadoMgr->cameraanim;
-	_this->mPosition.mX *= 1.0f - anim;
-	_this->mPosition.mX+=0.05f * anim;
-	_this->mPosition.mY *= 1.0f - anim;
-	_this->mPosition.mY+=tornadoMgr->cameraheight * anim;
-	_this->mPosition.mZ *= 1.0f - anim;
-	_this->mPosition.mZ+=0.05f * anim;
-	_this->mAt.mX *= 1.0f - anim;
-	_this->mAt.mY *= 1.0f - anim;
-	_this->mAt.mZ *= 1.0f - anim;
-	_this->mUp.mY *= 1.0f - anim;
+	u8 *base = (u8*)_this;
+	sead::Projection *perspProj = *(sead::Projection **)(base + 0x80);
+	sead::Projection *orthoProj = *(sead::Projection **)(base + 0x140);
+	if(anim > 0.0f){
+		float orig = 1.0f - anim;
+		// Top-down: position directly above the at point
+		float topX = _this->mAt.mX;
+		float topY = _this->mAt.mY + tornadoMgr->cameraheight;
+		float topZ = _this->mAt.mZ + 0.01f;
+		_this->mPosition.mX = _this->mPosition.mX * orig + topX * anim;
+		_this->mPosition.mY = _this->mPosition.mY * orig + topY * anim;
+		_this->mPosition.mZ = _this->mPosition.mZ * orig + topZ * anim;
+		// Lerp at.mY toward ground level
+		_this->mAt.mY *= orig;
+		// Up vector: lerp toward (0, 0, -1) for north-up top-down
+		_this->mUp.mX *= orig;
+		_this->mUp.mY *= orig;
+		_this->mUp.mZ = _this->mUp.mZ * orig + (-1.0f) * anim;
+		// Switch to perspective projection
+		if(perspProj != NULL && perspProj != orthoProj){
+			*(sead::Projection **)(base + 0x78) = perspProj;
+			((Cmn::CameraBase*)_this)->setFovy(tornadoMgr->camerafovy);
+		}
+	} else {
+		// Restore ortho projection when not in inkstrike
+		if(orthoProj != NULL){
+			*(sead::Projection **)(base + 0x78) = orthoProj;
+		}
+	}
 }
 
 static void (*handleBulletCloneEventImpl)(Game::BulletCloneHandle *cloneHandle, Game::Player *player, Game::BulletCloneEvent *event, int clonefrm);

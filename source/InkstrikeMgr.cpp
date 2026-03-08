@@ -9,8 +9,9 @@ namespace Flexlion{
         memset(this, 0, sizeof(InkstrikeMgr));
         mTornadoArc = new Lp::Sys::ModelArc(sead::SafeStringBase<char>::create("Wsp_Tornado"), NULL, 0, NULL, NULL);
         mTornadoMonitorArc = new Lp::Sys::ModelArc(sead::SafeStringBase<char>::create("Wsp_Tornado_Monitor"), NULL, 0, NULL, NULL);
-        cameraheight = 300.0f;
+        cameraheight = 1500.0f;
         cameraanim = 0.0f;
+        camerafovy = 60.0f;
         for(int i = 0; i < 10; i++){
             bullets[i] = NULL;
             mTankRootBoneIdx[i] = -1;
@@ -108,12 +109,17 @@ namespace Flexlion{
             }
 
             if(isCtrlPerformer and Utils::isShowMinimap() and Lp::Utl::getCtrl(0)->isHoldContinue(starlight::Controller::Buttons::A, 1) and cameraanim > 0.95f){
-                const float distmul = 2.0f;
-                float dist = sqrtf(miniMap->mCursorPos.mX * miniMap->mCursorPos.mX + miniMap->mCursorPos.mY * miniMap->mCursorPos.mY) * distmul;
-                float deg = atan2f(miniMap->mCursorPos.mY, miniMap->mCursorPos.mX) + MATH_PI * 0.25f;
-                miniMapAt.mX = cosf(deg) * dist;
-                miniMapAt.mY = cameraheight;
-                miniMapAt.mZ = sinf(deg) * dist * -1;
+                // Perspective top-down camera: canvas → world using inverse projection
+                // Canvas centered on camera target; viewport halfSize from project()
+                const float halfCanvas = 360.0f;
+                float halfFovyRad = camerafovy * 0.5f * MATH_PI / 180.0f;
+                float tanHalfFovy = sinf(halfFovyRad) / cosf(halfFovyRad);
+                float worldPerCanvas = cameraheight * tanHalfFovy / halfCanvas;
+                // Camera target is at mAt (tracks player XZ); canvas (0,0) = camera target
+                sead::Vector3<float> camAt = miniMap->mMiniMapCamera->mAt;
+                miniMapAt.mX = camAt.mX + miniMap->mCursorPos.mX * worldPerCanvas;
+                miniMapAt.mY = 3000.0f;
+                miniMapAt.mZ = camAt.mZ - miniMap->mCursorPos.mY * worldPerCanvas;
                 miniMapAt = Utils::calcGroundPos(player, miniMapAt);
                 if(isOnline) bulletCloneHandle->sendEvent_Shot(player->mIndex, player->mPosition, miniMapAt, Game::BulletCloneEvent::Type::BulletTypeInkstrike, 0);
                 player->resetPaintGauge(0, 0, 0, 0);

@@ -36,6 +36,7 @@ namespace Flexlion{
         bool isShot;
         float cameraanim;
         float cameraheight;
+        float camerafovy;
         bool isBulletDeinit;
     };
 }
