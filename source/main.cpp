@@ -125,7 +125,6 @@ static void (*miniMapCamCalcImpl)(Game::MiniMapCamera *_this);
 static xlink2::UserInstanceSLink *(*startSkill_DeathMarkingImpl)(Game::Player*, unsigned int, char);
 static void (*startAllMarking_ImplOrig)(Game::Player*, int);
 static void (*updateCursorEffectOrig)(Game::MiniMap*);
-static bool gWasArtilleryCursor = false;
 void miniMapCamCalcHook(Game::MiniMapCamera *_this){
 	miniMapCamCalcImpl(_this);
 	float anim = tornadoMgr->cameraanim;
@@ -724,70 +723,49 @@ xlink2::UserInstanceSLink *startSkill_DeathMarkingHook(Game::Player *player, uns
 }
 
 
+static xlink2::Event *gLaserIconEvent = NULL;
+static u32 gLaserIconEventId = 0;
+
 void updateCursorEffectHook(Game::MiniMap *miniMap) {
+	// Always run the original (keeps DoronCursor working)
+	updateCursorEffectOrig(miniMap);
+
 	Game::Player *player = Game::PlayerMgr::sInstance->getControlledPerformer();
 	bool useArtillery = (player != NULL && tornadoMgr->playerState[player->mIndex] == Flexlion::TornadoState::cAim);
 
-	u8 *self = (u8*)miniMap;
+	// Manage LaserIcon separately from DoronCursor
+	bool laserValid = (gLaserIconEvent != NULL) && (*(u32*)((u8*)gLaserIconEvent + 32) == gLaserIconEventId);
 
-	// If cursor type changed, fade old effect and invalidate handle
-	if(useArtillery != gWasArtilleryCursor) {
-		u64 oldEvent = *(u64*)(self + 3776);
-		if(oldEvent != 0 && *(u32*)(oldEvent + 32) == *(u32*)(self + 3784)) {
-			((xlink2::Event*)oldEvent)->fade(-1);
-		}
-		*(u64*)(self + 3776) = 0;
-		*(u32*)(self + 3784) = 0;
-		gWasArtilleryCursor = useArtillery;
-	}
-
-	if(!useArtillery) {
-		// Normal case - original function uses "DoronCursor"
-		updateCursorEffectOrig(miniMap);
-		return;
-	}
-
-	// Artillery case - reimplement with "ArtilleryIcon"
-	// Visibility check (matching original at offsets 3161, getGameBigState, isSpectatorStation)
-	bool showCursor = false;
-	if(*(self + 3161)) {
-		int bigState = Game::MainMgr::sInstance->getGameBigState();
-		if(bigState != 3) {
-			if(bigState == 4)
-				showCursor = false;
-			else
-				showCursor = !Game::Utl::isSpectatorStation();
-		}
-	}
-
-	u64 eventPtr = *(u64*)(self + 3776);
-	bool isValid = (eventPtr != 0) && (*(u32*)(eventPtr + 32) == *(u32*)(self + 3784));
-
-	if(showCursor) {
-		if(!isValid) {
-			// Emit ArtilleryIcon effect
-			Lp::Sys::XLink *xlink = *(Lp::Sys::XLink **)(self + 800);
+	if(useArtillery) {
+		if(!laserValid) {
+			Flexlion::BulletSuperArtillery *bsa = tornadoMgr->bullets[player->mIndex];
+			Lp::Sys::XLink *xlink = (bsa != NULL) ? bsa->getXLink() : NULL;
 			xlink2::Handle handle;
-			xlink->searchAndEmitWrap("DoronCursor", false, &handle); // Placeholder until I find a working selection Icon
-			*(u32*)(self + 3784) = handle.mEventId;
-			*(xlink2::Event**)(self + 3776) = handle.mEvent;
-			eventPtr = (u64)handle.mEvent;
-			isValid = (eventPtr != 0) && (*(u32*)(eventPtr + 32) == *(u32*)(self + 3784));
+			if(xlink != NULL) xlink->searchAndEmitWrap("LaserIcon", false, &handle);
+			gLaserIconEvent = handle.mEvent;
+			gLaserIconEventId = handle.mEventId;
+			laserValid = (gLaserIconEvent != NULL) && (*(u32*)((u8*)gLaserIconEvent + 32) == gLaserIconEventId);
 		}
-		if(eventPtr != 0 && isValid) {
-			// Update cursor position (matching original offsets 3736/3740)
-			u8 *ev = (u8*)eventPtr;
-			u32 cursorY = *(u32*)(self + 3740);
-			*(u32*)(ev + 168) = *(u32*)(self + 3736);
-			*(u32*)(ev + 188) = 0x3F800000; // 1.0f
-			int flags = *(int*)(ev + 384);
-			*(u64*)(ev + 172) = (u64)cursorY; // writes cursorY to +172, 0 to +176
-			*(u64*)(ev + 180) = 0x3F8000003F800000LL; // 1.0f, 1.0f
-			*(int*)(ev + 384) = flags | 4;
+		if(laserValid) {
+			// Update BSA root matrix to cursor world position for 3D_Map rendering
+			Flexlion::BulletSuperArtillery *bsa = tornadoMgr->bullets[player->mIndex];
+			if(bsa != NULL) {
+				const float halfCanvas = 360.0f;
+				float halfFovyRad = tornadoMgr->camerafovy * 0.5f * MATH_PI / 180.0f;
+				float tanHalfFovy = sinf(halfFovyRad) / cosf(halfFovyRad);
+				float worldPerCanvas = tornadoMgr->cameraheight * tanHalfFovy / halfCanvas;
+				sead::Vector3<float> camAt = miniMap->mMiniMapCamera->mAt;
+				bsa->mXLinkMtx = {{
+					1.0f, 0.0f, 0.0f, camAt.mX + miniMap->mCursorPos.mX * worldPerCanvas,
+					0.0f, 1.0f, 0.0f, 0.0f,
+					0.0f, 0.0f, 1.0f, camAt.mZ - miniMap->mCursorPos.mY * worldPerCanvas
+				}};
+			}
 		}
-	} else if(eventPtr != 0 && isValid) {
-		// Fade the cursor effect (matching original: event->fade(-1))
-		((xlink2::Event*)eventPtr)->fade(-1);
+	} else if(laserValid) {
+		gLaserIconEvent->fade(-1);
+		gLaserIconEvent = NULL;
+		gLaserIconEventId = 0;
 	}
 }
 
