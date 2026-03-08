@@ -25,8 +25,8 @@ extern "C" {
 #define XLinkKillAllSound _ZN2Lp3Sys5XLink12killAllSoundEv
 
 // Flight parameters
-const int BSA_FLIGHT_TIME = 150;
-const float BSA_FLIGHT_HEIGHT = 300.0f;
+const int BSA_FLIGHT_TIME = 120;
+const float BSA_FLIGHT_HEIGHT = 400.0f;
 const float tornadoTankZOffset = -3.0f;
 
 namespace Flexlion {
@@ -531,10 +531,6 @@ void BulletSuperArtillery::updateModelMatrix() {
 }
 
 void BulletSuperArtillery::doSleep() {
-    Lp::Sys::XLink *xlink = getXLink();
-    if (xlink) {
-        XLinkKillAllSound(xlink);
-    }
     mHasBurst = false;
     mFlightActive = false;
     asLpActor()->reserveSleepAll_(Lp::Sys::Actor::ListNodeKind::None);

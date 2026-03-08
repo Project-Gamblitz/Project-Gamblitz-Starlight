@@ -1,6 +1,6 @@
 #include "flexlion/InkstrikeMgr.hpp"
-const int startflightdelay = 60; // delay from when a point is chosen to when the tornado is actually launched
-const int playerdelay = 120; // 60 frames Shoot_Tornado_St + 60 frames Shoot_Tornado
+const int startflightdelay = 40; // delay from when a point is chosen to when the tornado is actually launched
+const int playerdelay = 100; // 40 frames Shoot_Tornado_St + 60 frames Shoot_Tornado (was 60 + 60)
 const float tornadoTankZOffset = -3.0f;
 namespace Flexlion{
     InkstrikeMgr *InkstrikeMgr::sInstance = NULL;
