@@ -76,7 +76,7 @@ namespace Flexlion{
         case TornadoState::cNone:
             break;
         case TornadoState::cAim:
-            if(player->isInTrouble_Dying()){
+            if(player->isInTrouble_Dying() || !player->isAlive()){
                 // Player died without choosing a spot — cancel special
                 playerState[id] = TornadoState::cNone;
                 if(bullets[id] != NULL && bullets[id]->isActive()){
@@ -89,21 +89,14 @@ namespace Flexlion{
                 break;
             }
             if(!player->isInSpecial()){
-                // Special ran out without choosing a spot — shoot at player position
-                sead::Vector3<float> fallbackDest = player->mPosition;
-                fallbackDest.mY += cameraheight;
-                fallbackDest = Utils::calcGroundPos(player, fallbackDest);
-                if(isOnline) bulletCloneHandle->sendEvent_Shot(player->mIndex, player->mPosition, fallbackDest, Game::BulletCloneEvent::Type::BulletTypeInkstrike, 0);
-                player->resetPaintGauge(0, 0, 0, 0);
-                isAppliedWeapon[id] = 0;
-                mPendingDest[id] = fallbackDest;
-                mShootPrepareFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
-                playerState[id] = TornadoState::cShootPrepare;
-                if(bullets[id] != NULL) bullets[id]->mStateMachine.changeState(BSAState::cState_Wait);
-                Game::MiniMap *mMap = Utils::getMinimap();
-                if(mMap != NULL){
-                    mMap->setVisible(false);
-                    mMap->fadeAllEffect();
+                // Special ran out without choosing a spot — cancel, don't launch
+                playerState[id] = TornadoState::cNone;
+                if(bullets[id] != NULL && bullets[id]->isActive()){
+                    bullets[id]->cancel();
+                }
+                if(isCtrlPerformer){
+                    Game::MiniMap *mMap = Utils::getMinimap();
+                    if(mMap != NULL) mMap->setVisible(true);
                 }
                 break;
             }
@@ -143,6 +136,7 @@ namespace Flexlion{
         case TornadoState::cShootPrepare:
         {
             Prot::ObfStore(&player->mSpecialLeftFrame, startflightdelay);
+            Prot::ObfStore(&player->mLayoutSpecialState, -1); // negative total → gauge shows 0%
             int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mShootPrepareFrm[id];
             if(elapsed >= startflightdelay || player->isInTrouble_Dying()){
                 // Get launch position from ink tank bone
@@ -167,6 +161,7 @@ namespace Flexlion{
 			isAppliedWeapon[id] = 0;
 			int flightDelay = player->isInTrouble_Dying() ? 10 : startflightdelay;
 			Prot::ObfStore(&player->mSpecialLeftFrame, flightDelay);
+			Prot::ObfStore(&player->mLayoutSpecialState, -1); // negative total → gauge shows 0%
 			int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mShootFrm[id];
 			if(elapsed >= flightDelay){
 				Prot::ObfStore(&player->mSpecialLeftFrame, 0);
@@ -228,30 +223,25 @@ namespace Flexlion{
         if(mTornadoModel[id] == NULL || mTornadoMonitorModel[id] == NULL || player->mPlayerCustomMgr == NULL){
             return;
         }
-        bool bulletActive = bullets[id] != NULL && bullets[id]->isActive();
+        // Don't render special models when player is dead
+        if(!player->isAlive()){
+            return;
+        }
         switch(playerState[id]){
         case TornadoState::cNone:
-            break;
-        case TornadoState::cAim:
-        case TornadoState::cShootPrepare:
         {
-            // Tornado model rendering is handled by BSA's calcTankBone via vtFourthCalc
-            // Attach Wsp_Tornado_Monitor to the weapon bone (replacing current weapon)
+            // Restore weapon visibility when not in special
             Cmn::PlayerWeapon *weapon = player->mPlayerWeapon[0];
             if(weapon != NULL){
-                sead::Matrix34<float> weaponBoneMtx;
-                weapon->getRootBoneMtx(&weaponBoneMtx);
-                weapon->setVisible(false);
-                mTornadoMonitorModel[id]->mtx = weaponBoneMtx;
-                mTornadoMonitorModel[id]->mUpdateScale|=1;
-                mTornadoMonitorModel[id]->updateAnimationWorldMatrix_(3);
-                mTornadoMonitorModel[id]->requestDraw();
+                weapon->setVisible(true);
             }
             break;
         }
+        case TornadoState::cAim:
+        case TornadoState::cShootPrepare:
         case TornadoState::cShoot:
         {
-            // Keep monitor visible during shoot animation
+            // Attach Wsp_Tornado_Monitor to the weapon bone (replacing current weapon)
             Cmn::PlayerWeapon *weapon = player->mPlayerWeapon[0];
             if(weapon != NULL){
                 sead::Matrix34<float> weaponBoneMtx;

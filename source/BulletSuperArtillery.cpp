@@ -247,8 +247,14 @@ void BulletSuperArtillery::vtFourthCalc(BulletSuperArtillery *self) {
     if (self->mFlightActive) {
         self->updateModelMatrix();
     } else if (!self->mHasBurst) {
-        // cState_Wait: render tornado at player's tank bone
-        self->calcTankBone();
+        // Only render tank bone tornado if InkstrikeMgr state is cAim or cShootPrepare
+        InkstrikeMgr *mgr = InkstrikeMgr::sInstance;
+        if (mgr != NULL && self->mSender != NULL) {
+            int id = self->mSender->mIndex;
+            if (mgr->playerState[id] == TornadoState::cAim || mgr->playerState[id] == TornadoState::cShootPrepare) {
+                self->calcTankBone();
+            }
+        }
     }
 }
 
@@ -367,6 +373,7 @@ void BulletSuperArtillery::stateAim() {
 
 void BulletSuperArtillery::calcTankBone() {
     if (mSender == NULL || mTornadoModel == NULL) return;
+    if (!mSender->isAlive()) return;
 
     Cmn::PlayerCustomPart *tank = mSender->getTank();
     if (tank == NULL) tank = mSender->mPlayerCustomMgr->getMantle();
