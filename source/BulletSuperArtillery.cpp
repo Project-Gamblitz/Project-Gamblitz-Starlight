@@ -292,21 +292,13 @@ int BulletSuperArtillery::vtCountXLinkLocalProperty(BulletSuperArtillery *self) 
     return 2; // "User" + "BulletDistance"
 }
 
-// Inline reimplementation of xlink2::UserInstance::setRootMtx.
-// Updates the UserInstance's default matrix pointer (+64) and patches all
-// ModelAssetConnections that were using the old pointer, so boneless effects
-// (Laser, LaserIcon) read from our mXLinkMtx while bone effects are untouched.
-void BulletSuperArtillery::setXLinkRootMtx() {
-    Lp::Sys::XLink *xlink = getXLink();
-    if (!xlink) return;
-
-    // Lp::Sys::XLink+8 = xlink2::UserInstanceELink*
-    u8 *userInst = *(u8 **)((u8 *)xlink + 8);
+// Patch a single UserInstance's root matrix pointer to newMtx.
+// Updates +64 and patches all ModelAssetConnections that used the old pointer.
+static void patchUserInstanceRootMtx(u8 *userInst, sead::Matrix34<float> *newMtx) {
     if (!userInst) return;
 
     sead::Matrix34<float> **rootMtxPtr = (sead::Matrix34<float> **)(userInst + 64);
     sead::Matrix34<float> *oldMtx = *rootMtxPtr;
-    sead::Matrix34<float> *newMtx = &mXLinkMtx;
     if (oldMtx == newMtx) return;
 
     // Connection array struct at UserInstance + 32 or +40 (depending on flag bit 0 at +208)
@@ -317,7 +309,6 @@ void BulletSuperArtillery::setXLinkRootMtx() {
         u8 *connArray = *(u8 **)(connStruct + 8);
         for (int i = 0; i < count; i++) {
             u8 *conn = connArray + 24 * i;
-            // Only update connections that pointed to the old default matrix
             if (*(sead::Matrix34<float> **)(conn + 8) == oldMtx) {
                 *(sead::Matrix34<float> **)(conn + 8) = newMtx;
                 *(conn + 16) = 0; // row-major flag
@@ -327,6 +318,19 @@ void BulletSuperArtillery::setXLinkRootMtx() {
 
     *rootMtxPtr = newMtx;
     *(userInst + 72) = 0; // row-major flag
+}
+
+// Patches root matrix for both elink and slink UserInstances so boneless
+// effects and sounds read position from our mXLinkMtx.
+void BulletSuperArtillery::setXLinkRootMtx() {
+    Lp::Sys::XLink *xlink = getXLink();
+    if (!xlink) return;
+
+    sead::Matrix34<float> *newMtx = &mXLinkMtx;
+    u8 *xlinkBytes = (u8 *)xlink;
+    // XLink+8 = UserInstanceELink*, XLink+16 = UserInstanceSLink*
+    patchUserInstanceRootMtx(*(u8 **)(xlinkBytes + 8), newMtx);
+    patchUserInstanceRootMtx(*(u8 **)(xlinkBytes + 16), newMtx);
 }
 
 // ============================================================
