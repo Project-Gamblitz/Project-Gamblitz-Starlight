@@ -741,7 +741,7 @@ void updateCursorEffectHook(Game::MiniMap *miniMap) {
 			Flexlion::BulletSuperArtillery *bsa = tornadoMgr->bullets[player->mIndex];
 			Lp::Sys::XLink *xlink = (bsa != NULL) ? bsa->getXLink() : NULL;
 			xlink2::Handle handle;
-			if(xlink != NULL) xlink->searchAndEmitWrap("LaserIcon", false, &handle);
+			if(xlink != NULL) xlink->searchAndEmitWrap("Icon", false, &handle);
 			gLaserIconEvent = handle.mEvent;
 			gLaserIconEventId = handle.mEventId;
 			laserValid = (gLaserIconEvent != NULL) && (*(u32*)((u8*)gLaserIconEvent + 32) == gLaserIconEventId);
