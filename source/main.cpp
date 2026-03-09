@@ -725,20 +725,29 @@ xlink2::UserInstanceSLink *startSkill_DeathMarkingHook(Game::Player *player, uns
 
 static xlink2::Event *gLaserIconEvent = NULL;
 static u32 gLaserIconEventId = 0;
+static xlink2::Event *gArtIconSndEvent = NULL;
+static u32 gArtIconSndEventId = 0;
 
 void updateCursorEffectHook(Game::MiniMap *miniMap) {
 	Game::Player *player = Game::PlayerMgr::sInstance->getControlledPerformer();
 	bool useArtillery = (player != NULL && tornadoMgr->playerState[player->mIndex] == Flexlion::TornadoState::cAim);
-	bool aimValid = useArtillery && tornadoMgr->mAimValid[player->mIndex];
+	bool aimValid = useArtillery && tornadoMgr->mAimValid[player->mIndex] && Utils::isShowMinimap();
 
 	bool laserValid = (gLaserIconEvent != NULL) && (*(u32*)((u8*)gLaserIconEvent + 32) == gLaserIconEventId);
+	bool sndValid = (gArtIconSndEvent != NULL) && (*(u32*)((u8*)gArtIconSndEvent + 32) == gArtIconSndEventId);
 
-	// Fade Icon when leaving artillery or when aim becomes invalid
+	// Fade Icon and ArtilleryIcon sound when leaving artillery or when aim becomes invalid
 	if(!aimValid && laserValid) {
 		gLaserIconEvent->fade(-1);
 		gLaserIconEvent = NULL;
 		gLaserIconEventId = 0;
 		laserValid = false;
+	}
+	if(!aimValid && sndValid) {
+		gArtIconSndEvent->fade(-1);
+		gArtIconSndEvent = NULL;
+		gArtIconSndEventId = 0;
+		sndValid = false;
 	}
 
 	// When not in artillery, or aim is invalid, let the original run (shows DoronCursor)
@@ -764,6 +773,15 @@ void updateCursorEffectHook(Game::MiniMap *miniMap) {
 		gLaserIconEvent = handle.mEvent;
 		gLaserIconEventId = handle.mEventId;
 		laserValid = (gLaserIconEvent != NULL) && (*(u32*)((u8*)gLaserIconEvent + 32) == gLaserIconEventId);
+	}
+	if(!sndValid) {
+		Lp::Sys::XLink *mapXLink = *(Lp::Sys::XLink **)((u8*)miniMap + 0x320);
+		if(mapXLink != NULL) {
+			xlink2::Handle sndHandle;
+			mapXLink->searchAndPlayWrap("ArtilleryIcon", false, &sndHandle);
+			gArtIconSndEvent = sndHandle.mEvent;
+			gArtIconSndEventId = sndHandle.mEventId;
+		}
 	}
 	if(laserValid) {
 		Flexlion::BulletSuperArtillery *bsa = tornadoMgr->bullets[player->mIndex];
