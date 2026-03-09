@@ -729,23 +729,26 @@ static u32 gLaserIconEventId = 0;
 void updateCursorEffectHook(Game::MiniMap *miniMap) {
 	Game::Player *player = Game::PlayerMgr::sInstance->getControlledPerformer();
 	bool useArtillery = (player != NULL && tornadoMgr->playerState[player->mIndex] == Flexlion::TornadoState::cAim);
+	bool aimValid = useArtillery && tornadoMgr->mAimValid[player->mIndex];
 
-	u8 *self = (u8*)miniMap;
+	bool laserValid = (gLaserIconEvent != NULL) && (*(u32*)((u8*)gLaserIconEvent + 32) == gLaserIconEventId);
 
-	// When switching away from artillery, fade the Icon effect
-	if(!useArtillery && gLaserIconEvent != NULL) {
-		bool iconValid = *(u32*)((u8*)gLaserIconEvent + 32) == gLaserIconEventId;
-		if(iconValid) gLaserIconEvent->fade(-1);
+	// Fade Icon when leaving artillery or when aim becomes invalid
+	if(!aimValid && laserValid) {
+		gLaserIconEvent->fade(-1);
 		gLaserIconEvent = NULL;
 		gLaserIconEventId = 0;
+		laserValid = false;
 	}
 
-	if(!useArtillery) {
+	// When not in artillery, or aim is invalid, let the original run (shows DoronCursor)
+	if(!useArtillery || !aimValid) {
 		updateCursorEffectOrig(miniMap);
 		return;
 	}
 
-	// Suppress DoronCursor: fade it if active, then don't call original
+	// Aim is valid: suppress DoronCursor, show Icon instead
+	u8 *self = (u8*)miniMap;
 	u64 doronEvent = *(u64*)(self + 3776);
 	if(doronEvent != 0 && *(u32*)(doronEvent + 32) == *(u32*)(self + 3784)) {
 		((xlink2::Event*)doronEvent)->fade(-1);
@@ -753,45 +756,29 @@ void updateCursorEffectHook(Game::MiniMap *miniMap) {
 	*(u64*)(self + 3776) = 0;
 	*(u32*)(self + 3784) = 0;
 
-	// Visibility check: skip the minimap cursor-active flag (offset 3161) since the
-	// original game doesn't set it during specials; only gate on game state.
-	bool showCursor = true;
-	int bigState = Game::MainMgr::sInstance->getGameBigState();
-	if(bigState == 3 || bigState == 4 || Game::Utl::isSpectatorStation()) {
-		showCursor = false;
+	if(!laserValid) {
+		Flexlion::BulletSuperArtillery *bsa = tornadoMgr->bullets[player->mIndex];
+		Lp::Sys::XLink *xlink = (bsa != NULL) ? bsa->getXLink() : NULL;
+		xlink2::Handle handle;
+		if(xlink != NULL) xlink->searchAndEmitWrap("Icon", false, &handle);
+		gLaserIconEvent = handle.mEvent;
+		gLaserIconEventId = handle.mEventId;
+		laserValid = (gLaserIconEvent != NULL) && (*(u32*)((u8*)gLaserIconEvent + 32) == gLaserIconEventId);
 	}
-
-	bool laserValid = (gLaserIconEvent != NULL) && (*(u32*)((u8*)gLaserIconEvent + 32) == gLaserIconEventId);
-
-	if(showCursor) {
-		if(!laserValid) {
-			Flexlion::BulletSuperArtillery *bsa = tornadoMgr->bullets[player->mIndex];
-			Lp::Sys::XLink *xlink = (bsa != NULL) ? bsa->getXLink() : NULL;
-			xlink2::Handle handle;
-			if(xlink != NULL) xlink->searchAndEmitWrap("Icon", false, &handle);
-			gLaserIconEvent = handle.mEvent;
-			gLaserIconEventId = handle.mEventId;
-			laserValid = (gLaserIconEvent != NULL) && (*(u32*)((u8*)gLaserIconEvent + 32) == gLaserIconEventId);
+	if(laserValid) {
+		Flexlion::BulletSuperArtillery *bsa = tornadoMgr->bullets[player->mIndex];
+		if(bsa != NULL) {
+			const float halfCanvas = 360.0f;
+			float halfFovyRad = tornadoMgr->camerafovy * 0.5f * MATH_PI / 180.0f;
+			float tanHalfFovy = sinf(halfFovyRad) / cosf(halfFovyRad);
+			float worldPerCanvas = tornadoMgr->cameraheight * tanHalfFovy / halfCanvas;
+			sead::Vector3<float> camAt = miniMap->mMiniMapCamera->mAt;
+			bsa->mXLinkMtx = {{
+				1.0f, 0.0f, 0.0f, camAt.mX + miniMap->mCursorPos.mX * worldPerCanvas,
+				0.0f, 1.0f, 0.0f, 0.0f,
+				0.0f, 0.0f, 1.0f, camAt.mZ - miniMap->mCursorPos.mY * worldPerCanvas
+			}};
 		}
-		if(laserValid) {
-			Flexlion::BulletSuperArtillery *bsa = tornadoMgr->bullets[player->mIndex];
-			if(bsa != NULL) {
-				const float halfCanvas = 360.0f;
-				float halfFovyRad = tornadoMgr->camerafovy * 0.5f * MATH_PI / 180.0f;
-				float tanHalfFovy = sinf(halfFovyRad) / cosf(halfFovyRad);
-				float worldPerCanvas = tornadoMgr->cameraheight * tanHalfFovy / halfCanvas;
-				sead::Vector3<float> camAt = miniMap->mMiniMapCamera->mAt;
-				bsa->mXLinkMtx = {{
-					1.0f, 0.0f, 0.0f, camAt.mX + miniMap->mCursorPos.mX * worldPerCanvas,
-					0.0f, 1.0f, 0.0f, 0.0f,
-					0.0f, 0.0f, 1.0f, camAt.mZ - miniMap->mCursorPos.mY * worldPerCanvas
-				}};
-			}
-		}
-	} else if(laserValid) {
-		gLaserIconEvent->fade(-1);
-		gLaserIconEvent = NULL;
-		gLaserIconEventId = 0;
 	}
 }
 

@@ -126,6 +126,15 @@ namespace Flexlion{
                 mAimValid[id] = groundFound;
             }
 
+            if(isCtrlPerformer and Utils::isShowMinimap() and Lp::Utl::getCtrl(0)->isHoldContinue(starlight::Controller::Buttons::A, 1) and cameraanim > 0.95f and !mAimValid[id]){
+                // Invalid aim position — play rejection sound
+                Lp::Sys::XLink *mapXLink = *(Lp::Sys::XLink **)((u8*)miniMap + 0x320);
+                if(mapXLink != NULL){
+                    xlink2::Handle abtnHandle;
+                    mapXLink->searchAndPlayWrap("AButton", false, &abtnHandle);
+                }
+            }
+
             if(isCtrlPerformer and Utils::isShowMinimap() and Lp::Utl::getCtrl(0)->isHoldContinue(starlight::Controller::Buttons::A, 1) and cameraanim > 0.95f and mAimValid[id]){
                 // Perspective top-down camera: canvas → world using inverse projection
                 // Canvas centered on camera target; viewport halfSize from project()
