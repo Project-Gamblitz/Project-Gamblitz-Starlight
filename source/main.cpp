@@ -727,16 +727,47 @@ static xlink2::Event *gLaserIconEvent = NULL;
 static u32 gLaserIconEventId = 0;
 
 void updateCursorEffectHook(Game::MiniMap *miniMap) {
-	// Always run the original (keeps DoronCursor working)
-	updateCursorEffectOrig(miniMap);
-
 	Game::Player *player = Game::PlayerMgr::sInstance->getControlledPerformer();
 	bool useArtillery = (player != NULL && tornadoMgr->playerState[player->mIndex] == Flexlion::TornadoState::cAim);
 
-	// Manage LaserIcon separately from DoronCursor
+	u8 *self = (u8*)miniMap;
+
+	// When switching away from artillery, fade the Icon effect
+	if(!useArtillery && gLaserIconEvent != NULL) {
+		bool iconValid = *(u32*)((u8*)gLaserIconEvent + 32) == gLaserIconEventId;
+		if(iconValid) gLaserIconEvent->fade(-1);
+		gLaserIconEvent = NULL;
+		gLaserIconEventId = 0;
+	}
+
+	if(!useArtillery) {
+		updateCursorEffectOrig(miniMap);
+		return;
+	}
+
+	// Suppress DoronCursor: fade it if active, then don't call original
+	u64 doronEvent = *(u64*)(self + 3776);
+	if(doronEvent != 0 && *(u32*)(doronEvent + 32) == *(u32*)(self + 3784)) {
+		((xlink2::Event*)doronEvent)->fade(-1);
+	}
+	*(u64*)(self + 3776) = 0;
+	*(u32*)(self + 3784) = 0;
+
+	// Visibility check (matching original)
+	bool showCursor = false;
+	if(*(self + 3161)) {
+		int bigState = Game::MainMgr::sInstance->getGameBigState();
+		if(bigState != 3) {
+			if(bigState == 4)
+				showCursor = false;
+			else
+				showCursor = !Game::Utl::isSpectatorStation();
+		}
+	}
+
 	bool laserValid = (gLaserIconEvent != NULL) && (*(u32*)((u8*)gLaserIconEvent + 32) == gLaserIconEventId);
 
-	if(useArtillery) {
+	if(showCursor) {
 		if(!laserValid) {
 			Flexlion::BulletSuperArtillery *bsa = tornadoMgr->bullets[player->mIndex];
 			Lp::Sys::XLink *xlink = (bsa != NULL) ? bsa->getXLink() : NULL;
@@ -747,7 +778,6 @@ void updateCursorEffectHook(Game::MiniMap *miniMap) {
 			laserValid = (gLaserIconEvent != NULL) && (*(u32*)((u8*)gLaserIconEvent + 32) == gLaserIconEventId);
 		}
 		if(laserValid) {
-			// Update BSA root matrix to cursor world position for 3D_Map rendering
 			Flexlion::BulletSuperArtillery *bsa = tornadoMgr->bullets[player->mIndex];
 			if(bsa != NULL) {
 				const float halfCanvas = 360.0f;
