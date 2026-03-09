@@ -753,16 +753,12 @@ void updateCursorEffectHook(Game::MiniMap *miniMap) {
 	*(u64*)(self + 3776) = 0;
 	*(u32*)(self + 3784) = 0;
 
-	// Visibility check (matching original)
-	bool showCursor = false;
-	if(*(self + 3161)) {
-		int bigState = Game::MainMgr::sInstance->getGameBigState();
-		if(bigState != 3) {
-			if(bigState == 4)
-				showCursor = false;
-			else
-				showCursor = !Game::Utl::isSpectatorStation();
-		}
+	// Visibility check: skip the minimap cursor-active flag (offset 3161) since the
+	// original game doesn't set it during specials; only gate on game state.
+	bool showCursor = true;
+	int bigState = Game::MainMgr::sInstance->getGameBigState();
+	if(bigState == 3 || bigState == 4 || Game::Utl::isSpectatorStation()) {
+		showCursor = false;
 	}
 
 	bool laserValid = (gLaserIconEvent != NULL) && (*(u32*)((u8*)gLaserIconEvent + 32) == gLaserIconEventId);
