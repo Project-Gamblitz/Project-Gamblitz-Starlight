@@ -15,6 +15,7 @@ namespace Flexlion{
         for(int i = 0; i < 10; i++){
             bullets[i] = NULL;
             mTankRootBoneIdx[i] = -1;
+            mAimValid[i] = false;
         }
     }
     void InkstrikeMgr::informShotInkstrike(Game::Player *player, sead::Vector3<float> pos, sead::Vector3<float> dest, int paintgamefrm){
@@ -109,7 +110,23 @@ namespace Flexlion{
                 break;
             }
 
-            if(isCtrlPerformer and Utils::isShowMinimap() and Lp::Utl::getCtrl(0)->isHoldContinue(starlight::Controller::Buttons::A, 1) and cameraanim > 0.95f){
+            // Continuously validate aim position for the controlled player
+            if(isCtrlPerformer and Utils::isShowMinimap() and cameraanim > 0.95f){
+                const float halfCanvas = 360.0f;
+                float halfFovyRad = camerafovy * 0.5f * MATH_PI / 180.0f;
+                float tanHalfFovy = sinf(halfFovyRad) / cosf(halfFovyRad);
+                float worldPerCanvas = cameraheight * tanHalfFovy / halfCanvas;
+                sead::Vector3<float> camAt = miniMap->mMiniMapCamera->mAt;
+                sead::Vector3<float> aimPos;
+                aimPos.mX = camAt.mX + miniMap->mCursorPos.mX * worldPerCanvas;
+                aimPos.mY = 3000.0f;
+                aimPos.mZ = camAt.mZ - miniMap->mCursorPos.mY * worldPerCanvas;
+                bool groundFound = false;
+                Utils::calcGroundPos(player, aimPos, &groundFound);
+                mAimValid[id] = groundFound;
+            }
+
+            if(isCtrlPerformer and Utils::isShowMinimap() and Lp::Utl::getCtrl(0)->isHoldContinue(starlight::Controller::Buttons::A, 1) and cameraanim > 0.95f and mAimValid[id]){
                 // Perspective top-down camera: canvas → world using inverse projection
                 // Canvas centered on camera target; viewport halfSize from project()
                 const float halfCanvas = 360.0f;

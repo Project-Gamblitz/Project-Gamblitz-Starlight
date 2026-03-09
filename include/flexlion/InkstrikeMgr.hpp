@@ -2,6 +2,7 @@
 
 #include "Utils.hpp"
 #include "Cmn/PlayerWeapon.h"
+#include "Cmn/KDGndCol/Manager.h"
 #include "Prot/Prot.h"
 #include "sead/list.h"
 #include "flexlion/BulletSuperArtillery.hpp"
@@ -33,6 +34,7 @@ namespace Flexlion{
         int mShootFrm[10];
         sead::Vector3<float> mPendingDest[10];
         BulletSuperArtillery *bullets[10];
+        bool mAimValid[10];
         bool isShot;
         float cameraanim;
         float cameraheight;

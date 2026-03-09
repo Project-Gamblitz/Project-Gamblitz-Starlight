@@ -73,7 +73,7 @@ class Utils
     static void showAppError(int errorcode, const char *format, ...);
     static bool isShowMinimap();
     static Game::MiniMap *getMinimap();
-    static sead::Vector3<float> calcGroundPos(Game::Player *player, sead::Vector3<float> pos);
+    static sead::Vector3<float> calcGroundPos(Game::Player *player, sead::Vector3<float> pos, bool *outFound = NULL);
     static sead::Vector3<float> getRotFromMtx(sead::Matrix34<float> mtx);
     static int getGearIdByName(Cmn::Def::GearKind kind, char *name);
 };

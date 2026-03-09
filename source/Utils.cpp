@@ -31,8 +31,11 @@ Game::MiniMap *Utils::getMinimap(){
 	return hudMgr->mMiniMap;
 }
 
-sead::Vector3<float> Utils::calcGroundPos(Game::Player *player, sead::Vector3<float> pos){
-	if(player->mPlayerSuperLanding == NULL) return pos;
+sead::Vector3<float> Utils::calcGroundPos(Game::Player *player, sead::Vector3<float> pos, bool *outFound){
+	if(player->mPlayerSuperLanding == NULL){
+		if(outFound) *outFound = false;
+		return pos;
+	}
 	sead::Vector3<float> oldpos = player->mPosition;
 	// calcLandingPos raycasts down ~500 units from player position.
 	// Iterate from high to low in 450-unit steps to cover the full vertical range.
@@ -44,10 +47,17 @@ sead::Vector3<float> Utils::calcGroundPos(Game::Player *player, sead::Vector3<fl
 		player->mPlayerSuperLanding->calcLandingPos();
 		if(player->mPlayerSuperLanding->mLandingDist < 499.0f){
 			player->mPosition = oldpos;
+			if(outFound){
+				int attr = player->mPlayerSuperLanding->mLandingAttr;
+				bool isWater = (attr & 0x3F) == 12; // material ExFallWater
+				bool isDeath = (attr & 0x8000) != 0; // death plane bit
+				*outFound = !isWater && !isDeath;
+			}
 			return player->mPlayerSuperLanding->mLandingPos;
 		}
 	}
 	player->mPosition = oldpos;
+	if(outFound) *outFound = false;
 	return player->mPlayerSuperLanding->mLandingPos;
 }
 
