@@ -160,7 +160,7 @@ namespace Flexlion{
                     Lp::Sys::XLink *mapXLink = *(Lp::Sys::XLink **)((u8*)mMap + 0x320);
                     if(mapXLink != NULL){
                         xlink2::Handle decideHandle;
-                        mapXLink->searchAndPlayWrap("Decide", false, &decideHandle);
+                        mapXLink->searchAndPlayWrap("Pronounce", false, &decideHandle);
                     }
                     mMap->setVisible(false);
                     mMap->fadeAllEffect();
