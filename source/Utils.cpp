@@ -62,9 +62,12 @@ sead::Vector3<float> Utils::calcGroundPos(Game::Player *player, sead::Vector3<fl
 				sweepDir.mX = 0.0f;
 				sweepDir.mY = -1.0f;
 				sweepDir.mZ = 0.0f;
+				// kindFloor bit 0x100 must be clear: Manager skips the
+				// static block when it's set and CheckIF has no block filter.
+				// 0x80 enables attribute storage in entryGeomL.
 				colCheck.checkMoveSphere(
 					sweepStart, sweepDir, 200.0f, 6.0f,
-					0xFFFFFFFF, 0xFFFFFFFF,
+					0xFFFFFEFF, 0xFFFFFFFF,
 					Cmn::KDGndCol::Manager::cWallNrmY_L, 1.0f);
 				int rf = colCheck.mResultFlags;
 				if(rf != 0){
