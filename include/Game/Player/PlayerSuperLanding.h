@@ -8,8 +8,8 @@ namespace Game{
         public:
         void calcLandingPos();
         _BYTE _0[0x84];
-        float mLandingDist;
-        int mLandingAttr; // 0x88 — tentative: collision attribute from calcLandingPos hit (verify at runtime)
-        sead::Vector3<float> mLandingPos;
+        float mLandingDist; // 0x84
+        int _pad88;         // 0x88
+        sead::Vector3<float> mLandingPos; // 0x8C
     };
 };

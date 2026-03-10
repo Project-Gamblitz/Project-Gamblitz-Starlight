@@ -1,4 +1,5 @@
 #include "flexlion/Utils.hpp"
+#include "Cmn/KDGndCol/Manager.h"
 static bool wasSceneLoaded;
 static bool *isEffectPlay;
 rotateMtxFunc Utils::rotateMtxY = (rotateMtxFunc)(NULL);
@@ -48,10 +49,39 @@ sead::Vector3<float> Utils::calcGroundPos(Game::Player *player, sead::Vector3<fl
 		if(player->mPlayerSuperLanding->mLandingDist < 499.0f){
 			player->mPosition = oldpos;
 			if(outFound){
-				int attr = player->mPlayerSuperLanding->mLandingAttr;
-				bool isWater = (attr & 0x3F) == 12; // material ExFallWater
-				bool isDeath = (attr & 0x8000) != 0; // death plane bit
-				*outFound = !isWater && !isDeath;
+				// Check collision material at landing pos.
+				// Manager::checkMoveSphere stores kindFloor|0x10000000 at
+				// HitInfoImpl+644; bit 0x80 in kindFloor enables attribute
+				// storage in entryGeomL. kindFloor=0xFFFFFFFF has bit 0x80.
+				// Floor attr is at HitInfoImpl+140 as u16, same as Player
+				// reads in calcGndCollision (*(u16*)(hitInfo+140) & 0x3F).
+				Cmn::KDGndCol::CheckIF colCheck((Cmn::Actor*)player);
+				sead::Vector3<float> sweepStart = player->mPlayerSuperLanding->mLandingPos;
+				sweepStart.mY += 100.0f;
+				sead::Vector3<float> sweepDir;
+				sweepDir.mX = 0.0f;
+				sweepDir.mY = -1.0f;
+				sweepDir.mZ = 0.0f;
+				colCheck.checkMoveSphere(
+					sweepStart, sweepDir, 200.0f, 6.0f,
+					0xFFFFFFFF, 0xFFFFFFFF,
+					Cmn::KDGndCol::Manager::cWallNrmY_L, 1.0f);
+				int rf = colCheck.mResultFlags;
+				if(rf != 0){
+					u8 *hi = (u8*)colCheck.mHitInfoImpl;
+					u16 attr;
+					if(rf & 1)
+						attr = *(u16*)(hi + 140);
+					else
+						attr = *(u16*)(hi + 224);
+					int mat = attr & 0x3F;
+					*outFound = mat != 11 && mat != 12
+						&& mat != 14 && mat != 15 && mat != 16
+						&& mat != 20 && mat != 24 && mat != 26
+						&& mat != 27 && mat != 33 && mat != 34;
+				} else {
+					*outFound = false;
+				}
 			}
 			return player->mPlayerSuperLanding->mLandingPos;
 		}
