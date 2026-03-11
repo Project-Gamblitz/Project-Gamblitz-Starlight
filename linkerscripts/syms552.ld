@@ -870,3 +870,23 @@ _ZN4Game6Player17receiveDamage_NetEiN3Cmn3Def3DMGERKN4sead7Vector3IfEERKNS_12Dam
 _ZN6xlink222EnumPropertyDefinitionC2EPKcb = 0x018DFE14 - 0x2EBE000;
 _ZN6xlink222EnumPropertyDefinition12setEntryBuf_EiPNS0_5EntryE = 0x018E00DC - 0x2EBE000;
 _ZN6xlink222EnumPropertyDefinition5entryEiPKc = 0x018DFFC4 - 0x2EBE000;
+
+/* Cui::MsgArg */
+_ZN3Cui6MsgArgC1Ev = 0x004238B8 - 0x2EBE000;
+_ZN3Cui6MsgArg5resetEv = 0x00423988 - 0x2EBE000;
+_ZN3Cui6MsgArg4copyERKS0_ = 0x004239DC - 0x2EBE000;
+_ZN3Cui6MsgArg17readCommonMsgAttrERKN4sead14SafeStringBaseIcEES5_ = 0x00423BCC - 0x2EBE000;
+
+/* Cui::MsgWindowPageHandler */
+_ZN3Cui20MsgWindowPageHandler2inERKNS_6MsgArgE = 0x00439480 - 0x2EBE000;
+_ZN3Cui20MsgWindowPageHandler3outEv = 0x004381A4 - 0x2EBE000;
+_ZNK3Cui20MsgWindowPageHandler8isAbleInEv = 0x00439490 - 0x2EBE000;
+_ZNK3Cui20MsgWindowPageHandler8isDecideEv = 0x00439498 - 0x2EBE000;
+_ZNK3Cui20MsgWindowPageHandler11isEndDecideEv = 0x004394B4 - 0x2EBE000;
+_ZNK3Cui20MsgWindowPageHandler12getDecideBtnEv = 0x004394BC - 0x2EBE000;
+
+/* Cui::SystemPageMgr */
+_ZN3Cui13SystemPageMgr9sInstanceE = 0x02D7E420 - 0x2EBE000;
+
+/* nn::ui2d::TextBox */
+_ZN2nn4ui2d7TextBox13SetStringUtf8EPKct = 0x01A949DC - 0x2EBE000;
