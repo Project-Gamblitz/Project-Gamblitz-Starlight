@@ -34,6 +34,8 @@ void initBSSVtable_internal(BulletSuperShot *bss) {
         sBSSVtable.onSleep = (u64)((void (*)(BulletSuperShot *))&BulletSuperShot::vtOnSleep);
         sBSSVtable.getXlinkName = (u64)((const char *(*)(BulletSuperShot *))&BulletSuperShot::vtGetXlinkName);
         sBSSVtable.getXLinkMtx = (u64)((sead::Matrix34<float> *(*)(BulletSuperShot *))&BulletSuperShot::vtGetXLinkMtx);
+        sBSSVtable.getXLinkScale = (u64)((sead::Vector3<float> *(*)(BulletSuperShot *))&BulletSuperShot::vtGetXLinkScale);
+        sBSSVtable.isCreateSlink = (u64)((bool (*)(BulletSuperShot *))&BulletSuperShot::vtIsCreateSlink);
         sBSSVtable.setXlinkLocalPropertyDefinition = (u64)((int (*)(BulletSuperShot *, int))&BulletSuperShot::vtSetXLinkLocalPropertyDef);
         sBSSVtable.countXlinkLocalProperty = (u64)((int (*)(BulletSuperShot *))&BulletSuperShot::vtCountXLinkLocalProperty);
         sInitVtable = true;
@@ -219,10 +221,19 @@ void BulletSuperShot::launch(Game::Player *sender, sead::Vector3<float> const &p
     mXLinkMtx.matrix[2][3] = mPos.mZ;
 
     if (mSystemActive) {
-        // Actor is active in the actor system — just restart flight
+        // Actor is already active — just restart flight state.
+        // This avoids the sleep→reactivate cycle which corrupts the vtable pointer.
+        setXLinkRootMtx();
+        Lp::Sys::XLink *xlink = getXLink();
+        if (xlink) {
+            xlink->setLocalPropertyValue(0, 1.0f);
+            xlink->setLocalPropertyValue(1, 1.0f);
+            xlink->setLocalPropertyValue(2, 5.0f);
+        }
         mStateMachine.changeState(cState_Flight);
     } else {
-        // Actor is sleeping — activate it (vtOnActivate will start flight)
+        // First launch — actor hasn't been activated yet.
+        // reserveActivate queues for the activation processor, which calls actorOnActivate.
         asLpActor()->reserveActivate(true);
     }
 }
@@ -307,7 +318,17 @@ void BulletSuperShot::doSleep() {
     mFrame = 0;
     mPos = sead::Vector3<float>::zero;
     mVel = sead::Vector3<float>::zero;
-    asLpActor()->reserveSleepAll_(Lp::Sys::Actor::ListNodeKind::None);
+
+    // Kill looping xlink effects (Bullet/BulletCore are loops)
+    Lp::Sys::XLink *xlink = getXLink();
+    if (xlink) {
+        XLinkKillAllSound(xlink);
+    }
+
+    // Transition to idle — do NOT call reserveSleepAll_.
+    // The sleep→reactivate cycle corrupts the vtable pointer on the second activation.
+    // Instead, the actor stays permanently active and idles until the next launch().
+    mStateMachine.changeState(cState_Idle);
 }
 
 // ============================================================
@@ -315,9 +336,23 @@ void BulletSuperShot::doSleep() {
 // ============================================================
 
 void BulletSuperShot::stateEnterFlight() {
+    // Effects are emitted on the first stateFlight() frame, NOT here.
+    // Emitting during vtOnActivate (which calls changeState → stateEnter)
+    // is unsafe on reactivation because the xlink isn't fully re-initialized.
 }
 
 void BulletSuperShot::stateFlight() {
+    // Emit flight effects on first frame (deferred from stateEnterFlight
+    // so xlink is fully initialized after actorOnActivate completes)
+    if (mFrame == 0) {
+        Lp::Sys::XLink *xlink = getXLink();
+        if (xlink) {
+            xlink2::Handle h;
+            xlink->searchAndEmitWrap("Bullet", false, &h);
+            xlink->searchAndEmitWrap("BulletCore", false, &h);
+        }
+    }
+
     // Apply gravity
     mVel.mY -= GRAVITY;
 
@@ -363,9 +398,20 @@ void BulletSuperShot::stateFlight() {
 }
 
 void BulletSuperShot::stateEnterBurst() {
+    // Effects are emitted on the first stateBurst() frame (same reason as flight)
 }
 
 void BulletSuperShot::stateBurst() {
+    // Emit burst effects on first frame
+    if (mFrame == 0) {
+        Lp::Sys::XLink *xlink = getXLink();
+        if (xlink) {
+            xlink2::Handle h;
+            xlink->searchAndEmitWrap("FloorSplash", false, &h);
+            xlink->searchAndEmitWrap("HitSplash", false, &h);
+        }
+    }
+
     // Wait a few frames for burst effects to play, then sleep
     mFrame++;
     if (mFrame >= 30) {
@@ -374,6 +420,8 @@ void BulletSuperShot::stateBurst() {
 }
 
 void BulletSuperShot::stateEnterIdle() {
+    // Actor stays active but does nothing until next launch().
+    // Xlink effects are already killed in doSleep() before we get here.
 }
 
 void BulletSuperShot::stateIdle() {
@@ -394,17 +442,25 @@ void BulletSuperShot::vtFirstCalc(BulletSuperShot *self) {
 
 void BulletSuperShot::vtOnActivate(BulletSuperShot *self, bool) {
     self->mSystemActive = true;
+
+    // Set initial xlink property values
+    // elink index 0 = BulletDamageType (DamageP=1)
+    // elink index 1 = BulletPaintType  (Paint=1)
+    // elink index 2 = GndMaterial      (NoGnd=5)
     Lp::Sys::XLink *xlink = self->getXLink();
     if (xlink) {
-        xlink->setLocalPropertyValue(0, 1.0f); // BulletDamageType = DamageP
-        xlink->setLocalPropertyValue(1, 1.0f); // BulletPaintType = Paint
-        xlink->setLocalPropertyValue(2, 5.0f); // GndMaterial = NoGnd
+        xlink->setLocalPropertyValue(0, 1.0f);
+        xlink->setLocalPropertyValue(1, 1.0f);
+        xlink->setLocalPropertyValue(2, 5.0f);
     }
+
     self->setXLinkRootMtx();
     self->mStateMachine.changeState(cState_Flight);
 }
 
 void BulletSuperShot::vtOnSleep(BulletSuperShot *self) {
+    // Safety net: if the actor system sleeps us (e.g. parent player sleeps),
+    // reset state. The base actorOnSleep wrapper handles xlink cleanup.
     self->mSystemActive = false;
     self->mSender = NULL;
     self->mActive = false;
@@ -414,6 +470,16 @@ void BulletSuperShot::vtOnSleep(BulletSuperShot *self) {
 
 sead::Matrix34<float> *BulletSuperShot::vtGetXLinkMtx(BulletSuperShot *self) {
     return &self->mXLinkMtx;
+}
+
+static sead::Vector3<float> sUnitScale = {1.0f, 1.0f, 1.0f};
+
+sead::Vector3<float> *BulletSuperShot::vtGetXLinkScale(BulletSuperShot *self) {
+    return &sUnitScale;
+}
+
+bool BulletSuperShot::vtIsCreateSlink(BulletSuperShot *self) {
+    return false; // No slink resource exists for BulletSuperShot
 }
 
 const char *BulletSuperShot::vtGetXlinkName(BulletSuperShot *self) {
@@ -432,7 +498,7 @@ int BulletSuperShot::vtSetXLinkLocalPropertyDef(BulletSuperShot *self, int baseC
 }
 
 int BulletSuperShot::vtCountXLinkLocalProperty(BulletSuperShot *self) {
-    return 3; // BulletDamageType + BulletPaintType + GndMaterial
+    return 3; // BulletDamageType, BulletPaintType, GndMaterial
 }
 
 } // namespace Game
