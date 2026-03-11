@@ -45,6 +45,11 @@ namespace Flexlion{
         if(player->isInSpecial() and player->mSpecialWeaponId == TORNADO_SPECIAL_ID and playerState[id] == TornadoState::cNone){
             playerState[id] = TornadoState::cAim;
             isAppliedWeapon[id] = 0;
+            // Set PlayerWeapon xlink user to special-specific user for effects
+            Cmn::PlayerWeapon *weapon = player->mPlayerWeapon[0];
+            if(weapon != NULL){
+                weapon->setLinkUserName(sead::SafeStringBase<char>::create("Tornado"));
+            }
             // Activate BSA so xlink cState_Wait effects play during aiming
             if(bullets[id] != NULL && !bullets[id]->isActive()){
                 bullets[id]->prepare(player);
@@ -160,7 +165,7 @@ namespace Flexlion{
                     Lp::Sys::XLink *mapXLink = *(Lp::Sys::XLink **)((u8*)mMap + 0x320);
                     if(mapXLink != NULL){
                         xlink2::Handle decideHandle;
-                        mapXLink->searchAndPlayWrap("Decide", false, &decideHandle);
+                        mapXLink->searchAndPlayWrap("Pronounce", false, &decideHandle);
                     }
                     mMap->setVisible(false);
                     mMap->fadeAllEffect();

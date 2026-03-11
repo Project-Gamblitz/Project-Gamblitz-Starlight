@@ -118,6 +118,7 @@ bool Game::Utl::ActorFactoryBase::isNoActor() const{
 }
 
 static bool tsthk = 0;
+static bool sSuperShotXlinkSet[10];
 
 static int custommgrjpt[27];
 
@@ -133,19 +134,28 @@ void miniMapCamCalcHook(Game::MiniMapCamera *_this){
 	sead::Projection *orthoProj = *(sead::Projection **)(base + 0x140);
 	if(anim > 0.0f){
 		float orig = 1.0f - anim;
-		// Top-down: position directly above the at point
+		// Top-down: position directly above the at point, north-up
 		float topX = _this->mAt.mX;
 		float topY = _this->mAt.mY + tornadoMgr->cameraheight;
-		float topZ = _this->mAt.mZ + 0.01f;
-		_this->mPosition.mX = _this->mPosition.mX * orig + topX * anim;
-		_this->mPosition.mY = _this->mPosition.mY * orig + topY * anim;
-		_this->mPosition.mZ = _this->mPosition.mZ * orig + topZ * anim;
-		// Lerp at.mY toward ground level
-		_this->mAt.mY *= orig;
-		// Up vector: lerp toward (0, 0, -1) for north-up top-down
-		_this->mUp.mX *= orig;
-		_this->mUp.mY *= orig;
-		_this->mUp.mZ = _this->mUp.mZ * orig + (-1.0f) * anim;
+		float topZ = _this->mAt.mZ;
+		if(anim >= 1.0f){
+			// Snap to exact top-down to avoid float drift
+			_this->mPosition.mX = topX;
+			_this->mPosition.mY = topY;
+			_this->mPosition.mZ = topZ;
+			_this->mAt.mY = 0.0f;
+			_this->mUp.mX = 0.0f;
+			_this->mUp.mY = 0.0f;
+			_this->mUp.mZ = -1.0f;
+		} else {
+			_this->mPosition.mX = _this->mPosition.mX * orig + topX * anim;
+			_this->mPosition.mY = _this->mPosition.mY * orig + topY * anim;
+			_this->mPosition.mZ = _this->mPosition.mZ * orig + topZ * anim;
+			_this->mAt.mY *= orig;
+			_this->mUp.mX *= orig;
+			_this->mUp.mY *= orig;
+			_this->mUp.mZ = _this->mUp.mZ * orig + (-1.0f) * anim;
+		}
 		// Switch to perspective projection
 		if(perspProj != NULL && perspProj != orthoProj){
 			*(sead::Projection **)(base + 0x78) = perspProj;
@@ -174,6 +184,22 @@ static void (*playerFourthCalcOg)(Game::Player*);
 void playerFirstCalcHook(Game::Player *player){
 	playerFirstCalcOg(player);
 	tornadoMgr->playerFirstCalc(player);
+	// SuperShot: set PlayerWeapon xlink user when entering special
+	int id = player->mIndex;
+	if(player->isInSpecial() && player->mSpecialWeaponId == 24 && !sSuperShotXlinkSet[id]){
+		Cmn::PlayerWeapon *weapon = player->mPlayerWeapon[0];
+		if(weapon != NULL){
+			weapon->setLinkUserName(sead::SafeStringBase<char>::create("SuperShot"));
+		}
+		sSuperShotXlinkSet[id] = true;
+	} else if(!player->isInSpecial() && sSuperShotXlinkSet[id]){
+		// Trigger PutBack slink when special ends
+		Cmn::PlayerWeapon *weapon = player->mPlayerWeapon[0];
+		if(weapon != NULL){
+			weapon->emitAndPlay_PutBack();
+		}
+		sSuperShotXlinkSet[id] = false;
+	}
 }
 
 void playerThirdCalcHook(Game::Player *player){
@@ -249,6 +275,30 @@ void renderEntrypoint(agl::DrawContext *drawContext, sead::TextWriter *textWrite
 	agentThreeHandle();
 	kingSquidMgr->onCalc();
 	tornadoMgr->onCalc();
+
+	// Debug: show collision attribute under Inkstrike cursor
+	if(mTextWriter != NULL){
+		static const char *sMaterialNames[] = {
+			"Stone00", "Stone01", "Grass00", "Soil00", "Glass00",
+			"Wood00", "Plastic00", "Mesh00", "Metal00", "Metal00_SuperShotThrough",
+			"Rubber00", "None", "ExFallWater", "Cloth00", "ExKeepOutP",
+			"ExKeepOutE", "ExKeepOutR", "Mesh01", "EnemyShield00", "EnemyShield01",
+			"ExKeepOutC", "ExFillUpP", "ExFallEnemyInk", "Vinyl00", "ExKeepOutN",
+			"Dirt00", "ExKeepOutP_C", "ExKeepOutC_WallClimb", "Carpet00", "EnemyInkShower",
+			"ExFillUpE", "Metal01", "ExPaint", "ExKeepOutE2", "ExKeepOutP_JetPack",
+		};
+		Game::Player *ctrlPlayer = Utils::getControlledPerformer();
+		if(ctrlPlayer != NULL && tornadoMgr->playerState[ctrlPlayer->mIndex] == Flexlion::TornadoState::cAim){
+			u16 attr = tornadoMgr->mDbgColAttr;
+			if(attr == 0xFFFF){
+				mTextWriter->printf("NO_COL [INVALID]\n");
+			} else {
+				int mat = attr & 0x3F;
+				const char *matName = (mat <= 34) ? sMaterialNames[mat] : "???";
+				mTextWriter->printf("COL_%X %s%s %s\n", attr, matName, tornadoMgr->mDbgColIsWall ? " (wall)" : "", tornadoMgr->mAimValid[ctrlPlayer->mIndex] ? "" : "[INVALID]");
+			}
+		}
+	}
 
 	if(IS_DEV){
 	  if(showMenu){

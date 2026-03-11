@@ -1,4 +1,5 @@
 #include "flexlion/Utils.hpp"
+#include "flexlion/InkstrikeMgr.hpp"
 #include "Cmn/KDGndCol/Manager.h"
 static bool wasSceneLoaded;
 static bool *isEffectPlay;
@@ -49,22 +50,21 @@ sead::Vector3<float> Utils::calcGroundPos(Game::Player *player, sead::Vector3<fl
 		if(player->mPlayerSuperLanding->mLandingDist < 499.0f){
 			player->mPosition = oldpos;
 			if(outFound){
-				// Check collision material at landing pos.
-				// Manager::checkMoveSphere stores kindFloor|0x10000000 at
-				// HitInfoImpl+644; bit 0x80 in kindFloor enables attribute
-				// storage in entryGeomL. kindFloor=0xFFFFFFFF has bit 0x80.
-				// Floor attr is at HitInfoImpl+140 as u16, same as Player
-				// reads in calcGndCollision (*(u16*)(hitInfo+140) & 0x3F).
+				sead::Vector3<float> landPos = player->mPlayerSuperLanding->mLandingPos;
+				bool valid = true;
+
+				// 1) Check floor material via downward sweep.
+				// kindFloor bit 0x100 must be clear (Manager skips the
+				// static block when set and CheckIF has no block filter).
+				// bit 0x80 enables attribute storage in entryGeomL.
+				// Floor attr at HitInfoImpl+140 as u16, masked to 6 bits.
 				Cmn::KDGndCol::CheckIF colCheck((Cmn::Actor*)player);
-				sead::Vector3<float> sweepStart = player->mPlayerSuperLanding->mLandingPos;
+				sead::Vector3<float> sweepStart = landPos;
 				sweepStart.mY += 100.0f;
 				sead::Vector3<float> sweepDir;
 				sweepDir.mX = 0.0f;
 				sweepDir.mY = -1.0f;
 				sweepDir.mZ = 0.0f;
-				// kindFloor bit 0x100 must be clear: Manager skips the
-				// static block when it's set and CheckIF has no block filter.
-				// 0x80 enables attribute storage in entryGeomL.
 				colCheck.checkMoveSphere(
 					sweepStart, sweepDir, 200.0f, 6.0f,
 					0xFFFFFEFF, 0xFFFFFFFF,
@@ -73,18 +73,62 @@ sead::Vector3<float> Utils::calcGroundPos(Game::Player *player, sead::Vector3<fl
 				if(rf != 0){
 					u8 *hi = (u8*)colCheck.mHitInfoImpl;
 					u16 attr;
-					if(rf & 1)
+					bool isWall;
+					if(rf & 1){
 						attr = *(u16*)(hi + 140);
-					else
+						isWall = false;
+					} else {
 						attr = *(u16*)(hi + 224);
+						isWall = true;
+					}
+					if(Flexlion::InkstrikeMgr::sInstance != NULL){
+						Flexlion::InkstrikeMgr::sInstance->mDbgColAttr = attr;
+						Flexlion::InkstrikeMgr::sInstance->mDbgColIsWall = isWall;
+					}
 					int mat = attr & 0x3F;
-					*outFound = mat != 11 && mat != 12
-						&& mat != 14 && mat != 15 && mat != 16
-						&& mat != 20 && mat != 24 && mat != 26
-						&& mat != 27 && mat != 33 && mat != 34;
+					if(mat == 11 || mat == 12
+						|| mat == 14 || mat == 15 || mat == 16
+						|| mat == 20 || mat == 24 || mat == 26
+						|| mat == 27 || mat == 33 || mat == 34)
+						valid = false;
 				} else {
-					*outFound = false;
+					if(Flexlion::InkstrikeMgr::sInstance != NULL){
+						Flexlion::InkstrikeMgr::sInstance->mDbgColAttr = 0xFFFF;
+						Flexlion::InkstrikeMgr::sInstance->mDbgColIsWall = false;
+					}
+					valid = false;
 				}
+
+				// 2) Check for keepout walls between player and target.
+				// Out-of-bounds ground has normal material but sits behind
+				// keepout walls. Sweep horizontally from player toward the
+				// landing pos; if a keepout wall (kind 0x20000) blocks the
+				// path, reject the position.
+				// kindFloor must have wall-detection bits set (0xCA mask in
+				// entryGeomL); 0x33 matches calcLandingPos.
+				// Sweep at player Y so the probe is at keepout wall height.
+				if(valid){
+					float dx = landPos.mX - oldpos.mX;
+					float dz = landPos.mZ - oldpos.mZ;
+					float hDist = sqrtf(dx * dx + dz * dz);
+					if(hDist > 1.0f){
+						Cmn::KDGndCol::CheckIF colCheck2((Cmn::Actor*)player);
+						sead::Vector3<float> hStart = oldpos;
+						hStart.mY += 50.0f;
+						sead::Vector3<float> hDir;
+						hDir.mX = dx / hDist;
+						hDir.mY = 0.0f;
+						hDir.mZ = dz / hDist;
+						colCheck2.checkMoveSphere(
+							hStart, hDir, hDist, 6.0f,
+							0x33, 0x20000,
+							Cmn::KDGndCol::Manager::cWallNrmY_L, 1.0f);
+						if(colCheck2.mResultFlags != 0)
+							valid = false;
+					}
+				}
+
+				*outFound = valid;
 			}
 			return player->mPlayerSuperLanding->mLandingPos;
 		}
