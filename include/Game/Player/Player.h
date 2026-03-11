@@ -37,6 +37,7 @@
 #include "Cmn/Mush/MushDataHolder.h"
 #include "Cmn/PlayerWeapon.h"
 #include "Game/Player/PlayerDamage.h"
+#include "Game/DamageReason.h"
 #include "Game/Player/PlayerJointSquid.h"
 
 #ifndef GAME_PLAYER_H
@@ -119,6 +120,7 @@ namespace Game {
 		bool isCreateMantle() const;
 		bool isInTrouble_Immovable() const;
 		void resetDamage();
+		int receiveDamage_Net(int performerIdx, int dmg, sead::Vector3<float> const &hitDir, Game::DamageReason const &reason, bool, bool, bool);
 		void startDokanWarp_Block(sead::Vector3<float> const&, int, int, unsigned int);
 		void fillPaintGauge();
 		void dropHoldingClamAll_ForSpecial();

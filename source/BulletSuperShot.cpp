@@ -245,9 +245,23 @@ void BulletSuperShot::doBurst() {
         xlink->setLocalPropertyValue(2, 4.0f); // GndMaterial = Field
     }
 
+    // Paint burst splash (same approach as BulletBombBase::burst_ → splashBullet_ForBurst)
+    Cmn::Def::Team team = *(Cmn::Def::Team *)(_actorBase + 0x328);
+    sead::Vector3<float> downDir;
+    downDir.mX = 0.0f;
+    downDir.mY = -1.0f;
+    downDir.mZ = 0.0f;
+    sead::Vector2<float> paintSize;
+    paintSize.mX = BURST_PAINT_RADIUS * 2.0f;
+    paintSize.mY = BURST_PAINT_RADIUS * 2.0f;
+    Game::PaintUtl::requestColAndPaint(
+        mPos, paintSize, downDir,
+        (Game::PaintTexType)0, team,
+        mPos, false, 3, 0.0f, false);
+
     // Apply damage to nearby players
     Game::PlayerMgr *pmgr = Game::PlayerMgr::sInstance;
-    if (pmgr) {
+    if (pmgr && mSender) {
         for (int i = 0; i < pmgr->mTotalPlayers; i++) {
             Game::Player *target = pmgr->getPerformerAt(i);
             if (target == NULL) continue;
@@ -257,9 +271,24 @@ void BulletSuperShot::doBurst() {
             float dz = mPos.mZ - target->mPosition.mZ;
             float distSq = dx*dx + dy*dy + dz*dz;
             if (distSq < BURST_DAMAGE_RADIUS * BURST_DAMAGE_RADIUS) {
-                // TODO: Apply damage via game damage system
-                // Placeholder: user needs to wire up actual damage application
-                // e.g. target->receiveDamage(DAMAGE, mSender, ...);
+                sead::Vector3<float> hitDir;
+                float dist = sqrtf(distSq);
+                if (dist > 0.0f) {
+                    float inv = 1.0f / dist;
+                    hitDir.mX = -dx * inv;
+                    hitDir.mY = -dy * inv;
+                    hitDir.mZ = -dz * inv;
+                } else {
+                    hitDir.mX = 0.0f;
+                    hitDir.mY = -1.0f;
+                    hitDir.mZ = 0.0f;
+                }
+                Game::DamageReason reason;
+                reason.mWeaponId = 0xFFFF;
+                reason.mClassType = 1; // bomb type
+                target->receiveDamage_Net(
+                    (int)mSender->mIndex, DAMAGE,
+                    hitDir, reason, false, true, true);
             }
         }
     }
@@ -292,7 +321,34 @@ void BulletSuperShot::stateFlight() {
     // Apply gravity
     mVel.mY -= GRAVITY;
 
-    // Update position
+    // Calculate movement direction and distance
+    float moveLen = sqrtf(mVel.mX * mVel.mX + mVel.mY * mVel.mY + mVel.mZ * mVel.mZ);
+    sead::Vector3<float> moveDir;
+    if (moveLen > 0.0f) {
+        float inv = 1.0f / moveLen;
+        moveDir.mX = mVel.mX * inv;
+        moveDir.mY = mVel.mY * inv;
+        moveDir.mZ = mVel.mZ * inv;
+    } else {
+        moveDir.mX = 0.0f;
+        moveDir.mY = -1.0f;
+        moveDir.mZ = 0.0f;
+    }
+
+    // Ground/wall collision check (same flags as BulletGachihoko::firstCalcSub)
+    Cmn::KDGndCol::CheckIF checker(nullptr);
+    bool hit = checker.checkMoveSphere(
+        mPos, moveDir, moveLen, COLLISION_RADIUS,
+        0x10002B, 1279,
+        Cmn::KDGndCol::Manager::cWallNrmY_L, 1.0f);
+
+    if (hit) {
+        // Collision detected — burst at current position
+        doBurst();
+        return;
+    }
+
+    // No collision, update position
     mPos.mX += mVel.mX;
     mPos.mY += mVel.mY;
     mPos.mZ += mVel.mZ;
@@ -303,28 +359,8 @@ void BulletSuperShot::stateFlight() {
     mXLinkMtx.matrix[1][3] = mPos.mY;
     mXLinkMtx.matrix[2][3] = mPos.mZ;
 
-    // Check burst conditions
-    bool shouldBurst = false;
-
-    // 1. Ground collision — check if bullet is below ground height
-    // Uses placeholder function; user fills in the real offset
-    // float groundY = BulletSuperShot_getGroundHeight(mPos.mX, mPos.mZ);
-    // if (mPos.mY <= groundY) {
-    //     mPos.mY = groundY;
-    //     shouldBurst = true;
-    // }
-
-    // 2. Simple fallback: burst if bullet falls below start height (descending)
-    if (mFrame > 10 && mVel.mY < 0.0f && mPos.mY < mStartPos.mY - 10.0f) {
-        shouldBurst = true;
-    }
-
-    // 3. Maximum flight time
+    // Maximum flight time
     if (mFrame >= MAX_FLIGHT_FRAMES) {
-        shouldBurst = true;
-    }
-
-    if (shouldBurst) {
         doBurst();
     }
 }
