@@ -40,6 +40,13 @@ void PlayerWeaponSuperShot::initialize(){
 	mInitialized = true;
 }
 
+void PlayerWeaponSuperShot::registerPlayer(Game::Player *player) {
+	int id = player->mIndex;
+	if(id < 0 || id >= 10) return;
+	if(mBullet[id] != NULL) return;
+	mBullet[id] = Game::BulletSuperShot::create((Lp::Sys::Actor *)player, player->mTeam);
+}
+
 void PlayerWeaponSuperShot::sleepGachihokoBullet(Game::BulletGachihoko *bullet) {
 	// Immediately sleep the game-created BulletGachihoko so it doesn't do anything
 	Lp::Sys::Actor *actor = (Lp::Sys::Actor *)bullet;
@@ -49,10 +56,8 @@ void PlayerWeaponSuperShot::sleepGachihokoBullet(Game::BulletGachihoko *bullet) 
 void PlayerWeaponSuperShot::launchBullet(Game::Player *player) {
 	int id = player->mIndex;
 
-	// Create BulletSuperShot on first use
-	if (mBullet[id] == NULL) {
-		mBullet[id] = Game::BulletSuperShot::create((Lp::Sys::Actor *)player, player->mTeam);
-	}
+	// Bullet must be pre-created via registerPlayer (called from playerModelSetupHook)
+	if (mBullet[id] == NULL) return;
 
 	// If previous bullet is still active, sleep it first
 	if (mBullet[id]->mActive) {

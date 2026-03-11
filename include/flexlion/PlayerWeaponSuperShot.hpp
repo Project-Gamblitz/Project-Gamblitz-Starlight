@@ -17,6 +17,7 @@ namespace Game {
         PlayerWeaponSuperShot();
 
         void initialize();
+        void registerPlayer(Game::Player *player);
         void onCalc();
         void playerFirstCalc(Game::Player *player);
 

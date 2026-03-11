@@ -490,6 +490,7 @@ void playerModelSetupHook(Game::PlayerModel *pmodel){
 	pmodel->setup();
 	pmodel->mPlayer->mPlayerKingSquid = new Starlion::PlayerKingSquid(pmodel->mPlayer);
 	tornadoMgr->registerPlayer(pmodel->mPlayer);
+	Game::PlayerWeaponSuperShot::sInstance->registerPlayer(pmodel->mPlayer);
 	int idx = pmodel->mPlayer->mIndex;
 }
 
