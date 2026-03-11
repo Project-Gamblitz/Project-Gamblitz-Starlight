@@ -704,6 +704,7 @@ _ZN4Game12PlayerEffect23emitAndPlay_StartMarkedEPKNS_6PlayerE = 0x1077488 - 0x2E
 
 _ZN3Cmn16PlayerCustomPart19emitAndPlay_PutBackEv = 0x0018B5D0 - 0x2EBE000;
 _ZN3Cmn12PlayerWeapon13setLinkActionENS0_11InkActionIDEb = 0x001A5360 - 0x2EBE000;
+_ZN2Lp3Sys5Actor6createIN3Cmn22PlayerWeaponShachihokoEEEPT_PS1_PN4sead4HeapE = 0x00181B98 - 0x2EBE000;
 
 _ZN4Game11NpcIdolNews15playScratchAnimEb = 0x0DB997C - 0x2EBE000;
 

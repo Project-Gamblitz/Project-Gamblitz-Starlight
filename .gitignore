@@ -28,3 +28,4 @@ scripts/.idea/*
 starlight_patch_*/
 Project-Gamblitz-Starlight*.nso
 /.claude
+/.ida-mcp

@@ -18,10 +18,6 @@
 //#include "EffectMgr.hpp"
 
 ushort GetCharKindHook(uintptr_t _this, ushort charKind);
-void handleSupershot();
-int getSuperShotBurstWaitFrameHook(Game::BulletGachihoko *bullet);
-int getSuperShotBurstWarnFrameHook(Game::BulletGachihoko *bullet);
-void supershotJumpHook();
 void tornadoJumpHook();
 //int getBombThrowSpanFrmHook(Game::PlayerInkAction *inkAction, bool a);
 u64 specialSetupWithoutModelHook();
@@ -31,7 +27,6 @@ gsys::Model *createHumanModelHook(sead::SafeStringBase<char> const& name, Cmn::D
 int *custommgrjptHook();
 bool barrierEffectHook(Game::PlayerEffect *peffect, bool isEmit);
 int calcAquaBallDamageHook(Game::BulletSpAquaBall *bullet, int armortype, Cmn::Def::Team team, sead::Vector3<float> const& pos);
-int calcHokoDamageHook(Game::BulletGachihoko *bullet, int armortype, Cmn::Def::Team team, sead::Vector3<float> const& pos);
 int stepPaintTypeHook(Game::PlayerStepPaint *step);
 bool fixEffHook(Game::Player *player);
 void miniMapCamCalcHook(Game::MiniMapCamera *_this);
