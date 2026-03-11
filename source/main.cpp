@@ -838,8 +838,6 @@ void hooks_init(){
 	Game::PlayerWeaponSuperShot::supershotJumpHook();
 	custommgrjptHook();
 	specialSetupWithoutModelHook();
-	Game::PlayerWeaponSuperShot::getBurstWaitFrame(NULL);
-	Game::PlayerWeaponSuperShot::getBurstWarnFrame(NULL);
 	stepPaintTypeHook(NULL);
 	fixEffHook(NULL);
 	playerModelResourceLoadHook(NULL, NULL);

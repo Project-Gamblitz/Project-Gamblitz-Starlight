@@ -1,6 +1,7 @@
 #include "flexlion/PlayerWeaponSuperShot.hpp"
-#include "flexlion/ProcessMemory.hpp"
+#include "flexlion/BulletSuperShot.hpp"
 #include "starlight/collector.hpp"
+#include "Game/Player/Player.h"
 
 using namespace starlight;
 
@@ -8,22 +9,18 @@ namespace Game {
 
 PlayerWeaponSuperShot *PlayerWeaponSuperShot::sInstance = NULL;
 
-// Vtable patching: override setLinkUserName so setFromMush can't overwrite
-// our xlink name before createXLink resolves the user
+// --- PlayerWeapon vtable patch (xlink name) ---
 static u64 sWeaponVtable[128];
-static bool sVtablePatched = false;
-
+static bool sWeaponVtablePatched = false;
 static void nopSetLinkUserName(void *, const void *) {}
 
 Cmn::PlayerWeapon* PlayerWeaponSuperShot::initWeaponXLink(Cmn::PlayerWeapon *weapon) {
-	// Set xlink name to SuperShot BEFORE setupWithoutModel runs
 	weapon->setLinkUserName(sead::SafeStringBase<char>::create("SuperShot"));
-	// Patch vtable so setFromMush's call to setLinkUserName is a no-op
-	if (!sVtablePatched) {
+	if (!sWeaponVtablePatched) {
 		u64 *origVtable = *(u64 **)weapon;
 		memcpy(sWeaponVtable, origVtable, sizeof(sWeaponVtable));
-		sWeaponVtable[87] = (u64)&nopSetLinkUserName; // setLinkUserName entry
-		sVtablePatched = true;
+		sWeaponVtable[87] = (u64)&nopSetLinkUserName;
+		sWeaponVtablePatched = true;
 	}
 	*(u64 **)weapon = sWeaponVtable;
 	return weapon;
@@ -33,16 +30,48 @@ PlayerWeaponSuperShot::PlayerWeaponSuperShot(){
 	sInstance = this;
 	memset(mXlinkSet, 0, sizeof(mXlinkSet));
 	memset(mFiredBullet, 0, sizeof(mFiredBullet));
+	memset(mBullet, 0, sizeof(mBullet));
 	mInitialized = false;
 }
 
 void PlayerWeaponSuperShot::initialize(){
 	if(mInitialized) return;
 	if(!Utils::isValidWeapon(Cmn::Def::WeaponKind::cSpecial, SUPERSHOT_SPECIAL_ID)) return;
-	*(u64*)ProcessMemory::MainAddr(0x2A32000) = (u64)&PlayerWeaponSuperShot::getBurstWaitFrame;
-	*(u64*)ProcessMemory::MainAddr(0x2A32008) = (u64)&PlayerWeaponSuperShot::getBurstWarnFrame;
-	*(u64*)ProcessMemory::MainAddr(0x2A31F40) = (u64)&PlayerWeaponSuperShot::calcHokoDamage;
 	mInitialized = true;
+}
+
+void PlayerWeaponSuperShot::sleepGachihokoBullet(Game::BulletGachihoko *bullet) {
+	// Immediately sleep the game-created BulletGachihoko so it doesn't do anything
+	Lp::Sys::Actor *actor = (Lp::Sys::Actor *)bullet;
+	actor->reserveSleepAll_(Lp::Sys::Actor::ListNodeKind::None);
+}
+
+void PlayerWeaponSuperShot::launchBullet(Game::Player *player) {
+	int id = player->mIndex;
+
+	// Create BulletSuperShot on first use
+	if (mBullet[id] == NULL) {
+		mBullet[id] = Game::BulletSuperShot::create((Lp::Sys::Actor *)player, player->mTeam);
+	}
+
+	// If previous bullet is still active, sleep it first
+	if (mBullet[id]->mActive) {
+		mBullet[id]->doSleep();
+	}
+
+	// Compute launch position and velocity from player aim
+	sead::Vector3<float> pos = player->mPosition;
+	pos.mY += 10.0f; // Raise above feet
+
+	float yaw = player->mShotRotation.mY;
+	float pitch = player->mShotRotation.mX;
+	float cp = cosf(pitch);
+	sead::Vector3<float> vel;
+	vel.mX = sinf(yaw) * cp * BulletSuperShot::LAUNCH_SPEED;
+	vel.mY = sinf(pitch) * BulletSuperShot::LAUNCH_SPEED;
+	vel.mZ = cosf(yaw) * cp * BulletSuperShot::LAUNCH_SPEED;
+
+	mBullet[id]->launch(player, pos, vel);
 }
 
 void PlayerWeaponSuperShot::onCalc(){
@@ -54,6 +83,9 @@ void PlayerWeaponSuperShot::onCalc(){
 		player->mPlayerInkAction->mChargerChargeState = 100;
 		Prot::ObfStore(&player->mPlayerInkAction->mChargerChargeFrame, 1000);
 	}
+
+	// Detect fire events by scanning for BulletGachihoko created by SuperShot players.
+	// We immediately sleep the Gachihoko bullet and launch our own BulletSuperShot instead.
 	bool hasBullet[10] = {};
 	auto iterNode = Game::BulletGachihoko::getClassIterNodeStatic();
 	for(Game::BulletGachihoko *ita = (Game::BulletGachihoko*)iterNode->derivedFrontActiveActor(); ita != NULL; ita = (Game::BulletGachihoko*)iterNode->derivedNextActiveActor(ita)){
@@ -62,13 +94,22 @@ void PlayerWeaponSuperShot::onCalc(){
 		}
 		Game::Player *bulletPlayer = (Game::Player*)ita->mSender;
 		int id = bulletPlayer->mIndex;
-		hasBullet[id] = true;
-		if(bulletPlayer->isInSpecial() && bulletPlayer->mSpecialWeaponId == SUPERSHOT_SPECIAL_ID && !mFiredBullet[id]){
-			Cmn::PlayerWeapon *weapon = bulletPlayer->mPlayerCustomMgr->getWeapon(Cmn::PlayerCustom::Kind_Wpn_Special, SUPERSHOT_SPECIAL_ID);
-			if(weapon != NULL){
-				weapon->setLinkAction(Cmn::PlayerWeapon::cFireImpact, false);
+		if(bulletPlayer->isInSpecial() && bulletPlayer->mSpecialWeaponId == SUPERSHOT_SPECIAL_ID){
+			hasBullet[id] = true;
+			if(!mFiredBullet[id]){
+				// Sleep the game's BulletGachihoko — BulletSuperShot handles everything
+				sleepGachihokoBullet(ita);
+
+				// Launch our standalone bullet
+				launchBullet(bulletPlayer);
+
+				// Trigger weapon xlink fire effect
+				Cmn::PlayerWeapon *weapon = bulletPlayer->mPlayerCustomMgr->getWeapon(Cmn::PlayerCustom::Kind_Wpn_Special, SUPERSHOT_SPECIAL_ID);
+				if(weapon != NULL){
+					weapon->setLinkAction(Cmn::PlayerWeapon::cFireImpact, false);
+				}
+				mFiredBullet[id] = true;
 			}
-			mFiredBullet[id] = true;
 		}
 	}
 	for(int i = 0; i < 10; i++){
@@ -88,49 +129,13 @@ void PlayerWeaponSuperShot::playerFirstCalc(Game::Player *player){
 		if(weapon != NULL){
 			weapon->setLinkAction(Cmn::PlayerWeapon::cPutBack, false);
 		}
+		// Sleep any active bullet when special ends
+		if(mBullet[id] != NULL && mBullet[id]->mActive){
+			mBullet[id]->doSleep();
+		}
 		mXlinkSet[id] = false;
 		mFiredBullet[id] = false;
 	}
-}
-
-int PlayerWeaponSuperShot::getBurstWaitFrame(Game::BulletGachihoko *bullet){
-	if(bullet == NULL){
-		return ((int (*)())ProcessMemory::MainAddr(0x4D7D84))();
-	}
-	if(!Utils::isPlayerClass(bullet->mSender)){
-		return ((int (*)())ProcessMemory::MainAddr(0x4D7D84))();
-	}
-	Game::Player *player = (Game::Player*)bullet->mSender;
-	if(player->isInSpecial() and player->mSpecialWeaponId == SUPERSHOT_SPECIAL_ID){
-		return 0;
-	}
-	return ((int (*)())ProcessMemory::MainAddr(0x4D7D84))();
-}
-
-int PlayerWeaponSuperShot::getBurstWarnFrame(Game::BulletGachihoko *bullet){
-	if(bullet == NULL){
-		return ((int (*)())ProcessMemory::MainAddr(0x4D7DB4))();
-	}
-	if(!Utils::isPlayerClass(bullet->mSender)){
-		return ((int (*)())ProcessMemory::MainAddr(0x4D7DB4))();
-	}
-	Game::Player *player = (Game::Player*)bullet->mSender;
-	if(player->isInSpecial() and player->mSpecialWeaponId == SUPERSHOT_SPECIAL_ID){
-		return 0;
-	}
-	return ((int (*)())ProcessMemory::MainAddr(0x4D7DB4))();
-}
-
-int PlayerWeaponSuperShot::calcHokoDamage(Game::BulletGachihoko *bullet, int armortype, Cmn::Def::Team team, sead::Vector3<float> const& pos){
-	int res = ((int (*)(Game::BulletGachihoko *, int, Cmn::Def::Team, sead::Vector3<float> const&))ProcessMemory::MainAddr(0x4DB3FC))(bullet, armortype, team, pos);
-	if(!Utils::isPlayerClass(bullet->mSender)){
-		return res;
-	}
-	Game::Player *player = (Game::Player*)bullet->mSender;
-	if(player->isInSpecial() and player->mSpecialWeaponId == SUPERSHOT_SPECIAL_ID and res != 0){
-		return DAMAGE;
-	}
-	return res;
 }
 
 void PlayerWeaponSuperShot::supershotJumpHook(){
