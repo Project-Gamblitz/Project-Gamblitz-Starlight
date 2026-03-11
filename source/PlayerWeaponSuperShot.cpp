@@ -136,11 +136,7 @@ void PlayerWeaponSuperShot::playerFirstCalc(Game::Player *player){
 		if(weapon != NULL){
 			weapon->setLinkAction(Cmn::PlayerWeapon::cPutBack, false);
 		}
-		// Request bullet to sleep on its next calc (safe context)
-		if(mBullet[id] != NULL && mBullet[id]->mActive){
-			mBullet[id]->mActive = false;
-			mBullet[id]->mHasBurst = false;
-		}
+		// Bullet continues its natural lifecycle (flight → burst → sleep)
 		mXlinkSet[id] = false;
 		mFiredBullet[id] = false;
 	}

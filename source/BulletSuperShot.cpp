@@ -177,6 +177,7 @@ BulletSuperShot::BulletSuperShot() {
     mFrame = 0;
     mActive = false;
     mHasBurst = false;
+    mSystemActive = false;
 }
 
 // ============================================================
@@ -201,8 +202,6 @@ BulletSuperShot *BulletSuperShot::create(Lp::Sys::Actor *parent, Cmn::Def::Team 
 // ============================================================
 
 void BulletSuperShot::launch(Game::Player *sender, sead::Vector3<float> const &pos, sead::Vector3<float> const &vel) {
-    bool wasActive = mActive;
-
     mSender = sender;
     mPos = pos;
     mVel = vel;
@@ -218,8 +217,8 @@ void BulletSuperShot::launch(Game::Player *sender, sead::Vector3<float> const &p
     mXLinkMtx.matrix[1][3] = mPos.mY;
     mXLinkMtx.matrix[2][3] = mPos.mZ;
 
-    if (wasActive) {
-        // Already active in actor system — just restart flight
+    if (mSystemActive) {
+        // Actor is active in the actor system — just restart flight
         mStateMachine.changeState(cState_Flight);
     } else {
         // Actor is sleeping — activate it (vtOnActivate will start flight)
@@ -356,15 +355,11 @@ const char *BulletSuperShot::vtGetClassName(BulletSuperShot *self) {
 }
 
 void BulletSuperShot::vtFirstCalc(BulletSuperShot *self) {
-    // If mActive was cleared externally (e.g. special ended), sleep from safe context
-    if (!self->mActive && !self->mHasBurst) {
-        self->doSleep();
-        return;
-    }
     self->mStateMachine.executeState();
 }
 
 void BulletSuperShot::vtOnActivate(BulletSuperShot *self, bool) {
+    self->mSystemActive = true;
     Lp::Sys::XLink *xlink = self->getXLink();
     if (xlink) {
         xlink->setLocalPropertyValue(0, 1.0f); // BulletDamageType = DamageP
@@ -376,6 +371,7 @@ void BulletSuperShot::vtOnActivate(BulletSuperShot *self, bool) {
 }
 
 void BulletSuperShot::vtOnSleep(BulletSuperShot *self) {
+    self->mSystemActive = false;
     self->mSender = NULL;
     self->mActive = false;
     self->mHasBurst = false;

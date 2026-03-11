@@ -22,6 +22,7 @@ namespace Game {
         int mFrame;
         bool mActive;
         bool mHasBurst;
+        bool mSystemActive; // true between vtOnActivate and vtOnSleep
 
         Lp::Utl::StateMachine mStateMachine;
 
