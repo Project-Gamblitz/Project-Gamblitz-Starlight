@@ -26,7 +26,7 @@ extern "C" {
 
 // Flight parameters
 const int BSA_FLIGHT_TIME = 120;
-const float BSA_FLIGHT_HEIGHT = 400.0f;
+const float BSA_FLIGHT_HEIGHT = 300.0f;
 const float tornadoTankZOffset = -3.0f;
 
 namespace Flexlion {
