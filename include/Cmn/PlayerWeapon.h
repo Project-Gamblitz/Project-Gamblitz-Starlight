@@ -39,7 +39,15 @@ namespace Cmn {
     };
     class PlayerWeapon : public Cmn::PlayerCustomPart {
 	public:
+    enum InkActionID {
+        cFireOn, cFireOff, cFireImpact, cFireFailed,
+        cPaintOn, cPaintOff, cPutBack, cChargeSpinner,
+        cSideStep, cLockOn, cBreak, cRecover,
+        cFireCanopy, cSetupWaterCutter, cUnknown,
+    };
     PlayerWeapon();
+    void setLinkUserName(const sead::SafeStringBase<char> &name);
+    void setLinkAction(InkActionID actionId, bool isNetRecv);
     bool has2(Cmn::Def::WeaponKind,int);
     u32 _358;
     u32 mWeaponId;

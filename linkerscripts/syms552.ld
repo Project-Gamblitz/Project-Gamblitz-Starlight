@@ -470,6 +470,7 @@ _ZN4gsys5Model11requestDrawEv = 0x17e0684 - 0x2EBE000;
 _ZN3Cmn16PlayerCustomPart8calcDrawEv = 0x18A7EC - 0x2EBE000;
 _ZN4Game17BulletSpSuperBall4shotEPNS_6PlayerEiiPN4sead7Vector3IfEEPNS_17SuperBallShotArg2Ei = 0x558720 - 0x2EBE000;
 _ZN3Cmn16PlayerCustomPart11requestDrawEv = 0x18AEDC - 0x2EBE000;
+_ZN3Cmn12PlayerWeapon15setLinkUserNameERKN4sead14SafeStringBaseIcEE = 0x001A4F14 - 0x2EBE000;
 _ZN4Game15PlayerInkAction19getBombThrowSpanFrmEb = 0x10BFD08 - 0x2EBE000;
 _ZN4Game15PlayerInkAction22startLauncherThrowAnimEv = 0x109F0A4 - 0x2EBE000;
 _ZNK4Game6Player21isInSpecial_FreeBombsEv = 0x10201D8 - 0x2EBE000;
@@ -701,7 +702,8 @@ _ZN4Game12PlayerEffect28emitAndPlay_SuperArmorVanishEv = 0x1078A34 - 0x2EBE000;
 _ZN4Game6Player19startBarrier_CommonEii = 0x101947C - 0x2EBE000;
 _ZN4Game12PlayerEffect23emitAndPlay_StartMarkedEPKNS_6PlayerE = 0x1077488 - 0x2EBE000;
 
-_ZN3Cmn16PlayerCustomPart19emitAndPlay_PutBackEv = 0x018B5D0 - 0x2EBE000;
+_ZN3Cmn16PlayerCustomPart19emitAndPlay_PutBackEv = 0x0018B5D0 - 0x2EBE000;
+_ZN3Cmn12PlayerWeapon13setLinkActionENS0_11InkActionIDEb = 0x001A5360 - 0x2EBE000;
 
 _ZN4Game11NpcIdolNews15playScratchAnimEb = 0x0DB997C - 0x2EBE000;
 

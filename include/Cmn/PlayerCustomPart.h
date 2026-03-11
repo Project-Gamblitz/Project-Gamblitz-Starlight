@@ -18,6 +18,8 @@ namespace Cmn {
 		void getRootBoneMtx(sead::Matrix34<float> *)const;
 		void calcDraw();
 		void requestDraw();
+		void setLinkUserName(const sead::SafeStringBase<char> &name);
+		void emitAndPlay_PutBack();
 		u64 _348;
 		Cmn::IPlayerCustomInfo *iCustomPlayerInfo;
 	};
