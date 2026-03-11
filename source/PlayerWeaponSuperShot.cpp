@@ -87,6 +87,7 @@ void PlayerWeaponSuperShot::onCalc(){
 	// Detect fire events by scanning for BulletGachihoko created by SuperShot players.
 	// We immediately sleep the Gachihoko bullet and launch our own BulletSuperShot instead.
 	bool hasBullet[10] = {};
+	Game::BulletGachihoko *toSleep[10] = {};
 	auto iterNode = Game::BulletGachihoko::getClassIterNodeStatic();
 	for(Game::BulletGachihoko *ita = (Game::BulletGachihoko*)iterNode->derivedFrontActiveActor(); ita != NULL; ita = (Game::BulletGachihoko*)iterNode->derivedNextActiveActor(ita)){
 		if(!Utils::isPlayerClass(ita->mSender)){
@@ -97,8 +98,8 @@ void PlayerWeaponSuperShot::onCalc(){
 		if(bulletPlayer->isInSpecial() && bulletPlayer->mSpecialWeaponId == SUPERSHOT_SPECIAL_ID){
 			hasBullet[id] = true;
 			if(!mFiredBullet[id]){
-				// Sleep the game's BulletGachihoko — BulletSuperShot handles everything
-				sleepGachihokoBullet(ita);
+				// Mark for sleep after iteration (can't sleep during iteration)
+				toSleep[id] = ita;
 
 				// Launch our standalone bullet
 				launchBullet(bulletPlayer);
@@ -110,6 +111,12 @@ void PlayerWeaponSuperShot::onCalc(){
 				}
 				mFiredBullet[id] = true;
 			}
+		}
+	}
+	// Sleep BulletGachihoko actors after iteration to avoid invalidating the iterator
+	for(int i = 0; i < 10; i++){
+		if(toSleep[i] != NULL){
+			sleepGachihokoBullet(toSleep[i]);
 		}
 	}
 	for(int i = 0; i < 10; i++){
