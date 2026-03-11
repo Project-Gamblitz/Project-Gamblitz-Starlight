@@ -335,15 +335,12 @@ void BulletSuperShot::stateFlight() {
         moveDir.mZ = 0.0f;
     }
 
-    // Ground/wall collision check (same flags as BulletGachihoko::firstCalcSub)
-    Cmn::KDGndCol::CheckIF checker(nullptr);
-    bool hit = checker.checkMoveSphere(
-        mPos, moveDir, moveLen, COLLISION_RADIUS,
-        0x10002B, 1279,
-        Cmn::KDGndCol::Manager::cWallNrmY_L, 1.0f);
-
-    if (hit) {
-        // Collision detected — burst at current position
+    // Simple ground check (TODO: replace with proper KDGndCol once actor is collision-registered)
+    sead::Vector3<float> nextPos;
+    nextPos.mX = mPos.mX + mVel.mX;
+    nextPos.mY = mPos.mY + mVel.mY;
+    nextPos.mZ = mPos.mZ + mVel.mZ;
+    if (nextPos.mY < mStartPos.mY - 500.0f) {
         doBurst();
         return;
     }

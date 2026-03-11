@@ -90,7 +90,7 @@ void PlayerWeaponSuperShot::onCalc(){
 	Game::BulletGachihoko *toSleep[10] = {};
 	auto iterNode = Game::BulletGachihoko::getClassIterNodeStatic();
 	for(Game::BulletGachihoko *ita = (Game::BulletGachihoko*)iterNode->derivedFrontActiveActor(); ita != NULL; ita = (Game::BulletGachihoko*)iterNode->derivedNextActiveActor(ita)){
-		if(!Utils::isPlayerClass(ita->mSender)){
+		if(ita->mSender == NULL || !Utils::isPlayerClass(ita->mSender)){
 			continue;
 		}
 		Game::Player *bulletPlayer = (Game::Player*)ita->mSender;
