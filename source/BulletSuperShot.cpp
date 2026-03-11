@@ -201,6 +201,8 @@ BulletSuperShot *BulletSuperShot::create(Lp::Sys::Actor *parent, Cmn::Def::Team 
 // ============================================================
 
 void BulletSuperShot::launch(Game::Player *sender, sead::Vector3<float> const &pos, sead::Vector3<float> const &vel) {
+    bool wasActive = mActive;
+
     mSender = sender;
     mPos = pos;
     mVel = vel;
@@ -216,8 +218,13 @@ void BulletSuperShot::launch(Game::Player *sender, sead::Vector3<float> const &p
     mXLinkMtx.matrix[1][3] = mPos.mY;
     mXLinkMtx.matrix[2][3] = mPos.mZ;
 
-    // Activate actor and start flight
-    asLpActor()->reserveActivate(true);
+    if (wasActive) {
+        // Already active in actor system — just restart flight
+        mStateMachine.changeState(cState_Flight);
+    } else {
+        // Actor is sleeping — activate it (vtOnActivate will start flight)
+        asLpActor()->reserveActivate(true);
+    }
 }
 
 void BulletSuperShot::doBurst() {
@@ -349,6 +356,11 @@ const char *BulletSuperShot::vtGetClassName(BulletSuperShot *self) {
 }
 
 void BulletSuperShot::vtFirstCalc(BulletSuperShot *self) {
+    // If mActive was cleared externally (e.g. special ended), sleep from safe context
+    if (!self->mActive && !self->mHasBurst) {
+        self->doSleep();
+        return;
+    }
     self->mStateMachine.executeState();
 }
 

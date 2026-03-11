@@ -59,11 +59,6 @@ void PlayerWeaponSuperShot::launchBullet(Game::Player *player) {
 	// Bullet must be pre-created via registerPlayer (called from playerModelSetupHook)
 	if (mBullet[id] == NULL) return;
 
-	// If previous bullet is still active, sleep it first
-	if (mBullet[id]->mActive) {
-		mBullet[id]->doSleep();
-	}
-
 	// Compute launch position and velocity from player aim
 	sead::Vector3<float> pos = player->mPosition;
 	pos.mY += 10.0f; // Raise above feet
@@ -141,9 +136,10 @@ void PlayerWeaponSuperShot::playerFirstCalc(Game::Player *player){
 		if(weapon != NULL){
 			weapon->setLinkAction(Cmn::PlayerWeapon::cPutBack, false);
 		}
-		// Sleep any active bullet when special ends
+		// Request bullet to sleep on its next calc (safe context)
 		if(mBullet[id] != NULL && mBullet[id]->mActive){
-			mBullet[id]->doSleep();
+			mBullet[id]->mActive = false;
+			mBullet[id]->mHasBurst = false;
 		}
 		mXlinkSet[id] = false;
 		mFiredBullet[id] = false;
