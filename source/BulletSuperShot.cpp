@@ -33,6 +33,7 @@ void initBSSVtable_internal(BulletSuperShot *bss) {
         sBSSVtable.onActivate = (u64)((void (*)(BulletSuperShot *, bool))&BulletSuperShot::vtOnActivate);
         sBSSVtable.onSleep = (u64)((void (*)(BulletSuperShot *))&BulletSuperShot::vtOnSleep);
         sBSSVtable.getXlinkName = (u64)((const char *(*)(BulletSuperShot *))&BulletSuperShot::vtGetXlinkName);
+        sBSSVtable.getXLinkMtx = (u64)((sead::Matrix34<float> *(*)(BulletSuperShot *))&BulletSuperShot::vtGetXLinkMtx);
         sBSSVtable.setXlinkLocalPropertyDefinition = (u64)((int (*)(BulletSuperShot *, int))&BulletSuperShot::vtSetXLinkLocalPropertyDef);
         sBSSVtable.countXlinkLocalProperty = (u64)((int (*)(BulletSuperShot *))&BulletSuperShot::vtCountXLinkLocalProperty);
         sInitVtable = true;
@@ -376,6 +377,10 @@ void BulletSuperShot::vtOnSleep(BulletSuperShot *self) {
     self->mActive = false;
     self->mHasBurst = false;
     self->mFrame = 0;
+}
+
+sead::Matrix34<float> *BulletSuperShot::vtGetXLinkMtx(BulletSuperShot *self) {
+    return &self->mXLinkMtx;
 }
 
 const char *BulletSuperShot::vtGetXlinkName(BulletSuperShot *self) {

@@ -1,6 +1,8 @@
 #pragma once
 
 #include "Cmn/Actor.h"
+#include "Cmn/KDGndCol/Manager.h"
+#include "Game/PaintUtl.h"
 #include "Lp/Utl.h"
 #include "sead/vector.h"
 #include "sead/matrix.h"
@@ -47,6 +49,7 @@ namespace Game {
         static void vtOnActivate(BulletSuperShot *self, bool);
         static void vtOnSleep(BulletSuperShot *self);
         static const char *vtGetXlinkName(BulletSuperShot *self);
+        static sead::Matrix34<float> *vtGetXLinkMtx(BulletSuperShot *self);
         static int vtSetXLinkLocalPropertyDef(BulletSuperShot *self, int baseCount);
         static int vtCountXLinkLocalProperty(BulletSuperShot *self);
         void setXLinkRootMtx();
@@ -62,6 +65,7 @@ namespace Game {
         static constexpr float LAUNCH_SPEED = 22.0f;
         static constexpr float BURST_PAINT_RADIUS = 50.0f;
         static constexpr float BURST_DAMAGE_RADIUS = 40.0f;
+        static constexpr float COLLISION_RADIUS = 5.0f;
         static constexpr int DAMAGE = 1500;
         static constexpr int MAX_FLIGHT_FRAMES = 300;
 
