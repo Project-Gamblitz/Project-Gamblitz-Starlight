@@ -257,15 +257,14 @@ void BulletSuperShot::doBurst() {
         }
     }
 
+    // Reset frame counter for burst timer
+    mFrame = 0;
+
     // Transition to burst state (triggers xlink burst effects)
     mStateMachine.changeState(cState_Burst);
 }
 
 void BulletSuperShot::doSleep() {
-    Lp::Sys::XLink *xlink = getXLink();
-    if (xlink) {
-        XLinkKillAllSound(xlink);
-    }
     mSender = NULL;
     mActive = false;
     mHasBurst = false;
