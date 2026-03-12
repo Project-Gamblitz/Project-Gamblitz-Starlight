@@ -174,7 +174,14 @@ void miniMapCamCalcHook(Game::MiniMapCamera *_this){
 static void (*handleBulletCloneEventImpl)(Game::BulletCloneHandle *cloneHandle, Game::Player *player, Game::BulletCloneEvent *event, int clonefrm);
 void handleBulletCloneEventHook(Game::BulletCloneHandle *cloneHandle, Game::Player *player, Game::BulletCloneEvent *event, int clonefrm){
 	int paintfrm = (*((int (**)(Game::SeqMgrBase*, uint))((*(u64*)Game::MainMgr::sInstance->seqMgr) + (78 * 8))))(Game::MainMgr::sInstance->seqMgr, clonefrm); // im lazy to define vtable
-	if(event->mType == Game::BulletCloneEvent::Type::BulletTypeInkstrike) tornadoMgr->informShotInkstrike(player, event->mPos, event->mVel, paintfrm);
+	if(event->mType == Game::BulletCloneEvent::Type::BulletTypeInkstrike){
+		// Defer the launch — store pending dest and let cShootPrepare handle the delay
+		int id = player->mIndex;
+		if(id >= 0 && id < 10){
+			tornadoMgr->mPendingDest[id] = event->mVel;
+			tornadoMgr->mRemoteShotPending[id] = true;
+		}
+	}
 	//FsLogger::LogFormatDefaultDirect("\nEvent:\nType: %i\nPos: %.2f %.2f %.2f\nVel: %.2f %.2f %.2f\nPlayerId: %i\n_unk: %i\n\n", 
 	//event->mType, event->mPos.mX, event->mPos.mY, event->mPos.mZ, event->mVel.mX, event->mVel.mY, event->mVel.mZ, event->mPlayerId, event->_unk);
 	handleBulletCloneEventImpl(cloneHandle, player, event, clonefrm);

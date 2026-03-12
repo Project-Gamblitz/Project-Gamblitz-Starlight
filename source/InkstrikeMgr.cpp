@@ -51,10 +51,12 @@ namespace Flexlion{
                 bullets[id]->prepare(player);
             }
         }
-        // Handle remote players: flight started via network while still in cAim
-        if(bullets[id] != NULL && bullets[id]->mFlightActive && playerState[id] == TornadoState::cAim){
-            mShootFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
-            playerState[id] = TornadoState::cShoot;
+        // Handle remote players: network event received, defer launch through cShootPrepare
+        // so the prepare animation plays before the BSA actually launches.
+        if(mRemoteShotPending[id] && playerState[id] == TornadoState::cAim){
+            mShootPrepareFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
+            playerState[id] = TornadoState::cShootPrepare;
+            mRemoteShotPending[id] = false;
         }
     }
     void InkstrikeMgr::playerFirstCalc(Game::Player *player){
