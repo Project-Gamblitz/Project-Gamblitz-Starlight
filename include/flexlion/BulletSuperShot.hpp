@@ -50,6 +50,8 @@ namespace Game {
         static void vtOnSleep(BulletSuperShot *self);
         static const char *vtGetXlinkName(BulletSuperShot *self);
         static sead::Matrix34<float> *vtGetXLinkMtx(BulletSuperShot *self);
+        static sead::Vector3<float> *vtGetXLinkScale(BulletSuperShot *self);
+        static bool vtIsCreateSlink(BulletSuperShot *self);
         static int vtSetXLinkLocalPropertyDef(BulletSuperShot *self, int baseCount);
         static int vtCountXLinkLocalProperty(BulletSuperShot *self);
         void setXLinkRootMtx();

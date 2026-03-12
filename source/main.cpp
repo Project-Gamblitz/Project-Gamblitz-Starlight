@@ -1,5 +1,6 @@
 #include "main.hpp"
 #include "flexlion/PlayerWeaponSuperShot.hpp"
+#include "Cui/MsgWindow.h"
 
 using namespace starlight;
 
@@ -302,6 +303,7 @@ void renderEntrypoint(agl::DrawContext *drawContext, sead::TextWriter *textWrite
 }
 	static int renderstate = 0;
 	static int renderctr = 0;
+	static bool msgWindowShown = false;
 	char *scenename = Lp::Utl::getCurSceneName();
 	switch(renderstate){
 	case 0:
@@ -316,6 +318,22 @@ void renderEntrypoint(agl::DrawContext *drawContext, sead::TextWriter *textWrite
 		renderstate+=DrawUtils::drawLogo(strcmp(scenename, "Boot") != 0);
 		break;
 	case 2:
+		// Show custom MsgWindow after logo on Boot scene (same pattern as Boot::NetworkExe::stateProductPlacement)
+		if(Cui::SystemPageMgr::sInstance != NULL && !msgWindowShown){
+			Cui::MsgWindowPageHandler *handler = Cui::SystemPageMgr::sInstance->mMsgWindowHandler;
+			Cui::MsgArg arg;
+			arg.readCommonMsgAttr(sead::SafeStringBase<char>::create("CuiMsgWin"), sead::SafeStringBase<char>::create("Msg_Product_Placement"));
+			handler->in(arg);
+			msgWindowShown = true;
+		}
+		if(msgWindowShown){
+			Cui::MsgWindowPageHandler *handler = Cui::SystemPageMgr::sInstance->mMsgWindowHandler;
+			if(handler->isAbleIn()){
+				renderstate+=1;
+			}
+		}
+		break;
+	case 3:
 		break;
 	}
 	static int mControlState = 0;
