@@ -630,16 +630,18 @@ void Game::SighterTarget_startAllMarking(Game::SighterTarget *sighterTarget, int
 }
 
 // Reimplementation of Game::PlayerEffect::emitAndPlay_SuperArmorInvoke but for AllMarking
-void emitAndPlay_AllMarkingInvoke(Game::Player *player) {
+void emitAndPlay_AllMarkingInvoke(Game::PlayerEffect *effect) {
 	xlink2::Handle handle;
-	player->mPlayerEffect->mPlayer->mXLink->searchAndEmitWrap("SWpAllMarking", false, &handle);
-	player->mXLink->searchAndPlayWrap("AllMarkingStartCtrl", false, &handle);
+	effect->mPlayer->mXLink->searchAndEmitWrap("SWpAllMarking", false, &handle);
+	effect->mPlayer->mXLink->searchAndPlayWrap("AllMarkingStartCtrl", false, &handle);
 }
 
 // Hook for Game::Player::startAllMarking_Impl to add SighterTarget marking
 void startAllMarking_ImplHook(Game::Player *player, int a1) {
 	// Call AllMarking invoke effect
-	emitAndPlay_AllMarkingInvoke(player);
+	if(player->mPlayerEffect != NULL){
+		emitAndPlay_AllMarkingInvoke(player->mPlayerEffect);
+	}
 
 	// Call original startAllMarking_Impl
 	player->startAllMarking_Impl(a1);
