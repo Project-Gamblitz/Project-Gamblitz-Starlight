@@ -1,7 +1,7 @@
 # TODO (Khangaroo): Make this process a lot less hacky (no, export did not work)
 # See MakefileNSO
 
-.PHONY: all clean starlight send linkerscript
+.PHONY: all clean starlight send ryujinx linkerscript
 
 S2VER ?= 552
 S2VERSTR ?= 5.5.2
@@ -39,7 +39,11 @@ starlight_patch_$(S2VER)/*.ips: patches/*.slpatch patches/configs/$(S2VER).confi
 	$(PYTHON) scripts/genPatch.py $(S2VER)
 
 send: all
-	$(PYTHON) scripts/sendPatch.py $(IP) $(S2ROMTYPE) $(S2VER)
+	$(PYTHON) scripts/sendPatch.py $(IP)
+
+ryujinx: all
+	@cp -r deploy/atmosphere "$(APPDATA)/Ryujinx/sdcard/"
+	@echo Deployed to Ryujinx sdcard.
 
 clean:
 	$(MAKE) clean -f MakefileNSO

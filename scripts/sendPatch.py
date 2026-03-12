@@ -2,19 +2,21 @@ from ftplib import FTP
 import os
 import sys
 
-titleIdLookup = {
-    "JP": '01003C700009C000',
-    "US": '01003BC0000A0000',
-    "EU": '0100F8F0000A2000',
-    'EveJP': '0100D070040F8000',
-    'EveUS': '01003870040FA000',
-    'EveEU': '010086F0040FC000',
-    'TrialUS': '01006BB00D45A000',
-    'ShowDL': '010000A00218E000'
-}
+consoleIP = sys.argv[1]
+if '.' not in consoleIP:
+    print(sys.argv[0], "ERROR: Please specify with `IP=[Your console's IP]`")
+    sys.exit(-1)
+
+consolePort = 5000
+
+deployDir = os.path.join(os.curdir, 'deploy', 'atmosphere')
+
+if not os.path.isdir(deployDir):
+    print("ERROR: deploy/atmosphere not found. Run `make` first.")
+    sys.exit(-1)
 
 
-def listdirs(connection,_path):
+def listdirs(connection, _path):
     file_list, dirs, nondirs = [], [], []
     try:
         connection.cwd(_path)
@@ -31,64 +33,40 @@ def listdirs(connection,_path):
     return dirs
 
 
-def ensuredirectory(connection,root,path):
-    print(f"Ensuring {os.path.join(root, path)} exists...")
+def ensuredirectory(connection, root, path):
     if path not in listdirs(connection, root):
         connection.mkd(f'{root}/{path}')
 
 
-consoleIP = sys.argv[1]
-if '.' not in consoleIP:
-    print(sys.argv[0], "ERROR: Please specify with `IP=[Your console's IP]`")
-    sys.exit(-1)
+def upload_tree(connection, local_root, remote_root):
+    for dirpath, dirnames, filenames in os.walk(local_root):
+        rel = os.path.relpath(dirpath, local_root).replace('\\', '/')
+        if rel == '.':
+            remote_dir = remote_root
+        else:
+            remote_dir = f'{remote_root}/{rel}'
 
-consolePort = 5000
+        # Ensure all directories exist
+        parts = remote_dir.strip('/').split('/')
+        current = ''
+        for part in parts:
+            parent = current if current else ''
+            ensuredirectory(connection, f'/{parent}' if parent else '', part)
+            current = f'{current}/{part}' if current else part
 
-if len(sys.argv) < 3:
-    romType = 'US'
-else:
-    romType = sys.argv[2]
+        for filename in filenames:
+            local_path = os.path.join(dirpath, filename)
+            remote_path = f'/{remote_dir}/{filename}'
+            print(f'Sending {remote_path}')
+            with open(local_path, 'rb') as f:
+                connection.storbinary(f'STOR {remote_path}', f)
 
-if len(sys.argv) < 4:
-    version = '310'
-else:
-    version = sys.argv[3]
-
-curDir = os.curdir
 
 ftp = FTP()
 print(f'Connecting to {consoleIP}... ', end='')
 ftp.connect(consoleIP, consolePort)
 print('Connected!')
 
-patchDirectories = []
+upload_tree(ftp, deployDir, 'atmosphere')
 
-root, dirs, _ = next(os.walk(curDir))
-for dir in dirs:
-    if dir.startswith("starlight_patch_"):
-        patchDirectories.append((os.path.join(root, dir), dir))
-
-ensuredirectory(ftp, '', 'atmosphere')
-ensuredirectory(ftp, '/atmosphere', 'exefs_patches')
-
-for patchDir in patchDirectories:
-    dirPath = patchDir[0]
-    dirName = patchDir[1]
-    ensuredirectory(ftp, '/atmosphere/exefs_patches', patchDir[1])
-    _, _, files = next(os.walk(dirPath))
-    for file in files:
-        fullPath = os.path.join(dirPath, file)
-        if os.path.exists(fullPath):
-            sdPath = f'/atmosphere/exefs_patches/{dirName}/{file}'
-            print(f'Sending {sdPath}')
-            ftp.storbinary(f'STOR {sdPath}', open(fullPath, 'rb'))
-
-ensuredirectory(ftp, '/atmosphere', 'contents')
-ensuredirectory(ftp, '/atmosphere/contents', titleIdLookup[romType])
-ensuredirectory(ftp, f'/atmosphere/contents/{titleIdLookup[romType]}', 'exefs')
-
-binaryPath = f'{os.path.basename(os.getcwd())}{version}.nso'
-if os.path.isfile(binaryPath):
-    sdPath = f'/atmosphere/contents/{titleIdLookup[romType]}/exefs/subsdk0'
-    print(f'Sending {sdPath}')
-    ftp.storbinary(f'STOR {sdPath}', open(binaryPath, 'rb'))
+print('Done!')
