@@ -19,6 +19,10 @@ all: starlight
 starlight:
 	$(MAKE) all -f MakefileNSO S2VER=$(S2VER) S2VERSTR=$(S2VERSTR)
 	$(MAKE) starlight_patch_$(S2VER)/*.ips
+	@mkdir -p deploy
+	@mv $(shell basename $(CURDIR))$(S2VER).nso deploy/subsdk0
+	@mv starlight_patch_$(S2VER) deploy/
+	@echo Deployed to deploy/
 
 starlight_patch_$(S2VER)/*.ips: patches/*.slpatch patches/configs/$(S2VER).config patches/maps/$(S2VER)/*.map \
 								build$(S2VER)/$(shell basename $(CURDIR))$(S2VER).map scripts/genPatch.py
@@ -30,7 +34,7 @@ send: all
 
 clean:
 	$(MAKE) clean -f MakefileNSO
-	@rm -fr starlight_patch_*
+	@rm -fr starlight_patch_* deploy
 
 linkerscript:
 	$(PYTHON) scripts/genLinkerScript.py patches/maps/551/main.map 0x2EBE000
