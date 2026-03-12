@@ -35,7 +35,10 @@ def listdirs(connection, _path):
 
 def ensuredirectory(connection, root, path):
     if path not in listdirs(connection, root):
-        connection.mkd(f'{root}/{path}')
+        try:
+            connection.mkd(f'{root}/{path}')
+        except:
+            pass
 
 
 def upload_tree(connection, local_root, remote_root):
@@ -65,6 +68,7 @@ def upload_tree(connection, local_root, remote_root):
 ftp = FTP()
 print(f'Connecting to {consoleIP}... ', end='')
 ftp.connect(consoleIP, consolePort)
+ftp.login()
 print('Connected!')
 
 upload_tree(ftp, deployDir, 'atmosphere')

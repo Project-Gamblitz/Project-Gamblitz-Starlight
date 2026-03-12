@@ -8,11 +8,33 @@ namespace Game {
 
 PlayerWeaponTornado *PlayerWeaponTornado::sInstance = NULL;
 
-// --- PlayerWeapon vtable patch (xlink name) ---
+// --- PlayerWeapon vtable patch (xlink name + actorOnActivate) ---
 static u64 sWeaponVtable[128];
 static bool sWeaponVtablePatched = false;
 static void nopSetLinkUserName(void *, const void *) {}
 typedef void (*SetLinkUserNameFn)(void*, const sead::SafeStringBase<char> *);
+
+// Custom actorOnActivate: replicates Cmn::Actor::actorOnActivate exactly,
+// only skipping the final onActivateEmitAndPlay (we handle it in playerFirstCalc).
+static void tornadoActorOnActivate(Cmn::Actor *actor) {
+	// xlink vtable[7] + setIsActive (matches original actorOnActivate)
+	Lp::Sys::XLink *xlink = actor->mXLink;
+	if(xlink) {
+		u64 *xlinkVt = *(u64 **)xlink;
+		((void(*)(void*))xlinkVt[7])(xlink);
+		xlink->setIsActive(true);
+	}
+	// Call virtual onActivate (vtable index 41, offset 0x148)
+	u64 *vtable = *(u64 **)actor;
+	((void(*)(void*))vtable[41])(actor);
+	// Component holder activation (actor offset 102*8 = 0x330)
+	void *comp = *((void**)actor + 102);
+	if (comp) {
+		u64 *compVt = *(u64 **)comp;
+		((void(*)(void*))compVt[8])(comp);
+	}
+	// Skip onActivateEmitAndPlay — handled by playerFirstCalc
+}
 
 Cmn::PlayerWeapon* PlayerWeaponTornado::initWeaponXLink(Cmn::PlayerWeapon *weapon) {
 	// Call the VIRTUAL setLinkUserName through the vtable (the non-virtual one is a NOP)
@@ -22,6 +44,7 @@ Cmn::PlayerWeapon* PlayerWeaponTornado::initWeaponXLink(Cmn::PlayerWeapon *weapo
 	realSetLinkUserName(weapon, &tornadoName);
 	if (!sWeaponVtablePatched) {
 		memcpy(sWeaponVtable, origVtable, sizeof(sWeaponVtable));
+		sWeaponVtable[17] = (u64)&tornadoActorOnActivate;
 		sWeaponVtable[87] = (u64)&nopSetLinkUserName;
 		sWeaponVtablePatched = true;
 	}
@@ -31,34 +54,35 @@ Cmn::PlayerWeapon* PlayerWeaponTornado::initWeaponXLink(Cmn::PlayerWeapon *weapo
 
 PlayerWeaponTornado::PlayerWeaponTornado(){
 	sInstance = this;
-	memset(mXlinkSet, 0, sizeof(mXlinkSet));
 	memset(mOnActivatePlayed, 0, sizeof(mOnActivatePlayed));
+	memset(mNotInSpecialCount, 0, sizeof(mNotInSpecialCount));
 }
 
 void PlayerWeaponTornado::playerFirstCalc(Game::Player *player){
 	int id = player->mIndex;
-	if(player->isInSpecial() && player->mSpecialWeaponId == TORNADO_SPECIAL_ID && !mXlinkSet[id]){
-		mXlinkSet[id] = true;
-		mOnActivatePlayed[id] = false;
-	} else if(!player->isInSpecial() && mXlinkSet[id]){
-		mXlinkSet[id] = false;
-		mOnActivatePlayed[id] = false;
-	}
+	bool inTornadoSpecial = player->isInSpecial() && player->mSpecialWeaponId == TORNADO_SPECIAL_ID;
 
-	// Emit OnActivate sound once the weapon's xlink is ready.
-	// actorOnActivate fires before async xlink creation finishes, so we must emit manually.
-	// Matches game's actorOnActivate pattern: setIsActive(true) then onActivateEmitAndPlay().
-	if(mXlinkSet[id] && !mOnActivatePlayed[id]){
-		Cmn::PlayerWeapon *weapon = player->mPlayerCustomMgr->getWeapon(Cmn::PlayerCustom::Kind_Wpn_Special, TORNADO_SPECIAL_ID);
-		if(weapon != NULL){
-			Lp::Sys::XLink *xlink = ((Cmn::Actor*)weapon)->mXLink;
-			if(xlink != NULL){
-				xlink->setIsActive(true);
-				xlink->onActivateEmitAndPlay();
-				mOnActivatePlayed[id] = true;
-			}
-		}
+	if(!inTornadoSpecial){
+		// Debounce: only reset after 30+ frames out of special (~0.5s at 60fps).
+		// Prevents isInSpecial() flicker (1-2 frames) from resetting mOnActivatePlayed,
+		// while still allowing reset between special uses (many seconds of recharge).
+		if(mNotInSpecialCount[id] < 30) mNotInSpecialCount[id]++;
+		if(mNotInSpecialCount[id] >= 30) mOnActivatePlayed[id] = false;
+		return;
 	}
+	mNotInSpecialCount[id] = 0;
+	if(mOnActivatePlayed[id]) return;
+
+	Cmn::PlayerWeapon *weapon = player->mPlayerCustomMgr->getWeapon(Cmn::PlayerCustom::Kind_Wpn_Special, TORNADO_SPECIAL_ID);
+	if(weapon == NULL) return;
+
+	Lp::Sys::XLink *xlink = ((Cmn::Actor*)weapon)->mXLink;
+	if(xlink == NULL) return;
+
+	// Wake slink if sleeping (first use after xlink creation), then emit.
+	if(xlink->isSleep()) xlink->setIsActive(true);
+	xlink->onActivateEmitAndPlay();
+	mOnActivatePlayed[id] = true;
 }
 
 void PlayerWeaponTornado::tornadoJumpHook(){

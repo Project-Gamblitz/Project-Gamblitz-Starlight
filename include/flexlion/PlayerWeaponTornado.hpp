@@ -19,7 +19,7 @@ namespace Game {
         static void tornadoJumpHook();
 
     private:
-        bool mXlinkSet[10];
         bool mOnActivatePlayed[10];
+        u8 mNotInSpecialCount[10];
     };
 }
