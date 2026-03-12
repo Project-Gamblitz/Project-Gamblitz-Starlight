@@ -2,6 +2,7 @@
 const int startflightdelay = 40; // delay from when a point is chosen to when the tornado is actually launched
 const int playerdelay = 100; // 40 frames Shoot_Tornado_St + 60 frames Shoot_Tornado (was 60 + 60)
 const float tornadoTankZOffset = -3.0f;
+
 namespace Flexlion{
     InkstrikeMgr *InkstrikeMgr::sInstance = NULL;
     InkstrikeMgr::InkstrikeMgr(){
@@ -45,11 +46,6 @@ namespace Flexlion{
         if(player->isInSpecial() and player->mSpecialWeaponId == TORNADO_SPECIAL_ID and playerState[id] == TornadoState::cNone){
             playerState[id] = TornadoState::cAim;
             isAppliedWeapon[id] = 0;
-            // Set PlayerWeapon xlink user to special-specific user for effects
-            Cmn::PlayerWeapon *weapon = player->mPlayerWeapon[0];
-            if(weapon != NULL){
-                weapon->setLinkUserName(sead::SafeStringBase<char>::create("Tornado"));
-            }
             // Activate BSA so xlink cState_Wait effects play during aiming
             if(bullets[id] != NULL && !bullets[id]->isActive()){
                 bullets[id]->prepare(player);

@@ -13,11 +13,15 @@ PlayerWeaponSuperShot *PlayerWeaponSuperShot::sInstance = NULL;
 static u64 sWeaponVtable[128];
 static bool sWeaponVtablePatched = false;
 static void nopSetLinkUserName(void *, const void *) {}
+typedef void (*SetLinkUserNameFn)(void*, const sead::SafeStringBase<char> *);
 
 Cmn::PlayerWeapon* PlayerWeaponSuperShot::initWeaponXLink(Cmn::PlayerWeapon *weapon) {
-	weapon->setLinkUserName(sead::SafeStringBase<char>::create("SuperShot"));
+	// Call the VIRTUAL setLinkUserName through the vtable (the non-virtual one is a NOP)
+	u64 *origVtable = *(u64 **)weapon;
+	SetLinkUserNameFn realSetLinkUserName = (SetLinkUserNameFn)origVtable[87];
+	sead::SafeStringBase<char> superShotName = sead::SafeStringBase<char>::create("SuperShot");
+	realSetLinkUserName(weapon, &superShotName);
 	if (!sWeaponVtablePatched) {
-		u64 *origVtable = *(u64 **)weapon;
 		memcpy(sWeaponVtable, origVtable, sizeof(sWeaponVtable));
 		sWeaponVtable[87] = (u64)&nopSetLinkUserName;
 		sWeaponVtablePatched = true;

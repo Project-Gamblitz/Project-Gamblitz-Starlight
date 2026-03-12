@@ -18,7 +18,7 @@
 //#include "EffectMgr.hpp"
 
 ushort GetCharKindHook(uintptr_t _this, ushort charKind);
-void tornadoJumpHook();
+// tornadoJumpHook moved to PlayerWeaponTornado
 //int getBombThrowSpanFrmHook(Game::PlayerInkAction *inkAction, bool a);
 u64 specialSetupWithoutModelHook();
 void playerModelResourceLoadHook(Game::PlayerModelResource *res, sead::Heap *heap);

@@ -19,6 +19,7 @@ namespace Lp {
       void setLocalPropertyValue(unsigned int, float);
       void killAllEffect();
       void killAllSound();
+      void onActivateEmitAndPlay();
       ALWAYS_INLINE void searchAndEmitWrap(const char* name, bool hold, xlink2::Handle* out) {
         asm("mov x8, %0" : : "r"(out));
         searchAndEmit(name, hold);

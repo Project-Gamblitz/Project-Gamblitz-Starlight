@@ -1,5 +1,6 @@
 #include "main.hpp"
 #include "flexlion/PlayerWeaponSuperShot.hpp"
+#include "flexlion/PlayerWeaponTornado.hpp"
 #include "Cui/MsgWindow.h"
 
 using namespace starlight;
@@ -185,6 +186,7 @@ static void (*playerFourthCalcOg)(Game::Player*);
 void playerFirstCalcHook(Game::Player *player){
 	playerFirstCalcOg(player);
 	tornadoMgr->playerFirstCalc(player);
+	Game::PlayerWeaponTornado::sInstance->playerFirstCalc(player);
 	Game::PlayerWeaponSuperShot::sInstance->playerFirstCalc(player);
 }
 
@@ -374,19 +376,9 @@ void healPlayerSuperLandingHook(Game::Player *player){
 
 u64 specialSetupWithoutModelHook(){
 	return 0xa582438000; // byte array for which specials mush model is created
-	// cTornado, cSupershot + og: 0xa582438000
-	// cSupershot + og: 0xa582418000
 }
 
-void tornadoJumpHook(){
-	asm("CMP W20, #0");
-	asm("B.EQ #8");
-	asm("B _ZN3Cmn15PlayerCustomMgr27checkAndCreateSpecialWeaponEiNS_12PlayerCustom4KindEb_CC");
-	asm("MOV X0, X19");
-	asm("MOV X1, XZR");
-	asm("BL _ZN2Lp3Sys5Actor6createIN3Cmn19PlayerWeaponShooterEEEPT_PS1_PN4sead4HeapE");
-	asm("B _ZN3Cmn15PlayerCustomMgr27checkAndCreateSpecialWeaponEiNS_12PlayerCustom4KindEb_1D4");
-}
+// tornadoJumpHook is now in PlayerWeaponTornado.cpp
 
 int *custommgrjptHook(){
 	custommgrjpt[0] = ((u64)&Game::PlayerWeaponSuperShot::supershotJumpHook) - ((u64)custommgrjpt);
@@ -397,7 +389,7 @@ int *custommgrjptHook(){
 			custommgrjpt[i]+=((u64)oldJptable) - ((u64)custommgrjpt);
 		}
 	}
-	custommgrjpt[2] = ((u64)&tornadoJumpHook) - ((u64)custommgrjpt);
+	custommgrjpt[2] = ((u64)&Game::PlayerWeaponTornado::tornadoJumpHook) - ((u64)custommgrjpt);
 	return custommgrjpt;
 }
 
@@ -481,6 +473,7 @@ void init_starlion(){
 	FsLogger::LogFormatDefaultDirect("[Gamblitz] Created KingSquidMgr, 0x%x free RAM.\n", Collector::mHeapMgr->getCurrentHeap()->getFreeSize());
 	mS1Inkstrike = new Starlion::S1Inkstrike();
 	new Game::PlayerWeaponSuperShot();
+	new Game::PlayerWeaponTornado();
 	tornadoMgr = new Flexlion::InkstrikeMgr();
 	FsLogger::LogFormatDefaultDirect("[Gamblitz] Created InkstrikeMgr, 0x%x free RAM.\n", Collector::mHeapMgr->getCurrentHeap()->getFreeSize());
 	_BYTE randomBuf[0x28];
