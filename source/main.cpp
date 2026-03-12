@@ -385,7 +385,19 @@ u64 specialSetupWithoutModelHook(){
 	return 0xa582438000; // byte array for which specials mush model is created
 }
 
-// tornadoJumpHook is now in PlayerWeaponTornado.cpp
+void barrierHook(){
+	Game::PlayerMgr *playerMgr = Collector::mPlayerMgrInstance;
+	if(playerMgr != NULL){
+		Game::Player* player = playerMgr->getControlledPerformer();
+		if(player != NULL){
+			if(player->mPlayerEffect != NULL){
+				xlink2::Handle tmp;
+				player->mXLink->searchAndEmitWrap("BarrierEnd", false, &tmp);
+			}
+		}
+	}
+	asm("BL _ZN4Game16PlayerNetControl20sendEvent_EndBarrierEv");
+}
 
 int *custommgrjptHook(){
 	custommgrjpt[0] = ((u64)&Game::PlayerWeaponSuperShot::supershotJumpHook) - ((u64)custommgrjpt);
@@ -857,6 +869,7 @@ void hooks_init(){
 	actorDbHook(NULL, NULL, NULL);
 	Game::PlayerWeaponSuperShot::supershotJumpHook();
 	custommgrjptHook();
+	barrierHook();
 	specialSetupWithoutModelHook();
 	stepPaintTypeHook(NULL);
 	fixEffHook(NULL);
