@@ -59,6 +59,7 @@ int performanceImprTestHook2();
 void isInLauncherHook(Game::Player *player);
 void handleDisplayVersion(nn::oe::DisplayVersion *ver);
 void agentThreeHandle();
+void barrierHook();
 void agentThreeGearHook(Cmn::MushGearInfo *gearInfo);
 bool isWorld00();
 int msnArmorHook(Cmn::MushGearInfo *gearInfo, Cmn::Def::GearKind kind, int armorLv);

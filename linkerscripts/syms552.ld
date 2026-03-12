@@ -892,3 +892,5 @@ _ZN3Cui13SystemPageMgr9sInstanceE = 0x02D7E420 - 0x2EBE000;
 
 /* nn::ui2d::TextBox */
 _ZN2nn4ui2d7TextBox13SetStringUtf8EPKct = 0x01A949DC - 0x2EBE000;
+
+_ZN4Game16PlayerNetControl20sendEvent_EndBarrierEv = 0x01100FE8 - 0x2EBE000;
