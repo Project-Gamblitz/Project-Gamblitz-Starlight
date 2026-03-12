@@ -633,6 +633,7 @@ void Game::SighterTarget_startAllMarking(Game::SighterTarget *sighterTarget, int
 void emitAndPlay_AllMarkingInvoke(Game::PlayerEffect *effect) {
 	xlink2::Handle handle;
 	effect->mPlayer->mXLink->searchAndEmitWrap("SWpAllMarking", false, &handle);
+	effect->mPlayer->mXLink->searchAndPlayWrap("AllMarkingStartCtrl", false, &handle);
 }
 
 // Hook for Game::Player::startAllMarking_Impl to add SighterTarget marking
