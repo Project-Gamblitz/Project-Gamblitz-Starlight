@@ -17,12 +17,13 @@ typedef void (*SetLinkUserNameFn)(void*, const sead::SafeStringBase<char> *);
 // Custom actorOnActivate: replicates Cmn::Actor::actorOnActivate exactly,
 // only skipping the final onActivateEmitAndPlay (we handle it in playerFirstCalc).
 static void tornadoActorOnActivate(Cmn::Actor *actor) {
-	// xlink vtable[7] + setIsActive (matches original actorOnActivate)
+	// xlink vtable[7] only — skip setIsActive to prevent deferred OnActivate emission
+	// before slink resources are loaded (causes NULL crash during Boot→Plaza).
+	// playerFirstCalc handles setIsActive + onActivateEmitAndPlay when actually needed.
 	Lp::Sys::XLink *xlink = actor->mXLink;
 	if(xlink) {
 		u64 *xlinkVt = *(u64 **)xlink;
 		((void(*)(void*))xlinkVt[7])(xlink);
-		xlink->setIsActive(true);
 	}
 	// Call virtual onActivate (vtable index 41, offset 0x148)
 	u64 *vtable = *(u64 **)actor;
