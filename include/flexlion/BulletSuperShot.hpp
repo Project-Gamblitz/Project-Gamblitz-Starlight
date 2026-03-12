@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Cmn/Actor.h"
-#include "Cmn/KDGndCol/Manager.h"
 #include "Game/PaintUtl.h"
 #include "Lp/Utl.h"
 #include "sead/vector.h"

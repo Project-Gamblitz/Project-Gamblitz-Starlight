@@ -81,6 +81,17 @@ void PlayerWeaponSuperShot::launchBullet(Game::Player *player) {
 void PlayerWeaponSuperShot::onCalc(){
 	Game::Player *player = Collector::mControlledPlayer;
 	if(player == NULL or !Utils::isSceneLoaded()){
+		// Scene exit: sleep all active bullets and reset state.
+		// Actors live on the scene heap and will be freed — null out pointers.
+		for(int i = 0; i < 10; i++){
+			if(mBullet[i] != NULL && mBullet[i]->mSystemActive){
+				mBullet[i]->doSleep();
+			}
+			mBullet[i] = NULL;
+			mXlinkSet[i] = false;
+			mFiredBullet[i] = false;
+		}
+		mInitialized = false;
 		return;
 	}
 	if(player->isInSpecial() and player->mSpecialWeaponId == SUPERSHOT_SPECIAL_ID){
@@ -135,12 +146,18 @@ void PlayerWeaponSuperShot::playerFirstCalc(Game::Player *player){
 	if(player->isInSpecial() && player->mSpecialWeaponId == SUPERSHOT_SPECIAL_ID && !mXlinkSet[id]){
 		mXlinkSet[id] = true;
 		mFiredBullet[id] = false;
+		if(mBullet[id] != NULL){
+			mBullet[id]->asLpActor()->reserveActivate(true);
+		}
 	} else if(!player->isInSpecial() && mXlinkSet[id]){
 		Cmn::PlayerWeapon *weapon = player->mPlayerCustomMgr->getWeapon(Cmn::PlayerCustom::Kind_Wpn_Special, SUPERSHOT_SPECIAL_ID);
 		if(weapon != NULL){
 			weapon->setLinkAction(Cmn::PlayerWeapon::cPutBack, false);
 		}
-		// Bullet continues its natural lifecycle (flight → burst → sleep)
+		// Sleep the bullet if it's still active (e.g. pre-activated but never fired)
+		if(mBullet[id] != NULL && mBullet[id]->mSystemActive){
+			mBullet[id]->doSleep();
+		}
 		mXlinkSet[id] = false;
 		mFiredBullet[id] = false;
 	}
