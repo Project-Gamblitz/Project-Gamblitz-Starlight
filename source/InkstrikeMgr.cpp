@@ -265,10 +265,13 @@ namespace Flexlion{
         switch(playerState[id]){
         case TornadoState::cNone:
         {
-            // Restore weapon visibility when not in special
-            Cmn::PlayerWeapon *weapon = player->mPlayerWeapon[0];
-            if(weapon != NULL){
-                weapon->setVisible(true);
+            // Restore weapon visibility only once when leaving tornado special
+            if(mWeaponHidden[id]){
+                Cmn::PlayerWeapon *weapon = player->mPlayerWeapon[0];
+                if(weapon != NULL){
+                    weapon->setVisible(true);
+                }
+                mWeaponHidden[id] = false;
             }
             break;
         }
@@ -282,6 +285,7 @@ namespace Flexlion{
                 sead::Matrix34<float> weaponBoneMtx;
                 weapon->getRootBoneMtx(&weaponBoneMtx);
                 weapon->setVisible(false);
+                mWeaponHidden[id] = true;
                 mTornadoMonitorModel[id]->mtx = weaponBoneMtx;
                 mTornadoMonitorModel[id]->mUpdateScale|=1;
                 mTornadoMonitorModel[id]->updateAnimationWorldMatrix_(3);
