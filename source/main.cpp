@@ -722,6 +722,7 @@ void Game::SighterTarget_startAllMarking(Game::SighterTarget *sighterTarget, int
 
 // Reimplementation of Game::PlayerEffect::emitAndPlay_SuperArmorInvoke but for AllMarking
 void emitAndPlay_AllMarkingInvoke(Game::PlayerEffect *effect) {
+	if(effect == NULL || effect->mPlayer == NULL || effect->mPlayer->mXLink == NULL) return;
 	xlink2::Handle handle;
 	effect->mPlayer->mXLink->searchAndEmitWrap("SWpAllMarking", false, &handle);
 	effect->mPlayer->mXLink->searchAndPlayWrap("AllMarkingStartCtrl", false, &handle);
@@ -729,6 +730,11 @@ void emitAndPlay_AllMarkingInvoke(Game::PlayerEffect *effect) {
 
 // Hook for Game::Player::startAllMarking_Impl to add SighterTarget marking
 void startAllMarking_ImplHook(Game::Player *player, int a1) {
+	// If this is the local player activating, send the network event
+	if(!player->mIsRemote){
+		sendEvent_AllMarking(player->mPlayerNetControl, a1);
+	}
+
 	// Call AllMarking invoke effect
 	if(player->mPlayerEffect != NULL){
 		emitAndPlay_AllMarkingInvoke(player->mPlayerEffect);
@@ -774,9 +780,13 @@ void Game::Player::startSpecial_AllMarking() {
 }
 
 // Reimplementation of Game::Player::receiveAllMarking (removed in 5.5.2)
+// Matches 3.1.0 behavior: calls startAllMarking_Impl directly for remote clones.
+// The hook's extra effects (SighterTarget marking, AllMarking invoke VFX) are only
+// for the local activation path — remote clones just need the core marking logic.
 void Game::Player::receiveAllMarking(int a2) {
 	if (this->mIsRemote) {
-		startAllMarking_ImplHook(this, a2);
+		emitAndPlay_AllMarkingInvoke(this->mPlayerEffect);
+		this->startAllMarking_Impl(a2);
 	}
 }
 
