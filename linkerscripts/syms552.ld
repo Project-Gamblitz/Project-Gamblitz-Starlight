@@ -894,3 +894,7 @@ _ZN3Cui13SystemPageMgr9sInstanceE = 0x02D7E420 - 0x2EBE000;
 _ZN2nn4ui2d7TextBox13SetStringUtf8EPKct = 0x01A949DC - 0x2EBE000;
 
 _ZN4Game16PlayerNetControl20sendEvent_EndBarrierEv = 0x01100FE8 - 0x2EBE000;
+
+/* EndBarrier reimplementation — TODO: fill in 5.5.2 addresses */
+/* 3.1.0 IDA ref: pushPlayerStateEvent = 0x7100e77598 → syms100 = 0x08D0728 */
+_ZN4Game14PlayerCloneObj20pushPlayerStateEventERKNS_21PlayerStateCloneEventE = 0x0104E3B4 - 0x2EBE000;

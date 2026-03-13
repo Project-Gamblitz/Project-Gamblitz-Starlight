@@ -31,6 +31,8 @@ int stepPaintTypeHook(Game::PlayerStepPaint *step);
 bool fixEffHook(Game::Player *player);
 void miniMapCamCalcHook(Game::MiniMapCamera *_this);
 void handleBulletCloneEventHook(Game::BulletCloneHandle *cloneHandle, Game::Player *player, Game::BulletCloneEvent *event, int clonefrm);
+void unpackStateEventHook(Game::Player *player, Game::PlayerStateCloneEvent *event, u32 gameFrame);
+void sendEvent_StartBarrierHook(Game::PlayerNetControl *netCtrl, int barrierEndFrm, int sourcePlayerIdx);
 bool isInInkstrikeCarryHook(Game::Player *player);
 
 void damageReasonHook(Game::VersusBeatenPage *page, Game::DamageReason &reason, Cmn::PlayerInfo const*attackerInfo, int dieFrm, int uiAppearFrm, bool iwannaslep);
@@ -59,7 +61,6 @@ int performanceImprTestHook2();
 void isInLauncherHook(Game::Player *player);
 void handleDisplayVersion(nn::oe::DisplayVersion *ver);
 void agentThreeHandle();
-void barrierHook();
 void agentThreeGearHook(Cmn::MushGearInfo *gearInfo);
 bool isWorld00();
 int msnArmorHook(Cmn::MushGearInfo *gearInfo, Cmn::Def::GearKind kind, int armorLv);
