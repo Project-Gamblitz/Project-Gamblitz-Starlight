@@ -883,6 +883,26 @@ void hooks_init(){
 	healPlayerSuperLandingHook(NULL);
 	createHumanModelHook(sead::SafeStringBase<char>::create("test"), Cmn::Def::Team::Alpha, *(Game::PlayerModelResource*)NULL,  *(Lp::Utl::ModelCreateArg*)NULL,  *(Lp::Utl::AnimCreateArg*)NULL, Cmn::Def::PlayerModelType::InkGirl, *(sead::RingBuffer<int>*)NULL);
 	msnArmorHook(0, Cmn::Def::GearKind::cHead, 0);
+	CustomizeSeqBaseLoadHook(NULL, NULL);
+	CustomizeAmiiboCbHelperFunc();
+}
+
+void CustomizeSeqBaseLoadHook(Cmn::CustomizeSeqBase *seqBase, sead::Heap *heap){
+	seqBase->mRivalCustomizePlayer = Lp::Sys::Actor::create<Cmn::CustomizePlayer>((Lp::Sys::Actor*)seqBase, heap);
+	memset(seqBase->mRivalCustomizePlayer->_480, 0, sizeof(seqBase->mRivalCustomizePlayer->_480));
+	seqBase->mRivalCustomizePlayer->mGearHeap = seqBase->mGearHeapForEachModel;
+	seqBase->mRivalCustomizePlayer->mModelType = Cmn::Def::PlayerModelType::Rival;
+	seqBase->mRivalCustomizePlayer->mCustomizeSeqBase = seqBase;
+}
+
+void CustomizeAmiiboCbHelperFunc(){
+	asm("LDR W8, [X19, #0x3EC]");
+	asm("CMP W8, #0x6");
+	asm("BNE #0xC");
+	asm("MOV W8, #0x4");
+	asm("STR W8, [X19, #0x3EC]");
+	asm("LDR W8, [X19,#0x414]");
+	asm("RET");
 }
 
 ushort GetCharKindHook(uintptr_t _this, ushort charKind){
