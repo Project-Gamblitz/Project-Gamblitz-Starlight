@@ -178,7 +178,11 @@
 00333270 0C000014
 
 //Rival Unpatch [YoshiCrystal]
-01454A54 1F2003D5
+01454A54 1F2003D5 // save validation removed
+001B5CF8 1F2003D5 // if modeltype = 5 and up dont do anything (network)
+// Rival Fix [Shadow] requires OE
+010EF2A8 0D000014
+010EF30C E0031FAA
 
 // Rival Fix [Shadow]
 010EF2A8 0D000014
@@ -219,6 +223,10 @@
 0039FA90 00E0A152 // static res
 0039C044 0048A052 // effect
 
-//barrier end sfx
-//010046F0 B #0x50
-01004750 BL barrierHook
+// EndBarrier unpackStateEvent hook
+// 3.1.0 IDA ref: BL at 0x7100e77374, inside receiveStateEvent (0x7100e77320)
+0104A04C BL unpackStateEventHook
+
+// StartBarrier — replace stubbed sendEvent_StartBarrier tail call inside startBarrier_Common
+// 3.1.0 IDA ref: BL at 0x7100e45f64, 5.5.2: B at 0x710101964C (tail call to stub at 0x7101100FE0)
+0101964C B sendEvent_StartBarrierHook

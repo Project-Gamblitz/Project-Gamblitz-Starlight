@@ -67,6 +67,7 @@ namespace Game {
 		
 		void clearRequest_Shot();
 		void startBarrier_Special();
+		void startBarrier_Common(int barrierEndFrm, int sourcePlayerIdx);
 		void startSpecial_AllMarking();
 		void startAllMarking_Impl(int);
 		void receiveAllMarking(int);

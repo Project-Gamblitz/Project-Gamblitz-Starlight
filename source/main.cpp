@@ -187,6 +187,83 @@ void handleBulletCloneEventHook(Game::BulletCloneHandle *cloneHandle, Game::Play
 	handleBulletCloneEventImpl(cloneHandle, player, event, clonefrm);
 }
 
+// Barrier network sync — unpackStateEvent hook
+// The compiler optimized out 'this' (PlayerCloneHandle*) from the calling convention
+// because unpackStateEvent never uses it. Actual ABI: (Player*, event*, gameFrame).
+static void (*unpackStateEventOriginal)(Game::Player *player, Game::PlayerStateCloneEvent *event, u32 gameFrame);
+
+// Packet types must fit in 6 bits (0-63) — pack() serializes byte 32 as 6 bits.
+// Game uses 1-54; we use 55 (StartBarrier) and 56 (EndBarrier).
+// Integer data must go in DWORD[6] (bytes 24-27) and DWORD[7] (bytes 28-31)
+// because bytes 0-23 are serialized as lossy compressed floats by pack().
+#define PACKET_START_BARRIER 55
+#define PACKET_END_BARRIER   56
+
+void receiveEndBarrier_Net_Reimpl(Game::Player *player){
+	player->mBarrierEndFrm = 0;
+	player->_B80 = 0;
+	player->mIsInBarrier = 0;
+}
+
+// Reimplementation of Game::Player::receiveStartBarrier_Net (3.1.0: 0x7100e45d68)
+// Delegates to startBarrier_Common which handles all field setting, effects, and infect.
+void receiveStartBarrier_Net_Reimpl(Game::Player *player, int duration, int sourcePlayerIdx){
+	int currentFrame = (int)Game::MainMgr::sInstance->mPaintGameFrame;
+	if(player->mBarrierEndFrm > currentFrame) return;
+	int barrierEndFrm = currentFrame + duration;
+	// Clamp clone's endFrm to never exceed the local player's endFrm.
+	// Without this, network timing drift makes checkBarrier_CopyFrom's '>' check
+	// re-trigger startBarrier_Common on the local player every frame (visual re-infect).
+	Game::Player *localPlayer = Game::PlayerMgr::sInstance->getControlledPerformer();
+	if(localPlayer != NULL && localPlayer->mBarrierEndFrm > currentFrame){
+		if(barrierEndFrm > localPlayer->mBarrierEndFrm)
+			barrierEndFrm = localPlayer->mBarrierEndFrm;
+	}
+	player->startBarrier_Common(barrierEndFrm, sourcePlayerIdx);
+}
+
+// Replaces stubbed sendEvent_StartBarrier tail-call inside startBarrier_Common.
+// Follows the same pattern as sendStateEvent_StartJetpack (3.1.0: 0x7100e78670):
+// construct event, set packet type, store ints at DWORD[6]/DWORD[7], check offline, push.
+// startBarrier_Common already guards with !mIsRemote before calling this.
+static u32 sBarrierSentExpiry = 0;
+void sendEvent_StartBarrierHook(Game::PlayerNetControl *netCtrl, int barrierEndFrm, int sourcePlayerIdx){
+	if(netCtrl == NULL || netCtrl->mCloneHandle == NULL) return;
+	// Don't re-send while a previous barrier send is still active.
+	// Prevents infect loop: network timing drift can make remote clone's mBarrierEndFrm
+	// higher than local player's, causing secondCalc's checkBarrier_CopyFrom (which uses >)
+	// to re-trigger startBarrier_Common on the local player every frame.
+	u32 currentFrame = (u32)Game::MainMgr::sInstance->mPaintGameFrame;
+	if(currentFrame < sBarrierSentExpiry) return;
+	sBarrierSentExpiry = (u32)barrierEndFrm;
+	Game::PlayerCloneHandle *handle = netCtrl->mCloneHandle;
+	if(handle->mCloneObjMgr->mIsOfflineScene) return;
+	Game::PlayerStateCloneEvent event;
+	memset(&event, 0, sizeof(event));
+	event._data[32] = PACKET_START_BARRIER;
+	// Duration and sourcePlayerIdx at DWORD[6] and DWORD[7] (bytes 24-31)
+	// These are transmitted as raw U32 by pack(), unlike bytes 0-23 (lossy float compression)
+	int duration = barrierEndFrm - (int)currentFrame;
+	*(int*)(event._data + 24) = duration;
+	*(int*)(event._data + 28) = sourcePlayerIdx;
+	handle->mPlayerCloneObj->pushPlayerStateEvent(event);
+}
+
+void unpackStateEventHook(Game::Player *player, Game::PlayerStateCloneEvent *event, u32 gameFrame){
+	u8 packetValue = event->_data[32];
+	if(packetValue == PACKET_END_BARRIER){
+		receiveEndBarrier_Net_Reimpl(player);
+		return;
+	}
+	if(packetValue == PACKET_START_BARRIER){
+		int duration = *(int*)(event->_data + 24);
+		int sourcePlayerIdx = *(int*)(event->_data + 28);
+		receiveStartBarrier_Net_Reimpl(player, duration, sourcePlayerIdx);
+		return;
+	}
+	unpackStateEventOriginal(player, event, gameFrame);
+}
+
 static void (*playerFirstCalcOg)(Game::Player*);
 static void (*playerThirdCalcOg)(Game::Player*);
 static void (*playerFourthCalcOg)(Game::Player*);
@@ -385,20 +462,6 @@ u64 specialSetupWithoutModelHook(){
 	return 0xa582438000; // byte array for which specials mush model is created
 }
 
-void barrierHook(){
-	Game::PlayerMgr *playerMgr = Collector::mPlayerMgrInstance;
-	if(playerMgr != NULL){
-		Game::Player* player = playerMgr->getControlledPerformer();
-		if(player != NULL){
-			if(player->mPlayerEffect != NULL){
-				xlink2::Handle tmp;
-				player->mXLink->searchAndEmitWrap("BarrierEnd", false, &tmp);
-			}
-		}
-	}
-	asm("BL _ZN4Game16PlayerNetControl20sendEvent_EndBarrierEv");
-}
-
 int *custommgrjptHook(){
 	custommgrjpt[0] = ((u64)&Game::PlayerWeaponSuperShot::supershotJumpHook) - ((u64)custommgrjpt);
 	int *oldJptable = (int*)ProcessMemory::MainAddr(0x24BE358);
@@ -486,6 +549,9 @@ void init_starlion(){
 	playerVtable->thirdCalc = (u64)playerThirdCalcHook;
 	playerVtable->fourthCalc = (u64)playerFourthCalcHook;
 	handleBulletCloneEventImpl = (void (*)(Game::BulletCloneHandle *, Game::Player *, Game::BulletCloneEvent *, int))ProcessMemory::MainAddr(0x4CF54C);
+	/* TODO: fill in 5.5.2 offset for unpackStateEvent (3.1.0 IDA: 0x7100e79b30) */
+	unpackStateEventOriginal = (void (*)(Game::Player *, Game::PlayerStateCloneEvent *, u32))ProcessMemory::MainAddr(0x0104CAA8);
+	// startBarrierCommon no longer needed — receive side sets barrier fields directly
 	DrawUtils::makeTudou();
 	FsLogger::LogFormatDefaultDirect("[Gamblitz] Initialized DrawUtils, 0x%x free RAM.\n", Collector::mHeapMgr->getCurrentHeap()->getFreeSize());
 	kingSquidMgr = new Starlion::KingSquidMgr();
@@ -869,7 +935,6 @@ void hooks_init(){
 	actorDbHook(NULL, NULL, NULL);
 	Game::PlayerWeaponSuperShot::supershotJumpHook();
 	custommgrjptHook();
-	barrierHook();
 	specialSetupWithoutModelHook();
 	stepPaintTypeHook(NULL);
 	fixEffHook(NULL);
@@ -879,6 +944,8 @@ void hooks_init(){
 	GetCharKindHook(NULL, 0);
 	isInInkstrikeCarryHook(NULL);
 	handleBulletCloneEventHook(NULL, NULL, NULL, 0);
+	unpackStateEventHook(NULL, NULL, 0);
+	sendEvent_StartBarrierHook(NULL, 0, 0);
 	PlaySuperArmorUse();
 	healPlayerSuperLandingHook(NULL);
 	createHumanModelHook(sead::SafeStringBase<char>::create("test"), Cmn::Def::Team::Alpha, *(Game::PlayerModelResource*)NULL,  *(Lp::Utl::ModelCreateArg*)NULL,  *(Lp::Utl::AnimCreateArg*)NULL, Cmn::Def::PlayerModelType::InkGirl, *(sead::RingBuffer<int>*)NULL);

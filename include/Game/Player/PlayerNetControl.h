@@ -5,8 +5,13 @@
 
 namespace Game{
     class Player;
+    class PlayerStateCloneEvent{
+        public:
+        _BYTE _data[40]; // byte[32] is the packet value, 40 bytes total (matches game's actual struct size)
+    };
     class PlayerCloneObj{
         public:
+        bool pushPlayerStateEvent(const Game::PlayerStateCloneEvent &event);
     };
     class CloneObjMgr{
         public:
