@@ -120,3 +120,4 @@
 #include "Game/SimulationMgr.h"
 #include "curl.h"
 #include "Game/VersusBeatenPage.h"
+#include "Cmn/CustomizeSeqBase.h"

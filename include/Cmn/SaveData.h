@@ -137,6 +137,7 @@ namespace Cmn {
         u64 unk0;
         SaveDataCmnData* pData;
         int getEquipGearId(Cmn::Def::GearKind) const;
+        int getSquidOrOctaPlayerModelType() const;
     };
 
     class SaveData : Lp::Sys::IUseHioNode {

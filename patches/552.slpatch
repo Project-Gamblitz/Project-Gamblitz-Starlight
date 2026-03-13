@@ -183,11 +183,54 @@
 010EF2A8 0D000014
 010EF30C E0031FAA
 
+// Rival Customize Fix 
+008F8052 008F8052 // size + 8
+014CA104 008F8052 // size + 8
+//000E0AAC 00F4A152 // bump GearHeap 200 -> 250mb | nvm not needed
+000DEDB8 7F3A02F9F4031F2A // relocated GearHeap = NULL
+000E0AE0 683A02F9 // store relocated GearHeap 0x3D8 -> 0x470
+000E0BD4 01000014 // return CustomizeSeqBase and heap for our convenience
+000E0BE0 01000014 // return CustomizeSeqBase and heap for our convenience
+000E0BF8 06000014 // return CustomizeSeqBase and heap for our convenience
+000E0C20 B CustomizeSeqBaseLoadHook // call our hook to create rival customize player 
+000E0FD4 623A42F9 // return relocated GearHeap
+000DF080 BL CustomizeAmiiboCbHelperFunc // fixup player id
+000DF180 1F150071 // cmp 4 -> 5
+000DF1A4 1F150071 // cmp 4 -> 5
+000E0F58 1F150071 // cmp 4 -> 5
+000E0F88 1F150071 // cmp 4 -> 5
+000E0FF4 3F150071 // cmp 4 -> 5
+000E1024 1F150071 // cmp 4 -> 5
+000E1044 1F150071 // cmp 4 -> 5
+000E1114 1F150071 // cmp 4 -> 5
+000E1130 1F150071 // cmp 4 -> 5
+000E10E4 1F180071410000548000805260EA03B960EE03B904000014 // sigma
+000E13F4 1F150071 // cmp 4 -> 5
+000E1D2C 1F150071 // cmp 4 -> 5
+000E1DA0 1F150071 // cmp 4 -> 5
+000E1E28 1F150071 // cmp 4 -> 5
+000E1E4C 1F150071 // cmp 4 -> 5
+
+// Rival Lobby Fix
+014984FC 007F8052 // size + 8
+01498598 02108052 // relocated Lobby::CoopCommander = NULL
+01498C64 60FA01F9 // store relocated Lobby::CoopCommander 0x3C0 -> 0x3F0
+01498CF8 60FA41F9 // load relocated Lobby::CoopCommander 0x3C0 -> 0x3F0
+01498CC8 1F150071 // cmp 4 -> 5
+01498CE4 1F150071 // cmp 4 -> 5
+01498DE8 1F150071 // cmp 4 -> 5
+01498E18 1F150071 // cmp 4 -> 5
+01498E84 3F150071 // cmp 4 -> 5
+01498EB4 1F150071 // cmp 4 -> 5
+01498ED4 1F150071 // cmp 4 -> 5
+014989AC BL LobbyRivalFixHook // create our rival
+01498B60 BL LobbyRivalGetPlayerTypeHook // map rival -> 4
+
 //Remove splatfest from vs select
 014B2484 00008052
 
 // Resource Heap Size Bump (if using merged testfire ptcl)
-0039FA90 0008A252 // static res
+0039FA90 00E0A152 // static res
 0039C044 0048A052 // effect
 
 // EndBarrier unpackStateEvent hook
