@@ -65,7 +65,7 @@ void agentThreeGearHook(Cmn::MushGearInfo *gearInfo);
 bool isWorld00();
 int msnArmorHook(Cmn::MushGearInfo *gearInfo, Cmn::Def::GearKind kind, int armorLv);
 void startAllMarking_ImplHook(Game::Player *player, int a1);
-void markedHook(Game::Player *player, int a1,int a2,Game::Player::MarkingType a3,int a4, unsigned int a5);
+void sendEvent_AllMarking(Game::PlayerNetControl *netCtrl, int gameFrame);
 xlink2::UserInstanceSLink *startSkill_DeathMarkingHook(Game::Player *player, unsigned int a2, char a3);
 void inkstrikeNetHook(u64 *x0, u32 w1, u64 *x2, u64 *x3, u32 w4, u32 w5);
 void shotBowHook();

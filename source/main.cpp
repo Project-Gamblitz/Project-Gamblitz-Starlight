@@ -198,6 +198,7 @@ static void (*unpackStateEventOriginal)(Game::Player *player, Game::PlayerStateC
 // because bytes 0-23 are serialized as lossy compressed floats by pack().
 #define PACKET_START_BARRIER 55
 #define PACKET_END_BARRIER   56
+#define PACKET_ALL_MARKING   57
 
 void receiveEndBarrier_Net_Reimpl(Game::Player *player){
 	player->mBarrierEndFrm = 0;
@@ -259,6 +260,11 @@ void unpackStateEventHook(Game::Player *player, Game::PlayerStateCloneEvent *eve
 		int duration = *(int*)(event->_data + 24);
 		int sourcePlayerIdx = *(int*)(event->_data + 28);
 		receiveStartBarrier_Net_Reimpl(player, duration, sourcePlayerIdx);
+		return;
+	}
+	if(packetValue == PACKET_ALL_MARKING){
+		int markingGameFrame = *(int*)(event->_data + 24);
+		player->receiveAllMarking(markingGameFrame);
 		return;
 	}
 	unpackStateEventOriginal(player, event, gameFrame);
@@ -746,10 +752,25 @@ void startAllMarking_ImplHook(Game::Player *player, int a1) {
 	}
 }
 
+// Sends AllMarking activation event to remote consoles via state event system.
+// Uses packet type 57 with game frame at DWORD[6] (bytes 24-27).
+void sendEvent_AllMarking(Game::PlayerNetControl *netCtrl, int gameFrame){
+	if(netCtrl == NULL || netCtrl->mCloneHandle == NULL) return;
+	Game::PlayerCloneHandle *handle = netCtrl->mCloneHandle;
+	if(handle->mCloneObjMgr->mIsOfflineScene) return;
+	Game::PlayerStateCloneEvent event;
+	memset(&event, 0, sizeof(event));
+	event._data[32] = PACKET_ALL_MARKING;
+	*(int*)(event._data + 24) = gameFrame;
+	handle->mPlayerCloneObj->pushPlayerStateEvent(event);
+}
+
 // Reimplementation of Game::Player::startSpecial_AllMarking (removed in 5.5.2)
+// Replaces stubbed sendSignal_AllMarking with state event send.
 void Game::Player::startSpecial_AllMarking() {
-	this->mPlayerNetControl->sendSignal_AllMarking();
-	startAllMarking_ImplHook(this, Game::MainMgr::sInstance->mPaintGameFrame);
+	int gameFrame = Game::MainMgr::sInstance->mPaintGameFrame;
+	sendEvent_AllMarking(this->mPlayerNetControl, gameFrame);
+	startAllMarking_ImplHook(this, gameFrame);
 }
 
 // Reimplementation of Game::Player::receiveAllMarking (removed in 5.5.2)
@@ -757,12 +778,6 @@ void Game::Player::receiveAllMarking(int a2) {
 	if (this->mIsRemote) {
 		startAllMarking_ImplHook(this, a2);
 	}
-}
-
-void markedHook(Game::Player *player, int a1,int a2,Game::Player::MarkingType a3,int a4,unsigned int a5){
-	Game::MainMgr::sInstance->mPaintGameFrame+=0x14;
-	player->startMarked_Bomb_Direct(0x21C, a4, 0);
-	Game::MainMgr::sInstance->mPaintGameFrame-=0x14;
 }
 
 xlink2::UserInstanceSLink *startSkill_DeathMarkingHook(Game::Player *player, unsigned int a2, char a3) {
@@ -922,7 +937,7 @@ void hooks_init(){
 	isInLauncherHook(NULL);
 	Game::SighterTarget_startAllMarking(NULL, 0, 0);
 	startAllMarking_ImplHook(NULL, 0);
-	markedHook(NULL, 0, 0, Game::Player::MarkingType::m1, 0, 0);
+	sendEvent_AllMarking(NULL, 0);
 	updateCursorEffectHook(NULL);
 	startSkill_DeathMarkingHook(NULL, 0, 0);
 	inkstrikeNetHook(NULL, 0, NULL, NULL, 0, 0);
