@@ -120,3 +120,4 @@ void PlayDisable();
 void handlePlayerControl();
 
 void dbgInfoSetHook(Cmn::PlayerInfoAry *playerInfoAry, Cmn::Def::Mode mode, sead::SafeStringBase<char> arg3);
+void playDamageVoiceAndRumbleHook(Game::Player *player, Game::DamageReason const &reason, bool isOneTimeDamage);

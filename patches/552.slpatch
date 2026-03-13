@@ -240,3 +240,7 @@
 // StartBarrier — replace stubbed sendEvent_StartBarrier tail call inside startBarrier_Common
 // 3.1.0 IDA ref: BL at 0x7100e45f64, 5.5.2: B at 0x710101964C (tail call to stub at 0x7101100FE0)
 0101964C B sendEvent_StartBarrierHook
+
+// playDamageHook barrier
+01049CA0 BL playDamageVoiceAndRumbleHook
+010569EC BL playDamageVoiceAndRumbleHook

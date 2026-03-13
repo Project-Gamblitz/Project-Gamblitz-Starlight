@@ -96,6 +96,8 @@ namespace Game {
 		void startMarked_Common(int, int, int, Game::Player::MarkingType);
 		void startMarked_Sender(int, int, Game::Player::MarkingType, int, unsigned int);
 		void calcBarrier_CenterPos(sead::Vector3<float> *out) const;
+		void emitAndPlay_BarrierHit(sead::Vector3<float> const&, bool);
+		void playDamageVoiceAndRumble(Game::DamageReason const&, bool);
 		bool isInSpecial() const;
 		bool isInSuperArmor() const;
 		bool IsInBarrier() const;

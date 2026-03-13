@@ -270,6 +270,16 @@ void unpackStateEventHook(Game::Player *player, Game::PlayerStateCloneEvent *eve
 	unpackStateEventOriginal(player, event, gameFrame);
 }
 
+// Hook for playDamageVoiceAndRumble — plays barrier hit SFX when player is in Bubbler
+void playDamageVoiceAndRumbleHook(Game::Player *player, Game::DamageReason const &reason, bool isOneTimeDamage){
+	if(player->mIsInBarrier){
+		sead::Vector3<float> pos = player->getWaistPos();
+		player->emitAndPlay_BarrierHit(pos, false);
+		return;
+	}
+	player->playDamageVoiceAndRumble(reason, isOneTimeDamage);
+}
+
 static void (*playerFirstCalcOg)(Game::Player*);
 static void (*playerThirdCalcOg)(Game::Player*);
 static void (*playerFourthCalcOg)(Game::Player*);
@@ -971,6 +981,7 @@ void hooks_init(){
 	handleBulletCloneEventHook(NULL, NULL, NULL, 0);
 	unpackStateEventHook(NULL, NULL, 0);
 	sendEvent_StartBarrierHook(NULL, 0, 0);
+	playDamageVoiceAndRumbleHook(NULL, *(Game::DamageReason*)NULL, 0);
 	PlaySuperArmorUse();
 	healPlayerSuperLandingHook(NULL);
 	createHumanModelHook(sead::SafeStringBase<char>::create("test"), Cmn::Def::Team::Alpha, *(Game::PlayerModelResource*)NULL,  *(Lp::Utl::ModelCreateArg*)NULL,  *(Lp::Utl::AnimCreateArg*)NULL, Cmn::Def::PlayerModelType::InkGirl, *(sead::RingBuffer<int>*)NULL);
