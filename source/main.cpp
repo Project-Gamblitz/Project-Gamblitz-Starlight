@@ -208,6 +208,7 @@ void receiveEndBarrier_Net_Reimpl(Game::Player *player){
 // Reimplementation of Game::Player::receiveStartBarrier_Net (3.1.0: 0x7100e45d68)
 // Delegates to startBarrier_Common which handles all field setting, effects, and infect.
 void receiveStartBarrier_Net_Reimpl(Game::Player *player, int duration, int sourcePlayerIdx){
+	if(player->mIsInBarrier) return;
 	int barrierEndFrm = (int)Game::MainMgr::sInstance->mPaintGameFrame + duration;
 	player->startBarrier_Common(barrierEndFrm, sourcePlayerIdx);
 }
