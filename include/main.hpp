@@ -65,6 +65,8 @@ void agentThreeGearHook(Cmn::MushGearInfo *gearInfo);
 bool isWorld00();
 int msnArmorHook(Cmn::MushGearInfo *gearInfo, Cmn::Def::GearKind kind, int armorLv);
 void CustomizeSeqBaseLoadHook(Cmn::CustomizeSeqBase *seqBase, sead::Heap *heap);
+void LobbyRivalFixHook(Lobby::MainMgr *mainMgr);
+int LobbyRivalGetPlayerTypeHook(Cmn::SaveDataCmn *saveDataCmn);
 void CustomizeAmiiboCbHelperFunc();
 void startAllMarking_ImplHook(Game::Player *player, int a1);
 void markedHook(Game::Player *player, int a1,int a2,Game::Player::MarkingType a3,int a4, unsigned int a5);

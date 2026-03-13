@@ -15,7 +15,18 @@
 #include "Game/MapObjMgr.h"
 #include "Game/BulletMgr.h"
 #include "Game/Player/PlayerNetControl.h"
+#include "Cmn/CustomizePlayer.h"
 
+namespace Lobby {
+    class MainMgr{
+        public:
+        void createActor();
+        _BYTE _0[0x3C0];
+        Lobby::Player *mRivalLobbyPlayer;
+        _BYTE _3C8[0x3D8 - 0x3C8];
+        sead::Heap *mGearHeapForEachModel;
+    };
+}
 namespace Game {
     class MainMgr : public Cmn::Actor, public sead::IDisposer {
         public:

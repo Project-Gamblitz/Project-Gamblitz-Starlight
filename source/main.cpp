@@ -952,8 +952,22 @@ void hooks_init(){
 	msnArmorHook(0, Cmn::Def::GearKind::cHead, 0);
 	CustomizeSeqBaseLoadHook(NULL, NULL);
 	CustomizeAmiiboCbHelperFunc();
+	LobbyRivalFixHook(NULL);
+	LobbyRivalGetPlayerTypeHook(NULL);
 }
 
+int LobbyRivalGetPlayerTypeHook(Cmn::SaveDataCmn *saveDataCmn){
+	int r = saveDataCmn->getSquidOrOctaPlayerModelType();
+	return (r == 6 ? 4 : r);
+}
+
+void LobbyRivalFixHook(Lobby::MainMgr *mainMgr){
+	mainMgr->createActor();
+	mainMgr->mRivalLobbyPlayer = Lp::Sys::Actor::create<Lobby::Player>((Lp::Sys::Actor*)mainMgr, NULL);
+	memset(mainMgr->mRivalLobbyPlayer->_480, 0, sizeof(mainMgr->mRivalLobbyPlayer->_480));
+	mainMgr->mRivalLobbyPlayer->mGearHeap = mainMgr->mGearHeapForEachModel;
+	mainMgr->mRivalLobbyPlayer->mModelType = Cmn::Def::PlayerModelType::Rival;
+}
 void CustomizeSeqBaseLoadHook(Cmn::CustomizeSeqBase *seqBase, sead::Heap *heap){
 	seqBase->mRivalCustomizePlayer = Lp::Sys::Actor::create<Cmn::CustomizePlayer>((Lp::Sys::Actor*)seqBase, heap);
 	memset(seqBase->mRivalCustomizePlayer->_480, 0, sizeof(seqBase->mRivalCustomizePlayer->_480));

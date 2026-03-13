@@ -20,3 +20,8 @@ namespace Cmn {
 		public:
 	};
 };
+namespace Lobby {
+    class Player : public Cmn::CustomizePlayerBase {
+        public:
+    };
+};
