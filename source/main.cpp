@@ -208,8 +208,17 @@ void receiveEndBarrier_Net_Reimpl(Game::Player *player){
 // Reimplementation of Game::Player::receiveStartBarrier_Net (3.1.0: 0x7100e45d68)
 // Delegates to startBarrier_Common which handles all field setting, effects, and infect.
 void receiveStartBarrier_Net_Reimpl(Game::Player *player, int duration, int sourcePlayerIdx){
-	if(player->mIsInBarrier) return;
-	int barrierEndFrm = (int)Game::MainMgr::sInstance->mPaintGameFrame + duration;
+	int currentFrame = (int)Game::MainMgr::sInstance->mPaintGameFrame;
+	if(player->mBarrierEndFrm > currentFrame) return;
+	int barrierEndFrm = currentFrame + duration;
+	// Clamp clone's endFrm to never exceed the local player's endFrm.
+	// Without this, network timing drift makes checkBarrier_CopyFrom's '>' check
+	// re-trigger startBarrier_Common on the local player every frame (visual re-infect).
+	Game::Player *localPlayer = Game::PlayerMgr::sInstance->getControlledPerformer();
+	if(localPlayer != NULL && localPlayer->mBarrierEndFrm > currentFrame){
+		if(barrierEndFrm > localPlayer->mBarrierEndFrm)
+			barrierEndFrm = localPlayer->mBarrierEndFrm;
+	}
 	player->startBarrier_Common(barrierEndFrm, sourcePlayerIdx);
 }
 
@@ -217,8 +226,16 @@ void receiveStartBarrier_Net_Reimpl(Game::Player *player, int duration, int sour
 // Follows the same pattern as sendStateEvent_StartJetpack (3.1.0: 0x7100e78670):
 // construct event, set packet type, store ints at DWORD[6]/DWORD[7], check offline, push.
 // startBarrier_Common already guards with !mIsRemote before calling this.
+static u32 sBarrierSentExpiry = 0;
 void sendEvent_StartBarrierHook(Game::PlayerNetControl *netCtrl, int barrierEndFrm, int sourcePlayerIdx){
 	if(netCtrl == NULL || netCtrl->mCloneHandle == NULL) return;
+	// Don't re-send while a previous barrier send is still active.
+	// Prevents infect loop: network timing drift can make remote clone's mBarrierEndFrm
+	// higher than local player's, causing secondCalc's checkBarrier_CopyFrom (which uses >)
+	// to re-trigger startBarrier_Common on the local player every frame.
+	u32 currentFrame = (u32)Game::MainMgr::sInstance->mPaintGameFrame;
+	if(currentFrame < sBarrierSentExpiry) return;
+	sBarrierSentExpiry = (u32)barrierEndFrm;
 	Game::PlayerCloneHandle *handle = netCtrl->mCloneHandle;
 	if(handle->mCloneObjMgr->mIsOfflineScene) return;
 	Game::PlayerStateCloneEvent event;
@@ -226,7 +243,7 @@ void sendEvent_StartBarrierHook(Game::PlayerNetControl *netCtrl, int barrierEndF
 	event._data[32] = PACKET_START_BARRIER;
 	// Duration and sourcePlayerIdx at DWORD[6] and DWORD[7] (bytes 24-31)
 	// These are transmitted as raw U32 by pack(), unlike bytes 0-23 (lossy float compression)
-	int duration = barrierEndFrm - (int)Game::MainMgr::sInstance->mPaintGameFrame;
+	int duration = barrierEndFrm - (int)currentFrame;
 	*(int*)(event._data + 24) = duration;
 	*(int*)(event._data + 28) = sourcePlayerIdx;
 	handle->mPlayerCloneObj->pushPlayerStateEvent(event);
