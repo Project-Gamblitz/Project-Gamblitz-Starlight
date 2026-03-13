@@ -178,7 +178,11 @@
 00333270 0C000014
 
 //Rival Unpatch [YoshiCrystal]
-01454A54 1F2003D5
+01454A54 1F2003D5 // save validation removed
+001B5CF8 1F2003D5 // if modeltype = 5 and up dont do anything (network)
+// Rival Fix [Shadow] requires OE
+010EF2A8 0D000014
+010EF30C E0031FAA
 
 //Remove splatfest from vs select
 014B2484 00008052
