@@ -312,6 +312,18 @@ void playerFirstCalcHook(Game::Player *player){
 
 }
 
+// Hook for the isInSpecial() call inside PlayerInkAction::getFlagDrawShooterGuide.
+// Vanilla bug: Barrier and FreeBombs aren't in the special allow-list, so the shot guide
+// is denied even though these specials let the player keep shooting.
+// Patched at 010B2014 (replaces BL to isInSpecial).
+bool isInSpecialForShotGuideHook(Game::Player *player){
+	if(!player->isInSpecial())
+		return false;
+	if(player->isInBarrier() || player->isInSpecial_FreeBombs())
+		return false;
+	return true;
+}
+
 void playerThirdCalcHook(Game::Player *player){
 	playerThirdCalcOg(player);
 	tornadoMgr->playerThirdCalc(player);
@@ -1046,6 +1058,7 @@ void hooks_init(){
 	CustomizeAmiiboCbHelperFunc();
 	LobbyRivalFixHook(NULL);
 	LobbyRivalGetPlayerTypeHook(NULL);
+	isInSpecialForShotGuideHook(NULL);
 }
 
 int LobbyRivalGetPlayerTypeHook(Cmn::SaveDataCmn *saveDataCmn){
