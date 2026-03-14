@@ -5,6 +5,7 @@
 
 #include "sead/vector.h"
 #include "Cmn/Actor.h"
+#include "Cmn/Def/DMG.h"
 #include "PlayerMotion.h"
 #include "PlayerModel.h"
 #include "Game/VictoryGoal.h"
@@ -98,9 +99,10 @@ namespace Game {
 		void calcBarrier_CenterPos(sead::Vector3<float> *out) const;
 		void emitAndPlay_BarrierHit(sead::Vector3<float> const&, bool);
 		void playDamageVoiceAndRumble(Game::DamageReason const&, bool);
+		void emitAndPlay_StealthDamage(int, Cmn::Def::DMG, Game::DamageReason const&);
 		bool isInSpecial() const;
 		bool isInSuperArmor() const;
-		bool IsInBarrier() const;
+		bool isInBarrier() const;
 		bool isInSpecial_WaterCutter() const;
 		bool isInTrouble_RespawnWait() const;
 		bool isInTrouble_Dying() const;

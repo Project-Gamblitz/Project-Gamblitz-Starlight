@@ -244,3 +244,12 @@
 // playDamageHook barrier
 01049CA0 BL playDamageVoiceAndRumbleHook
 010569EC BL playDamageVoiceAndRumbleHook
+
+01056A2C BL emitAndPlay_StealthDamageHook
+01049CB4 BL emitAndPlay_StealthDamageHook
+
+// receiveDamage_Net_WithLifeNumber: NOP the TBZ that skips voice for NoDamage
+0101A658 NOP
+
+// informDamage_WithVoiceAndRumble: hook playDamageVoiceAndRumble
+010105B0 BL playDamageVoiceAndRumbleHook

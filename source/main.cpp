@@ -270,14 +270,35 @@ void unpackStateEventHook(Game::Player *player, Game::PlayerStateCloneEvent *eve
 	unpackStateEventOriginal(player, event, gameFrame);
 }
 
-// Hook for playDamageVoiceAndRumble — plays barrier hit SFX when player is in Bubbler
+// Debug counters for barrier hit hooks
+static int dbgBarrierHitCount = 0;
+static int dbgStealthHookCount = 0;
+static int dbgDmgVoiceHookCount = 0;
+
+// Play barrier hit effect+SFX using the game's own emitAndPlay_BarrierHit
+static void emitBarrierHitSfx(Game::Player *player){
+	dbgBarrierHitCount++;
+	player->emitAndPlay_BarrierHit(player->mPosition, false);
+}
+
+// Hook for playDamageVoiceAndRumble — plays barrier hit effect+SFX when player is in Bubbler
 void playDamageVoiceAndRumbleHook(Game::Player *player, Game::DamageReason const &reason, bool isOneTimeDamage){
-	if(player->mIsInBarrier){
-		sead::Vector3<float> pos = player->getWaistPos();
-		player->emitAndPlay_BarrierHit(pos, false);
+	dbgDmgVoiceHookCount++;
+	if(player->isInBarrier()){
+		emitBarrierHitSfx(player);
 		return;
 	}
 	player->playDamageVoiceAndRumble(reason, isOneTimeDamage);
+}
+
+// Hook for emitAndPlay_StealthDamage — plays barrier hit effect+SFX
+// Fires on both ATTACKER's console (processDamageFromBullet_) and VICTIM's console (receiveAttackEventImpl)
+void emitAndPlay_StealthDamageHook(Game::Player *player, int attackerIdx, Cmn::Def::DMG dmg, Game::DamageReason const &reason){
+	dbgStealthHookCount++;
+	if(player->isInBarrier()){
+		emitBarrierHitSfx(player);
+	}
+	player->emitAndPlay_StealthDamage(attackerIdx, dmg, reason);
 }
 
 static void (*playerFirstCalcOg)(Game::Player*);
@@ -319,6 +340,11 @@ void renderEntrypoint(agl::DrawContext *drawContext, sead::TextWriter *textWrite
 	DrawUtils::setDrawContext(mDrawContext);
 	DrawUtils::setColor(sead::Color4f::cWhite);
 	mTextWriter->mColor = sead::Color4f::cWhite;
+
+	// Debug: barrier hit hook counters (always visible)
+	if(dbgBarrierHitCount > 0 || dbgStealthHookCount > 0 || dbgDmgVoiceHookCount > 0){
+		mTextWriter->printf("BHit:%d Stealth:%d DmgVoice:%d\n", dbgBarrierHitCount, dbgStealthHookCount, dbgDmgVoiceHookCount);
+	}
 	sead::Heap *oldHeap;
 
 	Collector::init();
@@ -982,6 +1008,7 @@ void hooks_init(){
 	unpackStateEventHook(NULL, NULL, 0);
 	sendEvent_StartBarrierHook(NULL, 0, 0);
 	playDamageVoiceAndRumbleHook(NULL, *(Game::DamageReason*)NULL, 0);
+	emitAndPlay_StealthDamageHook(NULL, 0, (Cmn::Def::DMG)0, *(Game::DamageReason*)NULL);
 	PlaySuperArmorUse();
 	healPlayerSuperLandingHook(NULL);
 	createHumanModelHook(sead::SafeStringBase<char>::create("test"), Cmn::Def::Team::Alpha, *(Game::PlayerModelResource*)NULL,  *(Lp::Utl::ModelCreateArg*)NULL,  *(Lp::Utl::AnimCreateArg*)NULL, Cmn::Def::PlayerModelType::InkGirl, *(sead::RingBuffer<int>*)NULL);

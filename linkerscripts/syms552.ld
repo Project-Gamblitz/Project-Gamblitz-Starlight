@@ -328,6 +328,7 @@ _ZNK3Cmn16PlayerCustomPart9isVisibleEv = 0x18AF3C - 0x2EBE000;
 _ZN3Cmn16PlayerCustomPart10setVisibleEb = 0x18A0BC - 0x2EBE000;
 _ZN4gsys5Model10setVisibleEbi = 0x17dea7c - 0x2EBE000;
 _ZNK4Game6Player14isInSuperArmorEv = 0x1011150 - 0x2EBE000;
+_ZNK4Game6Player11isInBarrierEv = 0x1017D10 - 0x2EBE000;
 _ZN4Game15PaintCloneEventC1ERKNS_15RequestPaintArgE = 0xFAF040 - 0x2EBE000;
 _ZN4Game15PaintCloneEventC2ERKNS_15RequestPaintArgE = 0xFAF040 - 0x2EBE000;
 _ZN4Game16PaintCloneHandle9sendEventERKNS_15PaintCloneEventE = 0xFAFB50 - 0x2EBE000;
@@ -904,3 +905,6 @@ _ZN4Game16PlayerNetControl20sendEvent_EndBarrierEv = 0x01100FE8 - 0x2EBE000;
 _ZN4Game14PlayerCloneObj20pushPlayerStateEventERKNS_21PlayerStateCloneEventE = 0x0104E3B4 - 0x2EBE000;
 
 _ZN4Game6Player24playDamageVoiceAndRumbleERKNS_12DamageReasonEb = 0x01010E94 - 0x2EBE000;
+_ZN4Game6Player25emitAndPlay_StealthDamageEiN3Cmn3Def3DMGERKNS_12DamageReasonE = 0x0101A7D0 - 0x2EBE000;
+
+_ZN4Game6Player22emitAndPlay_BarrierHitERKN4sead7Vector3IfEEb = 0x0102487C - 0x2EBE000;
