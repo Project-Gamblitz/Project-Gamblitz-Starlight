@@ -253,3 +253,8 @@
 
 // informDamage_WithVoiceAndRumble: hook playDamageVoiceAndRumble
 010105B0 BL playDamageVoiceAndRumbleHook
+
+// Shot guide fix: NOP the deny branch in PlayerInkAction::getFlagDrawShooterGuide
+// so shooter/spinner/slosher guides work during Barrier and FreeBombs.
+// 3.1.0: TBZ at 0x7100ed7730, 5.5.2: TBZ at 0x71010B2060
+010B2060 NOP

@@ -309,6 +309,7 @@ void playerFirstCalcHook(Game::Player *player){
 	tornadoMgr->playerFirstCalc(player);
 	Game::PlayerWeaponTornado::sInstance->playerFirstCalc(player);
 	Game::PlayerWeaponSuperShot::sInstance->playerFirstCalc(player);
+
 }
 
 void playerThirdCalcHook(Game::Player *player){
@@ -317,8 +318,35 @@ void playerThirdCalcHook(Game::Player *player){
 }
 
 void playerFourthCalcHook(Game::Player *player){
+	// Fix vanilla bug: shot guide disappears during Barrier and FreeBombs specials.
+	// These specials allow the player to keep shooting, so the guide should stay visible.
+	// drawShotGuide is called inside fourthCalc (via calcDraw_In4thCalc), so overrides
+	// must be applied BEFORE the original call. drawChargerGuide requires mCutsceneState==5,
+	// the hide flag cleared, and the ShotGuide enable bit set.
+	bool fixShotGuide = player->isInBarrier() || player->isInSpecial_FreeBombs();
+	u32 savedCutsceneState = 0;
+	if(fixShotGuide){
+		savedCutsceneState = player->mCutsceneState;
+		player->mCutsceneState = 5;
+		*((_BYTE*)player + 0x10E0) = 0;
+		u8 *inkAction = *(u8**)((u8*)player + 0xF80);
+		if(inkAction){
+			u8 *shotGuide = *(u8**)(inkAction + 0x298);
+			if(shotGuide){
+				*(shotGuide + 0x61C) |= 1;
+				// Prevent drawChargerGuide LABEL_574 from killing shooter/spinner sites.
+				// 3.1.0 ShotGuide[0x5D8], 5.5.2 ShotGuide[0x638]. Must be 5 to keep sites alive.
+				*(u32*)(shotGuide + 0x638) = 5;
+			}
+		}
+	}
+
 	playerFourthCalcOg(player);
 	tornadoMgr->playerFourthCalc(player);
+
+	if(fixShotGuide){
+		player->mCutsceneState = savedCutsceneState;
+	}
 }
 
 void handleDisplayVersion(nn::oe::DisplayVersion *ver){
@@ -345,6 +373,7 @@ void renderEntrypoint(agl::DrawContext *drawContext, sead::TextWriter *textWrite
 	if(dbgBarrierHitCount > 0 || dbgStealthHookCount > 0 || dbgDmgVoiceHookCount > 0){
 		mTextWriter->printf("BHit:%d Stealth:%d DmgVoice:%d\n", dbgBarrierHitCount, dbgStealthHookCount, dbgDmgVoiceHookCount);
 	}
+
 	sead::Heap *oldHeap;
 
 	Collector::init();
