@@ -380,12 +380,7 @@ void renderEntrypoint(agl::DrawContext *drawContext, sead::TextWriter *textWrite
 	DrawUtils::setDrawContext(mDrawContext);
 	DrawUtils::setColor(sead::Color4f::cWhite);
 	mTextWriter->mColor = sead::Color4f::cWhite;
-
-	// Debug: barrier hit hook counters (always visible)
-	if(dbgBarrierHitCount > 0 || dbgStealthHookCount > 0 || dbgDmgVoiceHookCount > 0){
-		mTextWriter->printf("BHit:%d Stealth:%d DmgVoice:%d\n", dbgBarrierHitCount, dbgStealthHookCount, dbgDmgVoiceHookCount);
-	}
-
+	
 	sead::Heap *oldHeap;
 
 	Collector::init();
@@ -735,8 +730,8 @@ void Game::SighterTarget_startAllMarking(Game::SighterTarget *sighterTarget, int
 	if ((state - 2) < 3)
 		return;
 
-	// Store marking end duration (how long the marking icon persists after appearing)
-	*(u32 *)(st + 0x66C) = a2;
+	// Marking icon duration after appearing: 0x21C = 540 frames (9s), matching player marking
+	*(u32 *)(st + 0x66C) = 0x21C;
 
 	// Get controlled player
 	Game::Player *player = Game::PlayerMgr::sInstance->getControlledPerformer();
@@ -771,16 +766,15 @@ void Game::SighterTarget_startAllMarking(Game::SighterTarget *sighterTarget, int
 	// Store search line value at byte 1732 (0x6C4)
 	*(float *)(st + 0x6C4) = searchLineValue;
 
-	// Override countdown based on distance so each target gets marked
-	// when the SearchLine visual reaches it, not all at once.
-	// Maps distance [0..600] -> countdown [10..90] frames.
+	// Distance-based countdown matching player startMarkingOne_Impl formula:
+	// Maps distance [0..600] -> countdown [20..60] frames.
 	int countdown;
 	if (dist <= 0.0f) {
-		countdown = 10;
+		countdown = 20;
 	} else if (dist >= 600.0f) {
-		countdown = 90;
+		countdown = 60;
 	} else {
-		countdown = 10 + (int)(dist * 80.0f / 600.0f);
+		countdown = (int)((dist * 40.0f / 600.0f) + 20.0f);
 	}
 	// Set both SearchLine travel countdown AND marking start countdown to the same
 	// distance-based value, so the "Marking" effects appear exactly when the
@@ -1325,13 +1319,6 @@ void handlePlayerControl(){
     if (playerCamera == NULL) return;
 
     Game::PlayerGamePadData::FrameInput input;
-}
-
-void barrierEffectNameHook(){
-	const char *poop = "SWpInkArmorPreBreak";
-	const char *poop2;
-	poop2 = poop;
-	asm("MOV X2, X0");
 }
 
 int main(int arg, char **argv){

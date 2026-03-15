@@ -80,7 +80,7 @@ void inkstrikeShotHook(Game::BulletSpSuperBall *ball, Game::Player *sender, int 
 int swimHook(Game::Player *player);
 bool krakenDiveHook(Game::Player *player);
 bool isInKingSquidHook(Game::Player *player);
-void barrierEffectNameHook();
+// void barrierEffectNameHook();
 Cmn::Def::Mode shotPropertiesHook();
 Game::BulletMgr *extraBigLaserBulletHook(Game::BulletMgr *mgr);
 bool princessCannonHook(bool val);
