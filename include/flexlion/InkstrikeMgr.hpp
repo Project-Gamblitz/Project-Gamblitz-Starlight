@@ -35,6 +35,8 @@ namespace Flexlion{
         sead::Vector3<float> mPendingDest[10];
         BulletSuperArtillery *bullets[10];
         bool mAimValid[10];
+		bool mWasAHeld[10];
+		bool mMapOpen[10];
         bool mWeaponHidden[10];
         bool mRemoteShotPending[10];
         u16 mDbgColAttr;

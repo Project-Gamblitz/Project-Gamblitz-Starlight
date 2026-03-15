@@ -17,6 +17,8 @@ namespace Flexlion{
             bullets[i] = NULL;
             mTankRootBoneIdx[i] = -1;
             mAimValid[i] = false;
+			mWasAHeld[i] = false;
+			mMapOpen[i] = false;
         }
     }
     void InkstrikeMgr::informShotInkstrike(Game::Player *player, sead::Vector3<float> pos, sead::Vector3<float> dest, int paintgamefrm){
@@ -83,6 +85,7 @@ namespace Flexlion{
             if(player->isInTrouble_Dying() || !player->isAlive()){
                 // Player died without choosing a spot — cancel special
                 playerState[id] = TornadoState::cNone;
+				mWasAHeld[id] = false;
                 if(bullets[id] != NULL && bullets[id]->isActive()){
                     bullets[id]->cancel();
                 }
@@ -93,25 +96,49 @@ namespace Flexlion{
                 break;
             }
             if(!player->isInSpecial()){
-                // Special gauge ran out without choosing a spot — auto-fire at player position
-                sead::Vector3<float> autoDest = player->mPosition;
-                autoDest.mY = 3000.0f;
-                autoDest = Utils::calcGroundPos(player, autoDest);
-                if(isOnline) bulletCloneHandle->sendEvent_Shot(player->mIndex, player->mPosition, autoDest, Game::BulletCloneEvent::Type::BulletTypeInkstrike, 0);
-                isAppliedWeapon[id] = 0;
-                mPendingDest[id] = autoDest;
-                mShootPrepareFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
-                playerState[id] = TornadoState::cShootPrepare;
-                if(bullets[id] != NULL) bullets[id]->mStateMachine.changeState(BSAState::cState_Wait);
-                if(isCtrlPerformer){
-                    Game::MiniMap *mMap = Utils::getMinimap();
-                    if(mMap != NULL){
-                        mMap->setVisible(false);
-                        mMap->fadeAllEffect();
-                    }
-                }
-                break;
-            }
+				sead::Vector3<float> autoDest;
+				if(isCtrlPerformer && mAimValid[id] && Lp::Utl::getCtrl(0)->isHoldContinue(starlight::Controller::Buttons::A, 1)){
+					// Special ran out while aiming at valid position — use cursor position
+					const float halfCanvas = 360.0f;
+					float halfFovyRad = camerafovy * 0.5f * MATH_PI / 180.0f;
+					float tanHalfFovy = sinf(halfFovyRad) / cosf(halfFovyRad);
+					float worldPerCanvas = cameraheight * tanHalfFovy / halfCanvas;
+					sead::Vector3<float> camAt = miniMap->mMiniMapCamera->mAt;
+					autoDest.mX = camAt.mX + miniMap->mCursorPos.mX * worldPerCanvas;
+					autoDest.mY = 3000.0f;
+					autoDest.mZ = camAt.mZ - miniMap->mCursorPos.mY * worldPerCanvas;
+					autoDest = Utils::calcGroundPos(player, autoDest);
+				} 
+				else {
+					// No valid aim — fall back to player position
+					autoDest = player->mPosition;
+					autoDest.mY = 3000.0f;
+					autoDest = Utils::calcGroundPos(player, autoDest);
+				}
+				if(isOnline) bulletCloneHandle->sendEvent_Shot(player->mIndex, player->mPosition, autoDest, Game::BulletCloneEvent::Type::BulletTypeInkstrike, 0);
+				isAppliedWeapon[id] = 0;
+				mPendingDest[id] = autoDest;
+				mShootPrepareFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
+				Game::MiniMap *mMap = Utils::getMinimap();
+				if(mMap != NULL){
+					Lp::Sys::XLink *mapXLink = *(Lp::Sys::XLink **)((u8*)mMap + 0x320);
+					if(mapXLink != NULL){
+						xlink2::Handle decideHandle;
+						mapXLink->searchAndPlayWrap("Pronounce", false, &decideHandle);
+					}
+				}
+				playerState[id] = TornadoState::cShootPrepare;
+				mWasAHeld[id] = false;
+				if(bullets[id] != NULL) bullets[id]->mStateMachine.changeState(BSAState::cState_Wait);
+				if(isCtrlPerformer){
+					Game::MiniMap *mMap = Utils::getMinimap();
+					if(mMap != NULL){
+						mMap->setVisible(false);
+						mMap->fadeAllEffect();
+					}
+				}
+				break;
+			}
 
             // Continuously validate aim position for the controlled player
             if(isCtrlPerformer and Utils::isShowMinimap() and cameraanim > 0.95f){
@@ -128,47 +155,79 @@ namespace Flexlion{
                 Utils::calcGroundPos(player, aimPos, &groundFound);
                 mAimValid[id] = groundFound;
             }
+			
+			// Play open sound on the frame the minimap becomes visible
+			if(isCtrlPerformer){
+				bool mapVisible = Utils::isShowMinimap();
+				if(mapVisible && !mMapOpen[id]){
+					// Map just became visible — play sound once
+					Game::MiniMap *mMap = Utils::getMinimap();
+					if(mMap != NULL){
+						Lp::Sys::XLink *mapXLink = *(Lp::Sys::XLink **)((u8*)mMap + 0x320);
+						if(mapXLink != NULL){
+							xlink2::Handle openHandle;
+							mapXLink->searchAndPlayWrap("OpenArtillery", false, &openHandle);
+						}
+					}
+					mMapOpen[id] = true;
+				} 
+				else 
+					if(!mapVisible){
+					mMapOpen[id] = false; // will let openartillery play again after closing map
+					mWasAHeld[id] = false; // ensures tornado doesn't shoot if map is closed while holding A
+				}
+			}
 
-            if(isCtrlPerformer and Utils::isShowMinimap() and Lp::Utl::getCtrl(0)->isHoldContinue(starlight::Controller::Buttons::A, 1) and cameraanim > 0.95f and !mAimValid[id]){
-                // Invalid aim position — play rejection sound
-                Lp::Sys::XLink *mapXLink = *(Lp::Sys::XLink **)((u8*)miniMap + 0x320);
-                if(mapXLink != NULL){
-                    xlink2::Handle abtnHandle;
-                    mapXLink->searchAndPlayWrap("AButton", false, &abtnHandle);
-                }
-            }
-
-            if(isCtrlPerformer and Utils::isShowMinimap() and Lp::Utl::getCtrl(0)->isHoldContinue(starlight::Controller::Buttons::A, 1) and cameraanim > 0.95f and mAimValid[id]){
-                // Perspective top-down camera: canvas → world using inverse projection
-                // Canvas centered on camera target; viewport halfSize from project()
-                const float halfCanvas = 360.0f;
-                float halfFovyRad = camerafovy * 0.5f * MATH_PI / 180.0f;
-                float tanHalfFovy = sinf(halfFovyRad) / cosf(halfFovyRad);
-                float worldPerCanvas = cameraheight * tanHalfFovy / halfCanvas;
-                // Camera target is at mAt (tracks player XZ); canvas (0,0) = camera target
-                sead::Vector3<float> camAt = miniMap->mMiniMapCamera->mAt;
-                miniMapAt.mX = camAt.mX + miniMap->mCursorPos.mX * worldPerCanvas;
-                miniMapAt.mY = 3000.0f;
-                miniMapAt.mZ = camAt.mZ - miniMap->mCursorPos.mY * worldPerCanvas;
-                miniMapAt = Utils::calcGroundPos(player, miniMapAt);
-                if(isOnline) bulletCloneHandle->sendEvent_Shot(player->mIndex, player->mPosition, miniMapAt, Game::BulletCloneEvent::Type::BulletTypeInkstrike, 0);
-                player->resetPaintGauge(0, 0, 0, 0);
-                isAppliedWeapon[id] = 0;
-                mPendingDest[id] = miniMapAt;
-                mShootPrepareFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
-                playerState[id] = TornadoState::cShootPrepare;
-                if(bullets[id] != NULL) bullets[id]->mStateMachine.changeState(BSAState::cState_Wait);
-                Game::MiniMap *mMap = Utils::getMinimap();
-                if(mMap != NULL){
-                    Lp::Sys::XLink *mapXLink = *(Lp::Sys::XLink **)((u8*)mMap + 0x320);
-                    if(mapXLink != NULL){
-                        xlink2::Handle decideHandle;
-                        mapXLink->searchAndPlayWrap("Pronounce", false, &decideHandle);
-                    }
-                    mMap->setVisible(false);
-                    mMap->fadeAllEffect();
-                }
-            }
+            if(isCtrlPerformer and Utils::isShowMinimap() and cameraanim > 0.95f){
+				bool aHeld = Lp::Utl::getCtrl(0)->isHoldContinue(starlight::Controller::Buttons::A, 1);
+				bool aFirstFrame = Lp::Utl::getCtrl(0)->isHoldContinue(starlight::Controller::Buttons::A, 1) && !mWasAHeld[id];
+			
+				if(aHeld && !mAimValid[id]){
+					// Invalid aim — play rejection sound on first frame of press
+					if(aFirstFrame){
+						Lp::Sys::XLink *mapXLink = *(Lp::Sys::XLink **)((u8*)miniMap + 0x320);
+						if(mapXLink != NULL){
+							xlink2::Handle abtnHandle;
+							mapXLink->searchAndPlayWrap("AButton", false, &abtnHandle);
+						}
+					}
+				}
+			
+				if(!aHeld && mWasAHeld[id] && mAimValid[id]){
+					// Play Pronounce on release
+					Game::MiniMap *mMap = Utils::getMinimap();
+					if(mMap != NULL){
+						Lp::Sys::XLink *mapXLink = *(Lp::Sys::XLink **)((u8*)mMap + 0x320);
+						if(mapXLink != NULL){
+							xlink2::Handle decideHandle;
+							mapXLink->searchAndPlayWrap("Pronounce", false, &decideHandle);
+						}
+					}
+					// A was released on valid aim — commit shot
+					const float halfCanvas = 360.0f;
+					float halfFovyRad = camerafovy * 0.5f * MATH_PI / 180.0f;
+					float tanHalfFovy = sinf(halfFovyRad) / cosf(halfFovyRad);
+					float worldPerCanvas = cameraheight * tanHalfFovy / halfCanvas;
+					sead::Vector3<float> camAt = miniMap->mMiniMapCamera->mAt;
+					miniMapAt.mX = camAt.mX + miniMap->mCursorPos.mX * worldPerCanvas;
+					miniMapAt.mY = 3000.0f;
+					miniMapAt.mZ = camAt.mZ - miniMap->mCursorPos.mY * worldPerCanvas;
+					miniMapAt = Utils::calcGroundPos(player, miniMapAt);
+					if(isOnline) bulletCloneHandle->sendEvent_Shot(player->mIndex, player->mPosition, miniMapAt, Game::BulletCloneEvent::Type::BulletTypeInkstrike, 0);
+					player->resetPaintGauge(0, 0, 0, 0);
+					isAppliedWeapon[id] = 0;
+					mPendingDest[id] = miniMapAt;
+					mShootPrepareFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
+					playerState[id] = TornadoState::cShootPrepare;
+					if(bullets[id] != NULL) bullets[id]->mStateMachine.changeState(BSAState::cState_Wait);
+					if(mMap != NULL){
+						mMap->setVisible(false);
+						mMap->fadeAllEffect();
+					}
+				}
+			
+				mWasAHeld[id] = aHeld;
+			}
             break;
         case TornadoState::cShootPrepare:
         {

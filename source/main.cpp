@@ -896,8 +896,8 @@ static u32 gArtIconSndEventId = 0;
 void updateCursorEffectHook(Game::MiniMap *miniMap) {
 	Game::Player *player = Game::PlayerMgr::sInstance->getControlledPerformer();
 	bool useArtillery = (player != NULL && tornadoMgr->playerState[player->mIndex] == Flexlion::TornadoState::cAim);
-	bool aimValid = useArtillery && tornadoMgr->mAimValid[player->mIndex] && Utils::isShowMinimap();
-
+	bool aHeld = (player != NULL) && Lp::Utl::getCtrl(0)->isHoldContinue(starlight::Controller::Buttons::A, 1);
+	bool aimValid = useArtillery && tornadoMgr->mAimValid[player->mIndex] && Utils::isShowMinimap() && aHeld;
 	bool laserValid = (gLaserIconEvent != NULL) && (*(u32*)((u8*)gLaserIconEvent + 32) == gLaserIconEventId);
 	bool sndValid = (gArtIconSndEvent != NULL) && (*(u32*)((u8*)gArtIconSndEvent + 32) == gArtIconSndEventId);
 
