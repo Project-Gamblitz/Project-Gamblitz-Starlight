@@ -872,11 +872,15 @@ xlink2::UserInstanceSLink *startSkill_DeathMarkingHook(Game::Player *player, uns
 
     Game::Player *PerformerAt = Game::PlayerMgr::sInstance->getPerformerAt(a2);
 
-    // a3 bit 0 selects marking type (m3=2 vs m2=1)
+    // ShowDL passes gameFrame-based args to startMarkingOne_Impl:
+    //   m2 (default): arg3 = gameFrame + 0x21C, arg4 = gameFrame
+    //   m3 (a3 & 1):  arg3 = gameFrame + 0x78,  arg4 = gameFrame
+    // Without these, the marking duration is zero and the timer is never set.
+    int gameFrame = (int)Game::MainMgr::sInstance->mPaintGameFrame;
     Game::Player::MarkingType markType = (a3 & 1) ? Game::Player::MarkingType::m3
                                                    : Game::Player::MarkingType::m2;
-
-    player->startMarkingOne_Impl(PerformerAt, markType, 0, 0);
+    int frameOffset = (a3 & 1) ? 0x78 : 0x21C;
+    player->startMarkingOne_Impl(PerformerAt, markType, gameFrame + frameOffset, gameFrame);
 
     if (!player->mIsRemote) {
         int *netCtrlField = (int *)((u8 *)player->mPlayerNetControl + 132);
