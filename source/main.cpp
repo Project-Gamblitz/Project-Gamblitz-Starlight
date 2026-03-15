@@ -735,15 +735,11 @@ void Game::SighterTarget_startAllMarking(Game::SighterTarget *sighterTarget, int
 	if ((state - 2) < 3)
 		return;
 
-	// Store marking parameters
-	*(u32 *)(st + 0x66C) = a2;   // DWORD 411
-	*(u32 *)(st + 0x670) = (a3 >= 1) ? a3 : 1;  // DWORD 412
+	// Store marking end duration (how long the marking icon persists after appearing)
+	*(u32 *)(st + 0x66C) = a2;
 
 	// Get controlled player
 	Game::Player *player = Game::PlayerMgr::sInstance->getControlledPerformer();
-
-	// Store a3 as countdown at byte 1704 (0x6A8)
-	*(u32 *)(st + 0x6A8) = a3;
 
 	// Calculate marking effect position
 	sead::Vector3<float> effectPos = Game::SighterTarget_calcMarkingEffectPos(sighterTarget);
@@ -762,19 +758,6 @@ void Game::SighterTarget_startAllMarking(Game::SighterTarget *sighterTarget, int
 	float dz = barrierPos.mZ - effectPos.mZ;
 	float dist = sqrtf(dx * dx + dy * dy + dz * dz);
 
-	// Compute countdown frames from distance, matching startMarkingOne_Impl:
-	// [0..600] -> [20..60] frames
-	int countdown;
-	if (dist <= 0.0f)
-		countdown = 20;
-	else if (dist >= 600.0f)
-		countdown = 60;
-	else
-		countdown = (int)((dist * 40.0f / 600.0f) + 20.0f);
-
-	// Override countdown at byte 1704 (0x6A8) with distance-based value
-	*(u32 *)(st + 0x6A8) = countdown;
-
 	// Map distance to search line arc height: [0..600] -> [2.0..5.0]
 	float searchLineValue;
 	if (dist <= 0.0f) {
@@ -787,6 +770,23 @@ void Game::SighterTarget_startAllMarking(Game::SighterTarget *sighterTarget, int
 
 	// Store search line value at byte 1732 (0x6C4)
 	*(float *)(st + 0x6C4) = searchLineValue;
+
+	// Override countdown based on distance so each target gets marked
+	// when the SearchLine visual reaches it, not all at once.
+	// Maps distance [0..600] -> countdown [10..90] frames.
+	int countdown;
+	if (dist <= 0.0f) {
+		countdown = 10;
+	} else if (dist >= 600.0f) {
+		countdown = 90;
+	} else {
+		countdown = 10 + (int)(dist * 80.0f / 600.0f);
+	}
+	// Set both SearchLine travel countdown AND marking start countdown to the same
+	// distance-based value, so the "Marking" effects appear exactly when the
+	// SearchLine visual reaches the target (calcMarked_ decrements both each frame).
+	*(u32 *)(st + 0x670) = countdown;  // marking start countdown
+	*(u32 *)(st + 0x6A8) = countdown;  // SearchLine travel countdown
 
 	// Emit "SearchLine" XLink effect
 	xlink2::Handle handle;
