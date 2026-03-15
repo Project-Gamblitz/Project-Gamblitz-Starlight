@@ -1,6 +1,5 @@
 #include "flexlion/InkstrikeMgr.hpp"
 const int startflightdelay = 40; // delay from when a point is chosen to when the tornado is actually launched
-const int playerdelay = 100; // 40 frames Shoot_Tornado_St + 60 frames Shoot_Tornado (was 60 + 60)
 const float tornadoTankZOffset = -3.0f;
 
 namespace Flexlion{
@@ -262,6 +261,7 @@ namespace Flexlion{
 			if(elapsed >= flightDelay){
 				Prot::ObfStore(&player->mSpecialLeftFrame, 0);
 				playerState[id] = TornadoState::cNone;
+				player->mPlayerMotion->animSeq_3C = -1;
 				player->informGetWeapon_Impl_(player->mMainWeaponId, player->mSubWeaponId, player->mSpecialWeaponId, 0);
 				if(isCtrlPerformer){
 					Game::MiniMap *mMap = Utils::getMinimap();
