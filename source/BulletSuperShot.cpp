@@ -115,41 +115,6 @@ static void initGndMatProperty() {
 }
 
 // ============================================================
-// XLink root matrix patching
-// ============================================================
-
-static void patchUserInstanceRootMtx(u8 *userInst, sead::Matrix34<float> *newMtx) {
-    if (!userInst) return;
-    sead::Matrix34<float> **rootMtxPtr = (sead::Matrix34<float> **)(userInst + 64);
-    sead::Matrix34<float> *oldMtx = *rootMtxPtr;
-    if (oldMtx == newMtx) return;
-
-    u8 flag = *(userInst + 208) & 1;
-    u8 *connStruct = *(u8 **)(userInst + 32 + flag * 8);
-    if (connStruct && *(connStruct + 32)) {
-        int count = *(int *)connStruct;
-        u8 *connArray = *(u8 **)(connStruct + 8);
-        for (int i = 0; i < count; i++) {
-            u8 *conn = connArray + 24 * i;
-            if (*(sead::Matrix34<float> **)(conn + 8) == oldMtx) {
-                *(sead::Matrix34<float> **)(conn + 8) = newMtx;
-                *(conn + 16) = 0;
-            }
-        }
-    }
-    *rootMtxPtr = newMtx;
-    *(userInst + 72) = 0;
-}
-
-void BulletSuperShot::setXLinkRootMtx() {
-    Lp::Sys::XLink *xlink = getXLink();
-    if (!xlink) return;
-    u8 *xlinkBytes = (u8 *)xlink;
-    patchUserInstanceRootMtx(*(u8 **)(xlinkBytes + 8), &mXLinkMtx);
-    patchUserInstanceRootMtx(*(u8 **)(xlinkBytes + 16), &mXLinkMtx);
-}
-
-// ============================================================
 // Constructor
 // ============================================================
 
@@ -218,7 +183,6 @@ void BulletSuperShot::launch(Game::Player *sender, sead::Vector3<float> const &p
     // Actor should already be active (pre-activated when player enters special).
     // Just switch to flight state.
     if (mSystemActive) {
-        setXLinkRootMtx();
         Lp::Sys::XLink *xlink = getXLink();
         if (xlink) {
             xlink->setLocalPropertyValue(0, 1.0f); // BulletDamageType = DamageP
@@ -363,8 +327,6 @@ void BulletSuperShot::vtOnActivate(BulletSuperShot *self, bool) {
         xlink->setLocalPropertyValue(1, 1.0f); // BulletPaintType = Paint
         xlink->setLocalPropertyValue(2, 5.0f); // GndMaterial = NoGnd
     }
-
-    self->setXLinkRootMtx();
 
     // Start in Idle — launch() will switch to Flight when the player fires
     self->mStateMachine.changeState(cState_Idle);

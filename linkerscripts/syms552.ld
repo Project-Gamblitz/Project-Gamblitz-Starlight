@@ -472,6 +472,7 @@ _ZN4Game6Player15resetPaintGaugeEbbbb = 0xFEEB10 - 0x2EBE000;
 _ZN4Game13SighterTarget15startMarkedBombEi = 0x0B8B600 - 0x2EBE000;
 _ZN4Game13SighterTarget16stateEnterBurst_Ev = 0x0B89110 - 0x2EBE000;
 _ZN4Game13SighterTarget22getClassIterNodeStaticEv = 0x478EE8 - 0x2EBE000;
+_ZN4Game9Gachihoko22getClassIterNodeStaticEv = 0x0034718 - 0x2EBE000;
 _ZN4Game20BulletSpSuperMissile22getClassIterNodeStaticEv = 0x4EB0A8 - 0x2EBE000;
 _ZN3Cmn24PlayerWeaponSuperMissile22getClassIterNodeStaticEv = 0x1AF578 - 0x2EBE000;
 _ZN4gsys5Model11requestDrawEv = 0x17e0684 - 0x2EBE000;

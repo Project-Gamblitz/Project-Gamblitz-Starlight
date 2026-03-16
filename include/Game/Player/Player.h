@@ -125,7 +125,7 @@ namespace Game {
 		bool isCreateMantle() const;
 		bool isInTrouble_Immovable() const;
 		void resetDamage();
-		int receiveDamage_Net(int performerIdx, int dmg, sead::Vector3<float> const &hitDir, Game::DamageReason const &reason, bool, bool, bool);
+		int receiveDamage_Net(int performerIdx, Cmn::Def::DMG dmg, sead::Vector3<float> const &hitDir, Game::DamageReason const &reason, bool, bool, bool);
 		void startDokanWarp_Block(sead::Vector3<float> const&, int, int, unsigned int);
 		void fillPaintGauge();
 		void dropHoldingClamAll_ForSpecial();

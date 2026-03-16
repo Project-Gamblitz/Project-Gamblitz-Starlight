@@ -7,7 +7,6 @@
 
 namespace Game {
     class Player;
-    class BulletSpSuperBall;
 }
 
 namespace Flexlion {
@@ -28,7 +27,6 @@ public:
     // Custom fields
     Game::Player *mSender;
     gsys::Model *mTornadoModel;
-    Game::BulletSpSuperBall *mSuperball;
     sead::Vector3<float> mFrom;
     sead::Vector3<float> mTo;
     sead::Vector3<float> mPos;
@@ -37,6 +35,8 @@ public:
     bool mFlightActive;
     bool mHasBurst;
     sead::Matrix34<float> mXLinkMtx;
+    float mBurstRadius;
+    int mBurstFrm;
 
     Lp::Utl::StateMachine mStateMachine;
 
@@ -58,7 +58,8 @@ public:
     static void vtOnSleep(BulletSuperArtillery *self);
     static int vtSetXLinkLocalPropertyDef(BulletSuperArtillery *self, int idx);
     static int vtCountXLinkLocalProperty(BulletSuperArtillery *self);
-    void setXLinkRootMtx();
+    static sead::Matrix34<float> *vtGetXLinkMtx(BulletSuperArtillery *self);
+    static sead::Vector3<float> *vtGetXLinkScale(BulletSuperArtillery *self);
 
     // State machine callbacks
     void stateEnterPronounce();
@@ -75,6 +76,7 @@ public:
     void calcFlight();
     void doBurst();
     void calcBurstFollow();
+    void calcBurstPaintAndDamage();
     void updateModelMatrix();
     void doSleep();
 

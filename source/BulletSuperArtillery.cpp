@@ -1,12 +1,10 @@
 #include "flexlion/BulletSuperArtillery.hpp"
 #include "flexlion/InkstrikeMgr.hpp"
-#include "Game/BulletMgr.h"
-#include "Game/BulletSpSuperBall.h"
 #include "Game/Player/Player.h"
-#include "Game/Player/PlayerSuperBall.h"
-#include "Game/Player/PlayerInkAction.h"
 #include "Game/MainMgr.h"
-#include "Cmn/PlayerWeapon.h"
+#include "Game/PaintUtl.h"
+#include "Game/DamageReason.h"
+#include "Game/SighterTarget.h"
 
 extern "C" {
     void _ZN3Cmn5ActorC2Ev(void *);
@@ -29,6 +27,13 @@ const int BSA_FLIGHT_TIME = 120;
 const float BSA_FLIGHT_HEIGHT = 300.0f;
 const float tornadoTankZOffset = -3.0f;
 
+// Burst parameters
+const float BSA_BURST_RADIUS_START = 10.0f;   // Initial paint/hitbox radius
+const float BSA_BURST_RADIUS_MAX   = 100.0f;  // Maximum radius
+const float BSA_BURST_RADIUS_GROW  = 1.0f;    // Radius growth per frame
+const int   BSA_BURST_DAMAGE       = 25;       // 2.5 HP per frame (internal units: 25 = 2.5% of 1000 max HP)
+const int   BSA_BURST_DURATION     = 180;      // Frames before burst ends (3 seconds at 60fps)
+
 namespace Flexlion {
 
 // ============================================================
@@ -49,6 +54,8 @@ void initBSAVtable(BulletSuperArtillery *bsa) {
         sBSAVtable.onSleep = (u64)((void (*)(BulletSuperArtillery *))&BulletSuperArtillery::vtOnSleep);
         sBSAVtable.setXlinkLocalPropertyDefinition = (u64)((int (*)(BulletSuperArtillery *, int))&BulletSuperArtillery::vtSetXLinkLocalPropertyDef);
         sBSAVtable.countXlinkLocalProperty = (u64)((int (*)(BulletSuperArtillery *))&BulletSuperArtillery::vtCountXLinkLocalProperty);
+        sBSAVtable.getXLinkMtx = (u64)((sead::Matrix34<float> *(*)(BulletSuperArtillery *))&BulletSuperArtillery::vtGetXLinkMtx);
+        sBSAVtable.getXLinkScale = (u64)((sead::Vector3<float> *(*)(BulletSuperArtillery *))&BulletSuperArtillery::vtGetXLinkScale);
         sInitVtable = true;
     }
     *vtable = &sBSAVtable;
@@ -141,7 +148,6 @@ BulletSuperArtillery::BulletSuperArtillery() {
     // Zero custom fields
     mSender = NULL;
     mTornadoModel = NULL;
-    mSuperball = NULL;
     mFrom = sead::Vector3<float>::zero;
     mTo = sead::Vector3<float>::zero;
     mPos = sead::Vector3<float>::zero;
@@ -150,6 +156,8 @@ BulletSuperArtillery::BulletSuperArtillery() {
     mFlightActive = false;
     mHasBurst = false;
     mXLinkMtx = sead::Matrix34<float>::ident;
+    mBurstRadius = 0.0f;
+    mBurstFrm = 0;
 }
 
 // ============================================================
@@ -184,7 +192,8 @@ void BulletSuperArtillery::prepare(Game::Player *sender) {
     mStartFrm = 0;
     mFlightActive = false;
     mHasBurst = false;
-    mSuperball = NULL;
+    mBurstRadius = 0.0f;
+    mBurstFrm = 0;
 
     asLpActor()->reserveActivate(true);
 }
@@ -206,7 +215,6 @@ void BulletSuperArtillery::launch(sead::Vector3<float> src, sead::Vector3<float>
         0.0f, 1.0f, 0.0f, mTo.mY,
         0.0f, 0.0f, 1.0f, mTo.mZ
     }};
-    setXLinkRootMtx();
 
     mStateMachine.changeState(cState_Pronounce);
 }
@@ -221,7 +229,6 @@ bool BulletSuperArtillery::isActive() const {
 
 void BulletSuperArtillery::reset() {
     mSender = NULL;
-    mSuperball = NULL;
     mFrom = sead::Vector3<float>::zero;
     mTo = sead::Vector3<float>::zero;
     mPos = sead::Vector3<float>::zero;
@@ -229,6 +236,8 @@ void BulletSuperArtillery::reset() {
     mStartFrm = 0;
     mFlightActive = false;
     mHasBurst = false;
+    mBurstRadius = 0.0f;
+    mBurstFrm = 0;
 }
 
 // ============================================================
@@ -246,7 +255,9 @@ void BulletSuperArtillery::vtFirstCalc(BulletSuperArtillery *self) {
 void BulletSuperArtillery::vtFourthCalc(BulletSuperArtillery *self) {
     if (self->mFlightActive) {
         self->updateModelMatrix();
-    } else if (!self->mHasBurst) {
+    } else if (self->mHasBurst) {
+        self->calcBurstPaintAndDamage();
+    } else {
         // Only render tank bone tornado if InkstrikeMgr state is cAim or cShootPrepare
         InkstrikeMgr *mgr = InkstrikeMgr::sInstance;
         if (mgr != NULL && self->mSender != NULL) {
@@ -267,9 +278,6 @@ void BulletSuperArtillery::vtOnActivate(BulletSuperArtillery *self, bool) {
         // Property 1: "BulletDistance" (set later in launch())
         xlink->setLocalPropertyValue(1, 0.0f);
     }
-
-    // Update the UserInstance root matrix pointer so calcMtx uses our mXLinkMtx
-    self->setXLinkRootMtx();
 
     // Start in cState_Aim (idle aiming, no xlink effects)
     self->mStateMachine.changeState(cState_Aim);
@@ -292,45 +300,16 @@ int BulletSuperArtillery::vtCountXLinkLocalProperty(BulletSuperArtillery *self) 
     return 2; // "User" + "BulletDistance"
 }
 
-// Patch a single UserInstance's root matrix pointer to newMtx.
-// Updates +64 and patches all ModelAssetConnections that used the old pointer.
-static void patchUserInstanceRootMtx(u8 *userInst, sead::Matrix34<float> *newMtx) {
-    if (!userInst) return;
+// XLink reads position from the matrix returned by getXLinkMtx vtable call.
+// By overriding getXLinkMtx we avoid patching XLink internal structures.
+static sead::Vector3<float> sBSAUnitScale = {1.0f, 1.0f, 1.0f};
 
-    sead::Matrix34<float> **rootMtxPtr = (sead::Matrix34<float> **)(userInst + 64);
-    sead::Matrix34<float> *oldMtx = *rootMtxPtr;
-    if (oldMtx == newMtx) return;
-
-    // Connection array struct at UserInstance + 32 or +40 (depending on flag bit 0 at +208)
-    u8 flag = *(userInst + 208) & 1;
-    u8 *connStruct = *(u8 **)(userInst + 32 + flag * 8);
-    if (connStruct && *(connStruct + 32)) {
-        int count = *(int *)connStruct;
-        u8 *connArray = *(u8 **)(connStruct + 8);
-        for (int i = 0; i < count; i++) {
-            u8 *conn = connArray + 24 * i;
-            if (*(sead::Matrix34<float> **)(conn + 8) == oldMtx) {
-                *(sead::Matrix34<float> **)(conn + 8) = newMtx;
-                *(conn + 16) = 0; // row-major flag
-            }
-        }
-    }
-
-    *rootMtxPtr = newMtx;
-    *(userInst + 72) = 0; // row-major flag
+sead::Matrix34<float> *BulletSuperArtillery::vtGetXLinkMtx(BulletSuperArtillery *self) {
+    return &self->mXLinkMtx;
 }
 
-// Patches root matrix for both elink and slink UserInstances so boneless
-// effects and sounds read position from our mXLinkMtx.
-void BulletSuperArtillery::setXLinkRootMtx() {
-    Lp::Sys::XLink *xlink = getXLink();
-    if (!xlink) return;
-
-    sead::Matrix34<float> *newMtx = &mXLinkMtx;
-    u8 *xlinkBytes = (u8 *)xlink;
-    // XLink+8 = UserInstanceELink*, XLink+16 = UserInstanceSLink*
-    patchUserInstanceRootMtx(*(u8 **)(xlinkBytes + 8), newMtx);
-    patchUserInstanceRootMtx(*(u8 **)(xlinkBytes + 16), newMtx);
+sead::Vector3<float> *BulletSuperArtillery::vtGetXLinkScale(BulletSuperArtillery *self) {
+    return &sBSAUnitScale;
 }
 
 // ============================================================
@@ -462,61 +441,90 @@ void BulletSuperArtillery::doBurst() {
         }
     }
 
-    Game::PlayerSuperBall *playerSuperBall = mSender->mPlayerSuperBall;
-    Game::PlayerInkAction *inkAction = mSender->mPlayerInkAction;
-    Game::BulletMgr *bulletMgr = Game::MainMgr::sInstance->mBulletMgr;
-
-    if (playerSuperBall && inkAction && bulletMgr) {
-        if (playerSuperBall->mBullet == NULL) {
-            playerSuperBall->mBullet = (Game::BulletSpSuperBall *)bulletMgr->activateOneCancelUnnecessary(
-                0x76, mSender->mIsRemote == 0, mPos, sead::Vector3<float>::zero, -1);
-            mSuperball = playerSuperBall->mBullet;
-        }
-        if (playerSuperBall->mBullet) {
-            playerSuperBall->mBullet->Initialize(mSender->mIndex, &mPos);
-            InkstrikeMgr::sInstance->isShot = 1;
-            inkAction->shotSuperBall();
-            InkstrikeMgr::sInstance->isShot = 0;
-            playerSuperBall->reset();
-            playerSuperBall->mBullet = NULL;
-        }
-    }
+    // Initialize burst state — BSA handles paint and damage itself
+    mBurstRadius = BSA_BURST_RADIUS_START;
+    mBurstFrm = 0;
 
     mFlightActive = false;
     mHasBurst = true;
 }
 
 void BulletSuperArtillery::calcBurstFollow() {
-    if (mSuperball == NULL) {
-        doSleep();
-        return;
-    }
+    mBurstFrm++;
 
-    // Check if the superball actor is still alive
-    auto ballIter = Game::BulletSpSuperBall::getClassIterNodeStatic();
-    bool found = false;
-    for (auto *bullet = (Game::BulletSpSuperBall *)ballIter->derivedFrontActiveActor();
-         bullet != NULL;
-         bullet = (Game::BulletSpSuperBall *)ballIter->derivedNextActiveActor(bullet)) {
-        if (mSuperball == bullet) {
-            found = true;
-            break;
+    // Grow radius over time
+    if (mBurstRadius < BSA_BURST_RADIUS_MAX)
+        mBurstRadius += BSA_BURST_RADIUS_GROW;
+    if (mBurstRadius > BSA_BURST_RADIUS_MAX)
+        mBurstRadius = BSA_BURST_RADIUS_MAX;
+
+    // End burst after max duration
+    if (mBurstFrm >= BSA_BURST_DURATION) {
+        doSleep();
+    }
+}
+
+void BulletSuperArtillery::calcBurstPaintAndDamage() {
+    // Paint ink each frame — Artillery00 = PaintTexType 11
+    sead::Vector3<float> groundNrm = {0.0f, 1.0f, 0.0f};
+    sead::Vector2<float> paintSize = {mBurstRadius, mBurstRadius};
+    sead::Vector3<float> vel = sead::Vector3<float>::zero;
+    Cmn::Def::Team team = *(Cmn::Def::Team *)(_actorBase + 0x328);
+    // Sphere check radius = half paint size (matches 9-param wrapper logic)
+    float sphereRadius = mBurstRadius * 0.5f;
+    Game::PaintUtl::requestColAndPaint(
+        mTo, paintSize, vel,
+        (Game::PaintTexType)11, team,
+        groundNrm, true, -1, sphereRadius, false);
+
+    // Damage enemies within burst radius
+    float radiusSq = mBurstRadius * mBurstRadius;
+
+    // --- Players (PvP only — no enemy players exist in training mode) ---
+    Game::PlayerMgr *pmgr = Game::PlayerMgr::sInstance;
+    if (pmgr && mSender) {
+        int senderTeamInt = (int)team;
+        for (int i = 0; i < pmgr->mTotalPlayers; i++) {
+            Game::Player *p = pmgr->getPerformerAt(i);
+            if (!p) continue;
+            if ((int)p->mTeam == senderTeamInt) continue;
+            float dx = p->mPosition.mX - mTo.mX;
+            float dy = p->mPosition.mY - mTo.mY;
+            float dz = p->mPosition.mZ - mTo.mZ;
+            float distSq = dx * dx + dy * dy + dz * dz;
+            if (distSq < radiusSq) {
+                sead::Vector3<float> hitDir = {dx, dy, dz};
+                Game::DamageReason reason;
+                reason.mWeaponId = -1;
+                reason.mClassType = 0;
+                p->receiveDamage_Net(mSender->mIndex, (Cmn::Def::DMG)BSA_BURST_DAMAGE, hitDir, reason, false, false, false);
+            }
         }
     }
 
-    if (!found) {
-        doSleep();
-        return;
-    }
-
-    // Scale the superball core matrix for tornado visual effect
-    if (mSuperball->mIsHitGnd && mSuperball->mCore != NULL) {
-        sead::Matrix34<float> *matrix = &mSuperball->mCore->mMatrix;
-        *matrix = {{
-            0.7f, 0.0f, 0.0f, matrix->matrix[0][3],
-            0.0f, 3.0f, 0.0f, matrix->matrix[1][3],
-            0.0f, 0.0f, 0.7f, matrix->matrix[2][3]
-        }};
+    // --- Sighter targets (training dummies, EnemyBase subclass) ---
+    {
+        Lp::Sys::ActorClassIterNodeBase *iterNode = Game::SighterTarget::getClassIterNodeStatic();
+        for (Game::SighterTarget *st = (Game::SighterTarget *)iterNode->derivedFrontActiveActor();
+             st != NULL;
+             st = (Game::SighterTarget *)iterNode->derivedNextActiveActor((Lp::Sys::Actor *)st))
+        {
+            // Game::Actor::mPos at offset 0x39C from object start
+            sead::Vector3<float> *stPos = (sead::Vector3<float> *)((u8 *)st + 0x39C);
+            float dx = stPos->mX - mTo.mX;
+            float dy = stPos->mY - mTo.mY;
+            float dz = stPos->mZ - mTo.mZ;
+            float distSq = dx * dx + dy * dy + dz * dz;
+            if (distSq < radiusSq) {
+                // EnemyBase::mHealth at offset 0x574
+                u32 *health = (u32 *)((u8 *)st + 0x574);
+                if (*health > (u32)BSA_BURST_DAMAGE) {
+                    *health -= BSA_BURST_DAMAGE;
+                } else {
+                    *health = 0;
+                }
+            }
+        }
     }
 }
 

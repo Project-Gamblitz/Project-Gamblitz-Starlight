@@ -53,7 +53,6 @@ namespace Game {
         static bool vtIsCreateSlink(BulletSuperShot *self);
         static int vtSetXLinkLocalPropertyDef(BulletSuperShot *self, int baseCount);
         static int vtCountXLinkLocalProperty(BulletSuperShot *self);
-        void setXLinkRootMtx();
 
         // Accessors for actor base fields
         inline Lp::Sys::Actor *asLpActor() { return (Lp::Sys::Actor *)_actorBase; }
