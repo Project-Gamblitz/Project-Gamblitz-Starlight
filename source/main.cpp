@@ -325,7 +325,13 @@ bool isInSpecialForShotGuideHook(Game::Player *player){
 }
 
 void playerThirdCalcHook(Game::Player *player){
+	bool wasInBarrier = player->isInBarrier();
 	playerThirdCalcOg(player);
+	// Play BarrierEnd SFX when barrier expires during thirdCalc
+	if(wasInBarrier && !player->isInBarrier()){
+		xlink2::Handle handle;
+		player->mXLink->searchAndPlayWrap("BarrierEnd", false, &handle);
+	}
 	tornadoMgr->playerThirdCalc(player);
 }
 
