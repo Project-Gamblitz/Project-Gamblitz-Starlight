@@ -334,7 +334,7 @@ static void barrierEatBombs(Game::Player *player){
 	player->calcBarrier_CenterPos(&barrierPos);
 
 	int playerTeam = (int)player->mTeam;
-	const float radiusSq = 25.0f * 25.0f; // mBarrierColRadiusAtEnd = 25.0
+	const float radiusSq = 14.0f * 14.0f; // mBarrier_Radius = 25.0
 
 	auto iterNode = Game::BulletBombBase::getClassIterNodeStatic();
 	for (Lp::Sys::Actor *actor = iterNode->derivedFrontActiveActor();
