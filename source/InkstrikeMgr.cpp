@@ -230,6 +230,10 @@ namespace Flexlion{
             break;
         case TornadoState::cShootPrepare:
         {
+			if(isCtrlPerformer){
+				Game::MiniMap *mMap = Utils::getMinimap();
+				if(mMap != NULL) mMap->setVisible(true);
+			}
             Prot::ObfStore(&player->mSpecialLeftFrame, startflightdelay);
             Prot::ObfStore(&player->mLayoutSpecialState, -1); // negative total → gauge shows 0%
             int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mShootPrepareFrm[id];
@@ -263,10 +267,6 @@ namespace Flexlion{
 				playerState[id] = TornadoState::cNone;
 				player->mPlayerMotion->animSeq_3C = -1;
 				player->informGetWeapon_Impl_(player->mMainWeaponId, player->mSubWeaponId, player->mSpecialWeaponId, 0);
-				if(isCtrlPerformer){
-					Game::MiniMap *mMap = Utils::getMinimap();
-					if(mMap != NULL) mMap->setVisible(true);
-				}
 			}
 			break;
 		}
