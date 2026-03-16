@@ -344,6 +344,7 @@ _ZN4sead10StringUtil18convertUtf8ToUtf16EPDsjPKci = 0x1727ff4 - 0x2EBE000;
 _ZN2Lp3Sys5ParamIN4Game7InkTypeEE4ref_Ev = 0xA32708 - 0x2EBE000;
 _ZN4Game11VictoryGoal22getClassIterNodeStaticEv = 0xE32244 - 0x2EBE000;
 _ZN4Game17BulletBombSuction22getClassIterNodeStaticEv = 0x4B52BC - 0x2EBE000;
+_ZN4Game14BulletBombBase22getClassIterNodeStaticEv = 0x475C68 - 0x2EBE000;
 _ZN4Game11VictoryGoal15findVictoryGoalERKN3Cmn3Def4TeamE = 0xEB8448 - 0x2EBE000;
 _ZN4Game9VGoalOcta22getClassIterNodeStaticEv = 0xC6DF0C - 0x2EBE000;
 _ZN4Game9VGoalOcta13findVGoalOctaERKN3Cmn3Def4TeamE = 0xD3C438 - 0x2EBE000;

@@ -2,6 +2,7 @@
 #include "flexlion/PlayerWeaponSuperShot.hpp"
 #include "flexlion/PlayerWeaponTornado.hpp"
 #include "Cui/MsgWindow.h"
+#include "Game/BulletBombBase.h"
 
 using namespace starlight;
 
@@ -324,8 +325,60 @@ bool isInSpecialForShotGuideHook(Game::Player *player){
 	return true;
 }
 
+// Barrier eats enemy bombs on collision, matching RespawnPoint behavior.
+// Iterates all active BulletBombBase instances (covers all sub-weapon bomb types),
+// checks distance to barrier center, and calls informAndReactCollision with
+// reaction type 11 (sleepBarrier) to destroy the bomb.
+static void barrierEatBombs(Game::Player *player){
+	sead::Vector3<float> barrierPos;
+	player->calcBarrier_CenterPos(&barrierPos);
+
+	int playerTeam = (int)player->mTeam;
+	const float radiusSq = 25.0f * 25.0f; // mBarrierColRadiusAtEnd = 25.0
+
+	auto iterNode = Game::BulletBombBase::getClassIterNodeStatic();
+	for (Lp::Sys::Actor *actor = iterNode->derivedFrontActiveActor();
+		 actor != NULL; )
+	{
+		// Get next before potentially sleeping current actor
+		Lp::Sys::Actor *next = iterNode->derivedNextActiveActor(actor);
+
+		Cmn::Actor *bomb = (Cmn::Actor *)actor;
+		if ((int)bomb->mTeam != playerTeam) {
+			// Get bomb position via vtable[95] (byte offset 760)
+			u64 vtable = *(u64 *)bomb;
+			typedef float* (*GetPosFunc)(void*);
+			float *pos = ((GetPosFunc)(*(u64 *)(vtable + 760)))(bomb);
+			if (pos) {
+				float dx = pos[0] - barrierPos.mX;
+				float dy = pos[1] - barrierPos.mY;
+				float dz = pos[2] - barrierPos.mZ;
+				float distSq = dx*dx + dy*dy + dz*dz;
+
+				if (distSq < radiusSq) {
+					// informAndReactCollision (vtable[93], byte offset 744)
+					// reaction type 11 = sleepBarrier
+					typedef void (*InformFunc)(void*, int, int*, sead::Vector3<float>*, int, int, int, int, int);
+					int outResult = 0;
+					((InformFunc)(*(u64 *)(vtable + 744)))(bomb, 0, &outResult, &barrierPos, 11, playerTeam, 0, 0, 0);
+
+					// Play barrier hit VFX/SFX at bomb position
+					sead::Vector3<float> hitPos = {pos[0], pos[1], pos[2]};
+					player->emitAndPlay_BarrierHit(hitPos, false);
+				}
+			}
+		}
+		actor = next;
+	}
+}
+
 void playerThirdCalcHook(Game::Player *player){
 	bool wasInBarrier = player->isInBarrier();
+
+	// Eat enemy bombs while barrier is active (before thirdCalcOg may expire it)
+	if(wasInBarrier)
+		barrierEatBombs(player);
+
 	playerThirdCalcOg(player);
 	// Play BarrierEnd SFX when barrier expires during thirdCalc
 	if(wasInBarrier && !player->isInBarrier()){
