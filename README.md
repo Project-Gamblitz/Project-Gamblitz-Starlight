@@ -6,3 +6,4 @@ Custom code used for [Project Gamblitz for Splatoon 2](https://gamebanana.com/wi
 - [Shadów](https://github.com/shadowninja108)
 - [YoshiCrystal](https://github.com/YoshiCrystal9)
 - [Nacho](https://github.com/nacho95101)
+- [Nick27](https://github.com/IINick27II)
