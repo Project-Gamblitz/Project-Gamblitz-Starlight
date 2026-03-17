@@ -22,6 +22,7 @@ $(error "Please set DEVKITPRO in your environment. export DEVKITPRO=<path to>/de
 endif
 
 TOPDIR ?= $(CURDIR)
+GIT_SHA := $(shell git -C $(TOPDIR) rev-parse --short HEAD 2>/dev/null || echo unknown)
 include $(DEVKITPRO)/libnx/switch_rules
 
 #---------------------------------------------------------------------------------
@@ -45,7 +46,7 @@ ARCH    :=    -march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fpic -ftls-
 CFLAGS    :=    -g -Wall -ffunction-sections \
             $(ARCH) $(DEFINES)
 
-CFLAGS    +=    $(INCLUDE) -D__SWITCH__ -DS2VER=$(S2VER) -DS2VERSTR=$(S2VERSTR) -std=gnu++20
+CFLAGS    +=    $(INCLUDE) -D__SWITCH__ -DS2VER=$(S2VER) -DS2VERSTR=$(S2VERSTR) -DGIT_SHA=\"$(GIT_SHA)\" -std=gnu++20
 CFLAGS += "-w"
 
 CXXFLAGS    := $(CFLAGS) -fno-rtti -fomit-frame-pointer -fno-exceptions -fno-asynchronous-unwind-tables -fno-unwind-tables
@@ -162,6 +163,10 @@ $(OUTPUT).elf   : $(OFILES)
 
 
 $(OFILES_SRC)	: $(HFILES_BIN)
+
+# Force main.o to rebuild every time so GIT_SHA stays current
+.PHONY: FORCE
+main.o: FORCE
 
 #---------------------------------------------------------------------------------
 # you need a rule like this for each extension you use as binary data

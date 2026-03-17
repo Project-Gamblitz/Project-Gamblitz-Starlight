@@ -1,5 +1,8 @@
 #pragma once
 
-#define IS_DEV 0
-#define DEV_VER "2024"
-#define MOD_VER "FINAL"
+#define IS_DEV 1
+#ifndef GIT_SHA
+#define GIT_SHA "unknown"
+#endif
+#define DEV_VER GIT_SHA
+#define MOD_VER "2.0.0"

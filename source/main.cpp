@@ -48,7 +48,6 @@ static agl::DrawContext *mDrawContext;
 static sead::TextWriter *mTextWriter;
 static sead::ExpHeap* mStarlightHeap;
 static int mode;
-static bool showMenu;
 
 extern "C" sead::ExpHeap *flexGetStarlightHeap(){
 	return mStarlightHeap;
@@ -460,9 +459,6 @@ void renderEntrypoint(agl::DrawContext *drawContext, sead::TextWriter *textWrite
 		init = true;
 	}
 
-    if(Collector::mController.isPressed(Controller::Buttons::LStick))
-        showMenu = !showMenu;
-
 	static bool initcustommushtable;
 	if(!initcustommushtable){
 		if(Collector::mMushDataHolder != NULL){
@@ -493,7 +489,7 @@ void renderEntrypoint(agl::DrawContext *drawContext, sead::TextWriter *textWrite
 			"ExFillUpE", "Metal01", "ExPaint", "ExKeepOutE2", "ExKeepOutP_JetPack",
 		};
 		Game::Player *ctrlPlayer = Utils::getControlledPerformer();
-		if(ctrlPlayer != NULL && tornadoMgr->playerState[ctrlPlayer->mIndex] == Flexlion::TornadoState::cAim){
+		if(ctrlPlayer != NULL && tornadoMgr->playerState[ctrlPlayer->mIndex] == Flexlion::TornadoState::cAim && IS_DEV){
 			u16 attr = tornadoMgr->mDbgColAttr;
 			if(attr == 0xFFFF){
 				mTextWriter->printf("NO_COL [INVALID]\n");
@@ -504,26 +500,44 @@ void renderEntrypoint(agl::DrawContext *drawContext, sead::TextWriter *textWrite
 			}
 		}
 	}
-
 	if(IS_DEV){
-	  if(showMenu){
-		mTextWriter->printf("Gamblitz Dev Build v.%s\n", DEV_VER);
-		mTextWriter->printf("Mod Version: %s\n", MOD_VER);
-		mTextWriter->printf("Current heap name: %s\n", Collector::mHeapMgr->getCurrentHeap()->mName.mCharPtr);
-		mTextWriter->printf("Current heap free space: 0x%x\n", Collector::mHeapMgr->getCurrentHeap()->getFreeSize());
-		mTextWriter->printf("Current scene name: %s\n", Lp::Utl::getCurSceneName());
-		if(Cmn::StaticMem::sInstance){
-			mTextWriter->printf("Loaded Stage: %s\n", Cmn::StaticMem::sInstance->mMapFileName1.mCharPtr);
+		size_t freeBytes = Collector::mHeapMgr->getCurrentHeap()->getFreeSize();
+		float freeMB = (float)freeBytes / (1024.0f * 1024.0f);
+
+		// Box dimensions (pixel coords)
+		float boxX = 975.0f, boxY = 575.0f;
+		float boxW = 295.0f, boxH = 100.0f;
+
+		// Draw box border using drawLineImm in NDC space
+		{
+			sead::Matrix34<float> viewMtx = sead::Matrix34<float>::ident;
+			sead::Matrix44<float> projMtx = sead::Matrix44<float>::ident;
+			agl::utl::DevTools::beginDrawImm(mDrawContext, viewMtx, projMtx);
+
+			// Convert pixel coords to NDC (-1 to 1), Y flipped (screen Y-down, NDC Y-up)
+			float x0 = -1.0f + 2.0f * boxX / SCREEN_W;
+			float y0 =  1.0f - 2.0f * boxY / SCREEN_H;
+			float x1 = -1.0f + 2.0f * (boxX + boxW) / SCREEN_W;
+			float y1 =  1.0f - 2.0f * (boxY + boxH) / SCREEN_H;
+
+			sead::Color4f lineCol = sead::Color4f::cWhite;
+			float lw = 2.0f;
+			agl::utl::DevTools::drawLineImm(mDrawContext, {x0, y0, 0}, {x1, y0, 0}, lineCol, lw); // top
+			agl::utl::DevTools::drawLineImm(mDrawContext, {x0, y1, 0}, {x1, y1, 0}, lineCol, lw); // bottom
+			agl::utl::DevTools::drawLineImm(mDrawContext, {x0, y0, 0}, {x0, y1, 0}, lineCol, lw); // left
+			agl::utl::DevTools::drawLineImm(mDrawContext, {x1, y0, 0}, {x1, y1, 0}, lineCol, lw); // right
 		}
-		Game::Player *player = Utils::getControlledPerformer();
-		if(player){
-			handlePlayerControl();
-			mTextWriter->printf("Pos: %.2f %.2f %.2f\n", player->mPosition.mX, player->mPosition.mY, player->mPosition.mZ);
-			mTextWriter->printf("Vel: %.2f ", player->mMoveVel.mX, player->mMoveVel.mY, player->mMoveVel.mZ);
-			mTextWriter->printf("Vel.y: %.2f\n", player->mJumpVel);
-	  }
-    }
-}
+
+		// Text inside box
+		sead::Vector2<float> textPos = {boxX + 5.0f, boxY + 5.0f};
+		mTextWriter->setCursorFromTopLeft(textPos);
+		mTextWriter->printf("[Gamblitz Development Build]\n");
+		mTextWriter->printf("Git SHA[%s] v%s\n", DEV_VER, MOD_VER);
+		mTextWriter->printf("------------------------\n");
+		mTextWriter->printf("[Memory]\n");
+		mTextWriter->printf("Free: %.1f mb\n", freeMB);
+		mTextWriter->printf("------------------------\n");
+	}
 	static int renderstate = 0;
 	static int renderctr = 0;
 	static bool msgWindowShown = false;
