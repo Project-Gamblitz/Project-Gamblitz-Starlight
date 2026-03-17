@@ -422,10 +422,10 @@ void playerFourthCalcHook(Game::Player *player){
 void handleDisplayVersion(nn::oe::DisplayVersion *ver){
 	if(ver != NULL){
 		nn::oe::GetDisplayVersion(ver);
-		const char *sversion = "6.3 Final";
-		size_t ogLen = strlen(ver->name);
-		size_t stLen = strlen(sversion);
-		memcpy(ver->name, sversion, stLen);
+		char buf[64];
+		snprintf(buf, sizeof(buf), "%s | %s", ver->name, MOD_VER);
+		size_t stLen = strlen(buf);
+		memcpy(ver->name, buf, stLen + 1);
 	}
 }
 
@@ -552,7 +552,7 @@ void renderEntrypoint(agl::DrawContext *drawContext, sead::TextWriter *textWrite
 		}
 		break;
 	case 1:
-		renderstate+=DrawUtils::drawLogo(strcmp(scenename, "Boot") != 0);
+		// renderstate+=DrawUtils::drawLogo(strcmp(scenename, "Boot") != 0);
 		break;
 	case 2:
 		// Show custom MsgWindow after logo on Boot scene (same pattern as Boot::NetworkExe::stateProductPlacement)
