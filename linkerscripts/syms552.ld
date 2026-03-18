@@ -714,6 +714,7 @@ _ZN4Game12PlayerEffect23emitAndPlay_StartMarkedEPKNS_6PlayerE = 0x1077488 - 0x2E
 _ZN3Cmn16PlayerCustomPart19emitAndPlay_PutBackEv = 0x0018B5D0 - 0x2EBE000;
 _ZN3Cmn12PlayerWeapon13setLinkActionENS0_11InkActionIDEb = 0x001A5360 - 0x2EBE000;
 _ZN2Lp3Sys5Actor6createIN3Cmn22PlayerWeaponShachihokoEEEPT_PS1_PN4sead4HeapE = 0x00181B98 - 0x2EBE000;
+_ZN2Lp3Sys5Actor6createIN3Cmn20PlayerWeaponBigLaserEEEPT_PS1_PN4sead4HeapE = 0x0018212C - 0x2EBE000;
 
 _ZN4Game11NpcIdolNews15playScratchAnimEb = 0x0DB997C - 0x2EBE000;
 
@@ -875,6 +876,11 @@ _ZN4Game6Player20startMarkingOne_ImplEPS0_NS0_11MarkingTypeEii = 0x01028854 - 0x
 _ZN4Game16PlayerNetControl21sendSignal_AllMarkingEv = 0x01101180 - 0x2EBE000;
 
 _ZN4Game6Player17receiveDamage_NetEiN3Cmn3Def3DMGERKN4sead7Vector3IfEERKNS_12DamageReasonEbbb = 0x0101A034 - 0x2EBE000;
+_ZN4Game6Player22informDamage_ForceKillEiRKNS_12DamageReasonE = 0x10103BC - 0x2EBE000;
+_ZN4Game12PlayerDamage12informDamageEiN3Cmn3Def3DMGERKNS_12DamageReasonEb = 0x1066D50 - 0x2EBE000;
+
+/* Player bullet damage — the real HP damage function used by bullet collision system */
+_PlayerApplyBulletDamage = 0x1028DCC - 0x2EBE000;
 
 _ZN6xlink222EnumPropertyDefinitionC2EPKcb = 0x018DFE14 - 0x2EBE000;
 _ZN6xlink222EnumPropertyDefinition12setEntryBuf_EiPNS0_5EntryE = 0x018E00DC - 0x2EBE000;
