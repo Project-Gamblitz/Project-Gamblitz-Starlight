@@ -1,6 +1,7 @@
 #include "main.hpp"
 #include "flexlion/PlayerWeaponSuperShot.hpp"
 #include "flexlion/PlayerWeaponTornado.hpp"
+#include "flexlion/BigLaserModeMgr.hpp"
 #include "Cui/MsgWindow.h"
 #include "Game/BulletBombBase.h"
 
@@ -57,6 +58,7 @@ static Starlion::KingSquidMgr *kingSquidMgr = NULL;
 static Cmn::CtrlChecker *ctrlChecker = NULL;
 static Starlion::S1Inkstrike *mS1Inkstrike = NULL;
 static Flexlion::InkstrikeMgr *tornadoMgr = NULL;
+static Flexlion::BigLaserModeMgr *bigLaserModeMgr = NULL;
 template<>
 sead::Vector2<float> sead::Vector2<float>::zero = sead::Vector2<float>(0.0f, 0.0f);
 template<>
@@ -476,6 +478,9 @@ void renderEntrypoint(agl::DrawContext *drawContext, sead::TextWriter *textWrite
 	agentThreeHandle();
 	kingSquidMgr->onCalc();
 	tornadoMgr->onCalc();
+	if(!Utils::isSceneLoaded() && bigLaserModeMgr != NULL){
+		bigLaserModeMgr->reset();
+	}
 
 	// Debug: show collision attribute under Inkstrike cursor
 	if(mTextWriter != NULL){
@@ -622,6 +627,7 @@ int *custommgrjptHook(){
 			custommgrjpt[i]+=((u64)oldJptable) - ((u64)custommgrjpt);
 		}
 	}
+	custommgrjpt[1] = ((u64)&Flexlion::BigLaserModeMgr::bigLaserJumpHook) - ((u64)custommgrjpt);
 	custommgrjpt[2] = ((u64)&Game::PlayerWeaponTornado::tornadoJumpHook) - ((u64)custommgrjpt);
 	return custommgrjpt;
 }
@@ -637,14 +643,27 @@ CURLcode curl_easy_perform_hook(CURL *curl){
 void registKingSquidAnimHook(Game::PlayerAnimCtrlSet *animCtrlSet, int a1,char const*a2,bool a3,bool a4){
 	register Game::PlayerMotion *motion asm("x19");
 	Starlion::PlayerKingSquid* kingsquid = ((Starlion::PlayerKingSquid*)motion->mPlayer->mPlayerKingSquid);
-	animCtrlSet->registAnim(a1, a2, a3, a4);
+
+	// Replace BigLaserP animation names with non-P S1 Killer Wail versions
+	// e.g. "Shoot_BigLaserP" -> "Shoot_BigLaser", "Sp_Start_BigLaserP_Ed" -> "Sp_Start_BigLaser_Ed"
+	char s1Name[64];
+	const char *useName = a2;
+	const char *pPos = (a2 != NULL) ? strstr(a2, "BigLaserP") : NULL;
+	if(pPos != NULL) {
+		int prefixLen = (int)(pPos - a2) + 8; // includes "BigLaser" (8 chars)
+		memcpy(s1Name, a2, prefixLen);
+		strcpy(s1Name + prefixLen, pPos + 9); // skip the P, copy rest including null
+		useName = s1Name;
+	}
+
+	animCtrlSet->registAnim(a1, useName, a3, a4);
 	if(kingsquid == NULL){
 		return;
 	}
 	if(kingsquid->mKingSquidAnim == NULL){
 		return;
 	}
-	kingsquid->mKingSquidAnim->registAnim(a1, a2, a3, a4);
+	kingsquid->mKingSquidAnim->registAnim(a1, useName, a3, a4);
 }
 
 void setupKingSquidAnimHook(Game::PlayerAnimCtrlSet *animCtrlSet, Game::PlayerJoint *joint){
@@ -703,13 +722,15 @@ void init_starlion(){
 	/* TODO: fill in 5.5.2 offset for unpackStateEvent (3.1.0 IDA: 0x7100e79b30) */
 	unpackStateEventOriginal = (void (*)(Game::Player *, Game::PlayerStateCloneEvent *, u32))ProcessMemory::MainAddr(0x0104CAA8);
 	// startBarrierCommon no longer needed — receive side sets barrier fields directly
-	DrawUtils::makeTudou();
+	// DrawUtils::makeTudou();
 	FsLogger::LogFormatDefaultDirect("[Gamblitz] Initialized DrawUtils, 0x%x free RAM.\n", Collector::mHeapMgr->getCurrentHeap()->getFreeSize());
 	kingSquidMgr = new Starlion::KingSquidMgr();
 	FsLogger::LogFormatDefaultDirect("[Gamblitz] Created KingSquidMgr, 0x%x free RAM.\n", Collector::mHeapMgr->getCurrentHeap()->getFreeSize());
 	mS1Inkstrike = new Starlion::S1Inkstrike();
 	new Game::PlayerWeaponSuperShot();
 	new Game::PlayerWeaponTornado();
+	bigLaserModeMgr = new Flexlion::BigLaserModeMgr();
+	Flexlion::BigLaserModeMgr::initHook();
 	tornadoMgr = new Flexlion::InkstrikeMgr();
 	FsLogger::LogFormatDefaultDirect("[Gamblitz] Created InkstrikeMgr, 0x%x free RAM.\n", Collector::mHeapMgr->getCurrentHeap()->getFreeSize());
 	_BYTE randomBuf[0x28];
@@ -1086,6 +1107,9 @@ void hooks_init(){
 	isInKingSquidHook(NULL);
 	renderEntrypoint(NULL, NULL);
 	extraBigLaserBulletHook(NULL);
+	bulletSuperLaserShotHook(NULL, NULL, 0, 0, NULL, NULL, 0);
+	bigLaserItemPickupHook(NULL, 0);
+	bulletSuperLaserGetClassNameOverride();
 	jetPackJetHook(0);
 	curl_easy_perform_hook(NULL);
 	inkstrikeBombVelHook(NULL);
@@ -1107,6 +1131,7 @@ void hooks_init(){
 	kingSquidAnimSetControllerHook(NULL, NULL);
 	actorDbHook(NULL, NULL, NULL);
 	Game::PlayerWeaponSuperShot::supershotJumpHook();
+	Flexlion::BigLaserModeMgr::bigLaserJumpHook();
 	custommgrjptHook();
 	specialSetupWithoutModelHook();
 	stepPaintTypeHook(NULL);
@@ -1288,7 +1313,7 @@ Game::BulletMgr *extraBigLaserBulletHook(Game::BulletMgr *mgr){
 	if(mode != Cmn::Def::Mode::cVersus){
 		for(int i = 0; i < ary->getValidInfoNum() * 2; i++){
 			Lp::Sys::Actor::create<Game::BulletSuperLaser>(mgr->getBulletParent(), NULL);
-		}	
+		}
 		if((mode != Cmn::Def::Mode::cMission or strcmp(Cmn::StaticMem::sInstance->mMapFileName1.mCharPtr, "Fld_BossLastKing_Msn") != 0) and mode != Cmn::Def::Mode::cMissionOcta){
 			for(int i = 0; i < 16; i++){
 				Lp::Sys::Actor::create<Game::BulletGachihoko>(mgr->getBulletParent(), NULL);
