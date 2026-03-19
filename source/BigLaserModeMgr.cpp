@@ -195,6 +195,25 @@ void bulletSuperLaserShotHook(void *bullet, void *player, int weaponId1, int wea
 						Flexlion::sBulletActivateFn(candidate, 0);
 					}
 					shotBullet = candidate;
+
+					// Deactivate the wrong bullet — the pool allocator already
+					// activated it (linked into active list). If left active, the
+					// game loop will process it and replay old XLink effects.
+					// Inline unlink from the doubly-linked active list at actor+96.
+					u64 *node = (u64 *)((char *)bullet + 96);
+					u64 next = node[0];
+					u64 prev = node[1];
+					if (next) *(u64 *)(next + 8) = prev;
+					if (prev) *(u64 *)(prev) = next;
+					node[0] = 0;
+					node[1] = 0;
+					// Clear parent pointer and decrement list count
+					u64 parent = node[3];
+					if (parent) {
+						--*(int *)(parent + 16);
+						node[3] = 0;
+					}
+
 					break;
 				}
 			}
