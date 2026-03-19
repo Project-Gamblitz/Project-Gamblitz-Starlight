@@ -84,7 +84,6 @@ bool isInKingSquidHook(Game::Player *player);
 Cmn::Def::Mode shotPropertiesHook();
 Game::BulletMgr *extraBigLaserBulletHook(Game::BulletMgr *mgr);
 bool princessCannonHook(bool val);
-// BigLaser Killer Wail / Princess Cannon coexistence
 void bulletSuperLaserShotHook(void *bullet, void *player, int weaponId1, int weaponId2,
                               sead::Vector3<float> *pos, sead::Vector3<float> *dir, int param);
 void bigLaserItemPickupHook(Game::Player *player, int chargeValue);

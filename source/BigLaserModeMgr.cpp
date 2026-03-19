@@ -1,7 +1,7 @@
 #include "flexlion/BigLaserModeMgr.hpp"
 #include "flexlion/ProcessMemory.hpp"
-#include "flexlion/FsLogger.hpp"
 #include "Cmn/Actor.h"
+#include "Cmn/IPlayerCustomInfo.h"
 
 namespace Flexlion {
 
@@ -10,10 +10,11 @@ BigLaserModeMgr *BigLaserModeMgr::sInstance = NULL;
 // Function pointer to original BulletSuperLaser::shot (IDA 0x7100589B58, binary 0x589B58)
 static void (*sBulletSuperLaserShotOrig)(void*, void*, int, int, sead::Vector3<float>*, sead::Vector3<float>*, int) = NULL;
 
-typedef void (*SetLinkUserNameFn)(void*, const sead::SafeStringBase<char> *);
-static SetLinkUserNameFn sRealSetLinkUserName = NULL;
+// Function pointer to bullet pool activation (IDA 0x7101954EE0, binary 0x1954EE0)
+static void (*sBulletActivateFn)(void*, char) = NULL;
 
-// --- Split bullet pool tracking ---
+typedef void (*SetLinkUserNameFn)(void*, const sead::SafeStringBase<char> *);
+
 // Dynamic getClassName flag: when true, Actor::create resolves XLink as "BulletSuperLaser" (Princess Cannon)
 bool BigLaserModeMgr::sCreateAsPrincessCannon = false;
 
@@ -22,8 +23,12 @@ static void *sKWBullets[20];   // Killer Wail (BulletOldSuperLaser XLink)
 static void *sPCBullets[20];   // Princess Cannon (BulletSuperLaser XLink)
 static int sKWCount = 0;
 static int sPCCount = 0;
-static int sKWNextIdx = 0;
-static int sPCNextIdx = 0;
+
+// Cached XLink UserInstance pointers
+void *BigLaserModeMgr::sKWELink = NULL;
+void *BigLaserModeMgr::sKWSLink = NULL;
+void *BigLaserModeMgr::sPCELink = NULL;
+void *BigLaserModeMgr::sPCSLink = NULL;
 
 void BigLaserModeMgr::registerBullet(void *bullet, bool isPrincessCannon) {
 	if (isPrincessCannon) {
@@ -31,30 +36,18 @@ void BigLaserModeMgr::registerBullet(void *bullet, bool isPrincessCannon) {
 	} else {
 		if (sKWCount < 20) sKWBullets[sKWCount++] = bullet;
 	}
-	// elink/slink caching is done lazily in lazyCacheXLinkPtrs()
-	// because XLink UserInstances may not exist yet at registration time
 }
 
 void BigLaserModeMgr::resetBulletPools() {
 	sKWCount = 0;
 	sPCCount = 0;
-	sKWNextIdx = 0;
-	sPCNextIdx = 0;
-	// Reset cached pointers so they get re-cached from the new pools
-	sDbgKWELink = NULL;
-	sDbgKWSLink = NULL;
-	sDbgPCELink = NULL;
-	sDbgPCSLink = NULL;
+	sKWELink = NULL;
+	sKWSLink = NULL;
+	sPCELink = NULL;
+	sPCSLink = NULL;
 }
 
-bool BigLaserModeMgr::isBulletKillerWail(void *bullet) {
-	for (int i = 0; i < sKWCount; i++) {
-		if (sKWBullets[i] == bullet) return true;
-	}
-	return false;
-}
-
-bool BigLaserModeMgr::isBulletPrincessCannon(void *bullet) {
+static bool isBulletPrincessCannon(void *bullet) {
 	for (int i = 0; i < sPCCount; i++) {
 		if (sPCBullets[i] == bullet) return true;
 	}
@@ -62,77 +55,36 @@ bool BigLaserModeMgr::isBulletPrincessCannon(void *bullet) {
 }
 
 // Per-bullet getClassName: checks pool membership so actorLoad resolves correct XLink.
-// Called via naked wrapper (bulletSuperLaserGetClassNameOverride) which forwards this in X0.
 const char *BigLaserModeMgr::getClassNameHelper(void *self) {
-	// During initial pool creation, bullets aren't registered yet — use the flag
-	if (sCreateAsPrincessCannon) {
-		sDbgGetClassPC++;
-		return "BulletSuperLaser";
-	}
-	// After creation, check per-bullet pool membership
-	if (isBulletPrincessCannon(self)) {
-		sDbgGetClassPC++;
-		return "BulletSuperLaser";
-	}
-	sDbgGetClassKW++;
+	if (sCreateAsPrincessCannon) return "BulletSuperLaser";
+	if (isBulletPrincessCannon(self)) return "BulletSuperLaser";
 	return "BulletOldSuperLaser";
 }
 
-void *BigLaserModeMgr::findFreeBullet(bool wantPrincessCannon) {
-	void **pool = wantPrincessCannon ? sPCBullets : sKWBullets;
-	int count = wantPrincessCannon ? sPCCount : sKWCount;
-
-	// Check offset+56 == 0 to find an actually free bullet (same check as pool allocator)
-	for (int i = 0; i < count; i++) {
-		void *bullet = pool[i];
-		if (bullet && *(u64 *)((char *)bullet + 56) == 0) {
-			return bullet;
-		}
-	}
-	return NULL;
-}
-
 // Lazy-cache elink/slink UserInstance pointers from pool bullets.
-// At registration time (during BulletMgr init), XLink and its UserInstances
-// may not be created yet (they're resolved during actorLoad, not actorOnCreate).
-// By shot time, all bullets have been through their full lifecycle.
+// XLink UserInstances may not exist at registration time (resolved during actorLoad).
 void BigLaserModeMgr::lazyCacheXLinkPtrs() {
-	if (sDbgKWELink == NULL && sKWCount > 0) {
+	if (sKWELink == NULL && sKWCount > 0) {
 		for (int i = 0; i < sKWCount; i++) {
 			u64 *xlink = *(u64 **)((char *)sKWBullets[i] + 0x320);
 			if (xlink && xlink[1]) {
-				sDbgKWELink = (void *)xlink[1];
-				sDbgKWSLink = (void *)xlink[2];
+				sKWELink = (void *)xlink[1];
+				sKWSLink = (void *)xlink[2];
 				break;
 			}
 		}
 	}
-	if (sDbgPCELink == NULL && sPCCount > 0) {
+	if (sPCELink == NULL && sPCCount > 0) {
 		for (int i = 0; i < sPCCount; i++) {
 			u64 *xlink = *(u64 **)((char *)sPCBullets[i] + 0x320);
 			if (xlink && xlink[1]) {
-				sDbgPCELink = (void *)xlink[1];
-				sDbgPCSLink = (void *)xlink[2];
+				sPCELink = (void *)xlink[1];
+				sPCSLink = (void *)xlink[2];
 				break;
 			}
 		}
 	}
 }
-
-int BigLaserModeMgr::dbgKWPoolCount() { return sKWCount; }
-int BigLaserModeMgr::dbgPCPoolCount() { return sPCCount; }
-int BigLaserModeMgr::sDbgLastMode = 0;
-bool BigLaserModeMgr::sDbgLastWasKW = false;
-bool BigLaserModeMgr::sDbgLastSwapped = false;
-void *BigLaserModeMgr::sDbgLastBullet = NULL;
-void *BigLaserModeMgr::sDbgKWELink = NULL;
-void *BigLaserModeMgr::sDbgKWSLink = NULL;
-void *BigLaserModeMgr::sDbgPCELink = NULL;
-void *BigLaserModeMgr::sDbgPCSLink = NULL;
-bool BigLaserModeMgr::sDbgCached = false;
-void *BigLaserModeMgr::sDbgCachedPCELink = NULL;
-void *BigLaserModeMgr::sDbgCachedKWELink = NULL;
-void *BigLaserModeMgr::sDbgBulletElinkAfter = NULL;
 
 BigLaserModeMgr::BigLaserModeMgr(){
 	sInstance = this;
@@ -155,28 +107,38 @@ void BigLaserModeMgr::reset(){
 	}
 }
 
-void BigLaserModeMgr::onBulletSuperLaserShot(void *bullet, void *player){
-	// No-op
-}
-
 void BigLaserModeMgr::initHook(){
 	sBulletSuperLaserShotOrig = (decltype(sBulletSuperLaserShotOrig))ProcessMemory::MainAddr(0x589B58);
+	sBulletActivateFn = (decltype(sBulletActivateFn))ProcessMemory::MainAddr(0x1954EE0);
 }
 
 // Called right after Actor::create<PlayerWeaponBigLaser> in the jump hook.
-// The jump hook skips the normal checkAndCreateSpecialWeapon flow for BigLaser,
-// so setLinkUserName would never be called. We call it here with the vanilla
-// "BigLaser" name so the weapon's XLink resolves to PlayerWeapon_BigLaser (5.5.2 PC effects).
-//
-// Weapon effects are always Princess Cannon (5.5.2). Beam effects are controlled
-// per-shot by swapping elink/slink UserInstance pointers on the bullet.
+// parent = PlayerCustomMgr* (X19). PlayerCustomMgr+840 = IPlayerCustomInfo*.
+// Reads the player's BigLaserMode to decide which XLink user name to set:
+//   KillerWail (default)  → "OldBigLaser"  → PlayerWeapon_OldBigLaser (S1 effects)
+//   PrincessCannon (pickup) → "BigLaser"   → PlayerWeapon_BigLaser    (5.5.2 effects)
 Cmn::PlayerWeapon* BigLaserModeMgr::initWeaponXLink(Cmn::PlayerWeapon *weapon, void *parent) {
 	u64 *origVtable = *(u64 **)weapon;
 	SetLinkUserNameFn realSetLinkUserName = (SetLinkUserNameFn)origVtable[87];
-	sRealSetLinkUserName = realSetLinkUserName;
 
-	// Set weapon XLink name to vanilla "BigLaser" (Princess Cannon / 5.5.2)
-	sead::SafeStringBase<char> name = sead::SafeStringBase<char>::create("BigLaser");
+	// Default to KillerWail (S1) XLink name
+	char *xlinkName = (char *)"OldBigLaser";
+
+	// Get player index from parent (PlayerCustomMgr+840 = IPlayerCustomInfo*)
+	if (sInstance && parent) {
+		Cmn::IPlayerCustomInfo *info = *(Cmn::IPlayerCustomInfo **)((char *)parent + 840);
+		if (info && info->vtable && info->vtable->getGamePlayer) {
+			Game::Player *player = info->vtable->getGamePlayer(info);
+			if (player) {
+				BigLaserMode mode = sInstance->getMode(player->mIndex);
+				if (mode == cPrincessCannon) {
+					xlinkName = (char *)"BigLaser";
+				}
+			}
+		}
+	}
+
+	sead::SafeStringBase<char> name = sead::SafeStringBase<char>::create(xlinkName);
 	realSetLinkUserName(weapon, &name);
 
 	return weapon;
@@ -196,59 +158,56 @@ __attribute__((naked)) void BigLaserModeMgr::bigLaserJumpHook(){
 
 } // namespace Flexlion
 
-// Global-scope hook function (called from patch BL replacement)
+// Shot hook: ensure the correct bullet type (KW vs PC) is used for each player's mode.
 //
-// The bullet pool allocator (case 49) always allocates from "BulletSuperLaser" pool (PC).
-// The bullet has PC XLink by default. For KW mode, swap elink/slink UserInstance pointers
-// to KW ones (cached from KW pool bullets). For PC mode, use the bullet as-is.
+// Instead of swapping XLink UserInstance pointers (which breaks effect positioning because
+// the emitter tree caches model references internally at UserInstance creation time), we
+// swap the ENTIRE BULLET. If the pool allocator returned a bullet whose XLink type doesn't
+// match the player's BigLaserMode, we find a free bullet of the correct type from our
+// registered pools and fire shot() on that instead. Each bullet's native elink has correct
+// model references, so effects appear at the beam position.
+//
+// The "wrong" bullet stays activated but idle — it leaks a pool slot until scene change.
+// This is bounded and self-correcting: as wrong-type bullets leak, the pool increasingly
+// returns correct-type bullets. With N bullets per type, at most N slots can leak.
 void bulletSuperLaserShotHook(void *bullet, void *player, int weaponId1, int weaponId2,
                               sead::Vector3<float> *pos, sead::Vector3<float> *dir, int param)
 {
+	void *shotBullet = bullet;
+
 	if (player != NULL && Flexlion::BigLaserModeMgr::sInstance != NULL) {
 		Game::Player *p = (Game::Player *)player;
 		Flexlion::BigLaserMode mode = Flexlion::BigLaserModeMgr::sInstance->getMode(p->mIndex);
 		bool wantPC = (mode == Flexlion::cPrincessCannon);
+		bool bulletIsPC = Flexlion::isBulletPrincessCannon(bullet);
 
-		// Debug
-		Flexlion::BigLaserModeMgr::sDbgLastMode = wantPC ? 1 : 0;
-		Flexlion::BigLaserModeMgr::sDbgLastBullet = bullet;
+		if (wantPC != bulletIsPC) {
+			// Type mismatch: find a free bullet of the correct type from our pool
+			int count = wantPC ? Flexlion::sPCCount : Flexlion::sKWCount;
+			void **pool = wantPC ? Flexlion::sPCBullets : Flexlion::sKWBullets;
 
-		// Lazy-cache elink/slink pointers (may not have been available at pool creation time)
-		Flexlion::BigLaserModeMgr::lazyCacheXLinkPtrs();
-
-		// Swap elink/slink UserInstance pointers to match desired mode.
-		u64 *xlink = *(u64 **)((char *)bullet + 0x320);
-		if (xlink) {
-			if (!wantPC && Flexlion::BigLaserModeMgr::sDbgKWELink) {
-				// Default KW mode: swap bullet's PC elink/slink to KW
-				xlink[1] = (u64)Flexlion::BigLaserModeMgr::sDbgKWELink;
-				xlink[2] = (u64)Flexlion::BigLaserModeMgr::sDbgKWSLink;
-				Flexlion::BigLaserModeMgr::sDbgLastSwapped = true;
-			} else if (wantPC && Flexlion::BigLaserModeMgr::sDbgPCELink) {
-				// PC mode: ensure PC elink/slink (restore if previously swapped to KW)
-				xlink[1] = (u64)Flexlion::BigLaserModeMgr::sDbgPCELink;
-				xlink[2] = (u64)Flexlion::BigLaserModeMgr::sDbgPCSLink;
-				Flexlion::BigLaserModeMgr::sDbgLastSwapped = false;
-			} else {
-				Flexlion::BigLaserModeMgr::sDbgLastSwapped = false;
+			for (int i = 0; i < count; i++) {
+				void *candidate = pool[i];
+				// *(actor+0x38) == 0 means not currently in a beam/shot lifecycle
+				if (*(u64 *)((char *)candidate + 0x38) == 0) {
+					// Activate the candidate (links into active list; safe if already linked)
+					if (Flexlion::sBulletActivateFn) {
+						Flexlion::sBulletActivateFn(candidate, 0);
+					}
+					shotBullet = candidate;
+					break;
+				}
 			}
 		}
 	}
 
-	// Call original BulletSuperLaser::shot
-	Flexlion::sBulletSuperLaserShotOrig(bullet, player, weaponId1, weaponId2, pos, dir, param);
+	// Call original BulletSuperLaser::shot on the (possibly swapped) bullet
+	Flexlion::sBulletSuperLaserShotOrig(shotBullet, player, weaponId1, weaponId2, pos, dir, param);
 }
 
-// Debug counters for getClassName calls
-int Flexlion::BigLaserModeMgr::sDbgGetClassKW = 0;
-int Flexlion::BigLaserModeMgr::sDbgGetClassPC = 0;
-
 // Replaces BulletSuperLaser::getClassName (binary 0x58ACB4) via slpatch B redirect.
-// Naked wrapper: X0 = this (bullet pointer) from the original virtual call.
-// Forwards to getClassNameHelper which checks per-bullet pool membership so that
-// actorLoad (which runs asynchronously after Actor::create) resolves correct XLink.
+// X0 = this from the virtual call, forwarded to getClassNameHelper for pool-based dispatch.
 __attribute__((naked)) const char *bulletSuperLaserGetClassNameOverride() {
-	// X0 = this from the caller, passed as first arg to getClassNameHelper(void *self)
 	asm("B _ZN8Flexlion15BigLaserModeMgr18getClassNameHelperEPv");
 }
 
@@ -258,7 +217,7 @@ void bigLaserItemPickupHook(Game::Player *player, int chargeValue) {
 	// Original behavior: *(player + 0xE40) = chargeValue
 	*(int*)((char*)player + 0xE40) = chargeValue;
 
-	// Set Princess Cannon mode — bullet effects will be swapped at shot time
+	// Set Princess Cannon mode
 	if (Flexlion::BigLaserModeMgr::sInstance) {
 		Flexlion::BigLaserModeMgr::sInstance->setMode(player->mIndex, Flexlion::cPrincessCannon);
 	}

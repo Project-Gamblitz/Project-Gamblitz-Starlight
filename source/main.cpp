@@ -482,47 +482,6 @@ void renderEntrypoint(agl::DrawContext *drawContext, sead::TextWriter *textWrite
 		bigLaserModeMgr->reset();
 	}
 
-	// Debug: BigLaser mode
-	if(mTextWriter != NULL && bigLaserModeMgr != NULL){
-		Game::Player *blDbgPlayer = Utils::getControlledPerformer();
-		if(blDbgPlayer != NULL){
-			int idx = blDbgPlayer->mIndex;
-			Flexlion::BigLaserMode blMode = bigLaserModeMgr->getMode(idx);
-			mTextWriter->printf("BL[%d] %s KW:%d PC:%d\n",
-				idx,
-				blMode == Flexlion::cKillerWail ? "KillerWail" : "PrincessCannon",
-				Flexlion::BigLaserModeMgr::dbgKWPoolCount(),
-				Flexlion::BigLaserModeMgr::dbgPCPoolCount());
-			mTextWriter->printf("  shot: mode=%s wasKW=%d swapped=%d\n",
-				Flexlion::BigLaserModeMgr::sDbgLastMode ? "PC" : "KW",
-				Flexlion::BigLaserModeMgr::sDbgLastWasKW,
-				Flexlion::BigLaserModeMgr::sDbgLastSwapped);
-			mTextWriter->printf("  getClass: KW=%d PC=%d\n",
-				Flexlion::BigLaserModeMgr::sDbgGetClassKW,
-				Flexlion::BigLaserModeMgr::sDbgGetClassPC);
-			mTextWriter->printf("  wKW=%p wPC=%p swp=%d\n",
-				Flexlion::BigLaserModeMgr::sDbgCachedKWELink,
-				Flexlion::BigLaserModeMgr::sDbgCachedPCELink,
-				Flexlion::BigLaserModeMgr::sDbgLastSwapped);
-			// Read XLink user instance pointers live from pool bullets
-			{
-				void *kwEl = NULL, *kwSl = NULL, *pcEl = NULL, *pcSl = NULL;
-				void *kwB = Flexlion::BigLaserModeMgr::findFreeBullet(false);
-				void *pcB = Flexlion::BigLaserModeMgr::findFreeBullet(true);
-				if (kwB) {
-					u64 *xlink = *(u64 **)((char *)kwB + 0x320);
-					if (xlink) { kwEl = (void *)xlink[1]; kwSl = (void *)xlink[2]; }
-				}
-				if (pcB) {
-					u64 *xlink = *(u64 **)((char *)pcB + 0x320);
-					if (xlink) { pcEl = (void *)xlink[1]; pcSl = (void *)xlink[2]; }
-				}
-				mTextWriter->printf("  KW el=%p sl=%p\n", kwEl, kwSl);
-				mTextWriter->printf("  PC el=%p sl=%p\n", pcEl, pcSl);
-			}
-		}
-	}
-
 	// Debug: show collision attribute under Inkstrike cursor
 	if(mTextWriter != NULL){
 		static const char *sMaterialNames[] = {
@@ -1381,7 +1340,7 @@ Game::BulletMgr *extraBigLaserBulletHook(Game::BulletMgr *mgr){
 			}
 		}
 	} else{
-		// Split pool for XLink debug: create separate KW and PC bullets
+		// Split pool: KW and PC bullets for versus
 		Flexlion::BigLaserModeMgr::sCreateAsPrincessCannon = false;
 		for(int i = 0; i < ary->getValidInfoNum(); i++){
 			void *b = (void*)Lp::Sys::Actor::create<Game::BulletSuperLaser>(mgr->getBulletParent(), NULL);

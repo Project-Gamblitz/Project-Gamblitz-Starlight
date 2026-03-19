@@ -45,7 +45,7 @@
 01066298:
 	MOV W0, #0x1
 	RET
-// Killer Wail
+// Killer Wail shot hook
 010B66B4+100 BL bulletSuperLaserShotHook
 // BulletSuperLaser::getClassName -> return "BulletOldSuperLaser" for S1 Killer Wail XLink
 0058ACB4 B bulletSuperLaserGetClassNameOverride
