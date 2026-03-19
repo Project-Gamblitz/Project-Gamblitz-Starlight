@@ -35,6 +35,12 @@ void *BigLaserModeMgr::sKWSLink = NULL;
 void *BigLaserModeMgr::sPCELink = NULL;
 void *BigLaserModeMgr::sPCSLink = NULL;
 
+// Cached BigLaser trie entry for bullet model swapping (declared before resetBulletPools)
+static u64 sBigLaserTrieEntry = 0;
+static const char *sOrigTrieV6 = NULL;   // original string at trieEntry+0x68
+static const char *sOrigTrieV10 = NULL;  // original string at trieEntry+0xC0
+static bool sOldBigLaserModelRegistered = false;
+
 void BigLaserModeMgr::registerBullet(void *bullet, bool isPrincessCannon) {
 	if (isPrincessCannon) {
 		if (sPCCount < 20) sPCBullets[sPCCount++] = bullet;
@@ -50,6 +56,10 @@ void BigLaserModeMgr::resetBulletPools() {
 	sKWSLink = NULL;
 	sPCELink = NULL;
 	sPCSLink = NULL;
+	sBigLaserTrieEntry = 0;
+	sOrigTrieV6 = NULL;
+	sOrigTrieV10 = NULL;
+	sOldBigLaserModelRegistered = false;
 }
 
 // Per-weapon tracking: weapon pointer + both pre-created models
@@ -207,14 +217,79 @@ static void (*sOrigWeaponModelReg)(void*, u32, u32, char) = NULL;
 // Lp::Sys::ModelArc for OldBigLaser (loaded directly like rival/player model arcs)
 static Lp::Sys::ModelArc *sOldBigLaserArc = NULL;
 
+// Trie access: sub_7100009768(trie, type, index) → trie entry pointer
+static u64 (*sTrieGetByIndex)(u64, u32, u32) = NULL;
+// Trie name lookup: sub_71000877BC(trie, type, &safeString) → pointer to index
+static int *(*sTrieNameLookup)(u64, u32, const sead::SafeStringBase<char>*) = NULL;
+// Model archive registration: sub_71003B6010(mgr, mgr+568, &safeString)
+static void (*sRegisterModelArchive)(void*, void*, const sead::SafeStringBase<char>*) = NULL;
+
+static void resolveBigLaserTrieEntry() {
+	if (sBigLaserTrieEntry) return;
+	u64 *globalMgr = (u64 *)ProcessMemory::MainAddr(0x2D56A30);
+	u64 managerObj = *globalMgr;
+	u64 trie = *(u64 *)(managerObj + 0x50);
+
+	sead::SafeStringBase<char> name("BigLaser");
+	int *result = sTrieNameLookup(trie, 2, &name);
+	s16 index = (s16)(*(u16 *)result);
+
+	sBigLaserTrieEntry = sTrieGetByIndex(trie, 2, (u32)index);
+
+	// Cache original archive name strings
+	sOrigTrieV6 = *(const char **)(sBigLaserTrieEntry + 0x68);
+	sOrigTrieV10 = *(const char **)(sBigLaserTrieEntry + 0xC0);
+}
+
+void BigLaserModeMgr::swapBulletModelArchive(bool useOldBigLaser) {
+	resolveBigLaserTrieEntry();
+	if (!sBigLaserTrieEntry) return;
+
+	if (useOldBigLaser) {
+		*(const char **)(sBigLaserTrieEntry + 0x68) = "Wsp_OldBigLaser";
+		*(const char **)(sBigLaserTrieEntry + 0xC0) = "Wsp_OldBigLaser";
+	} else {
+		*(const char **)(sBigLaserTrieEntry + 0x68) = sOrigTrieV6;
+		*(const char **)(sBigLaserTrieEntry + 0xC0) = sOrigTrieV10;
+	}
+}
+
+// Original BulletSuperLaser::load (saved from vtable before patching)
+static void (*sOrigBulletSuperLaserLoad)(void*) = NULL;
+
 void BigLaserModeMgr::initModelHook() {
 	sBaseSetupWithModel = (decltype(sBaseSetupWithModel))ProcessMemory::MainAddr(0x18983C);
 	sFindBoneInModel = (decltype(sFindBoneInModel))ProcessMemory::MainAddr(0x17DE8D0);
 	sOrigWeaponModelReg = (decltype(sOrigWeaponModelReg))ProcessMemory::MainAddr(0x3DEC68);
+	sTrieGetByIndex = (decltype(sTrieGetByIndex))ProcessMemory::MainAddr(0x9768);
+	sTrieNameLookup = (decltype(sTrieNameLookup))ProcessMemory::MainAddr(0x877BC);
+	sRegisterModelArchive = (decltype(sRegisterModelArchive))ProcessMemory::MainAddr(0x3B6010);
 
 	// Load OldBigLaser archive early (same timing as KingSquid/Tornado ModelArcs)
 	sead::SafeStringBase<char> name = sead::SafeStringBase<char>::create("Wsp_OldBigLaser");
 	sOldBigLaserArc = new Lp::Sys::ModelArc(name, NULL, 0, NULL, NULL);
+
+	// Hook BulletSuperLaser::load via vtable patching (load is deferred, not called
+	// during Actor::create, so the trie swap must happen inside load itself).
+	// BulletSuperLaser vtable at binary 0x2a46e00; Cmn::Actor base at +0x90 = 0x2a46e90.
+	Cmn::ActorVtable *bslVtable = (Cmn::ActorVtable *)ProcessMemory::MainAddr(0x2a46e90);
+	sOrigBulletSuperLaserLoad = (void (*)(void *))bslVtable->load;
+	bslVtable->load = (u64)BigLaserModeMgr::bulletLoadHook;
+}
+
+// Vtable hook for BulletSuperLaser::load.
+// load is called by the framework AFTER Actor::create returns, so the trie swap
+// in extraBigLaserBulletHook has already been restored. We wrap each bullet's load
+// with the trie swap based on its pool membership.
+void BigLaserModeMgr::bulletLoadHook(void *bullet) {
+	bool isKW = !isBulletPrincessCannon(bullet);
+	if (isKW) {
+		swapBulletModelArchive(true);
+	}
+	sOrigBulletSuperLaserLoad(bullet);
+	if (isKW) {
+		swapBulletModelArchive(false);
+	}
 }
 
 // Swap the active model on a tracked BigLaser weapon.
@@ -269,9 +344,17 @@ void BigLaserModeMgr::reSetupForPlayer(int playerIdx) {
 } // namespace Flexlion
 
 // Wraps BL to sub_71003DEC68 at binary 0x3D08D4 (special weapon model pre-registration).
+// Also registers OldBigLaser model archive so the bullet model creation can find it by name.
 void weaponModelPreRegHook(void *mgr, u32 type, u32 weaponId, char flag) {
 	if (!mgr) return;
 	Flexlion::sOrigWeaponModelReg(mgr, type, weaponId, flag);
+
+	// Register OldBigLaser in the resource cache (once per scene)
+	if (!Flexlion::sOldBigLaserModelRegistered && Flexlion::sRegisterModelArchive) {
+		sead::SafeStringBase<char> name("Wsp_OldBigLaser");
+		Flexlion::sRegisterModelArchive(mgr, (char *)mgr + 568, &name);
+		Flexlion::sOldBigLaserModelRegistered = true;
+	}
 }
 
 // Replaces sub_71001A4EC0 (shared setupWithModel for all weapon types, binary 0x1A4EC0).
@@ -286,6 +369,23 @@ void bigLaserSetupWithModelHook(Cmn::PlayerWeapon *weapon) {
 	char *weaponName = *(char **)((char *)weapon + 0x568);
 	bool isBigLaser = (weaponName && strcmp(weaponName, "Wsp_BigLaser") == 0
 	                   && Flexlion::sOldBigLaserArc != NULL);
+
+	// If this BigLaser weapon is already tracked (i.e., both models were pre-created),
+	// just let the base setupWithModel use the cached model at weapon+0x4F8.
+	// This prevents re-running the dual-model creation (which corrupts model pointers).
+	if (isBigLaser) {
+		for (int i = 0; i < Flexlion::sWeaponTrackCount; i++) {
+			if (Flexlion::sWeaponTracks[i].weapon == weapon) {
+				Flexlion::sBaseSetupWithModel(weapon);
+				void *model = *(void **)((char *)weapon + 0x338);
+				if (model) {
+					sead::SafeStringBase<char> muzzleName("muzzle");
+					*(int *)((char *)weapon + 0x6B0) = Flexlion::sFindBoneInModel(model, &muzzleName);
+				}
+				return;
+			}
+		}
+	}
 
 	if (isBigLaser) {
 		u64 origArchive = *(u64 *)((char *)weapon + 0x500);

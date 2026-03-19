@@ -63,6 +63,12 @@ public:
 	// Called from bigLaserItemPickupHook — swaps pre-created model pointers for PC mode.
 	static void reSetupForPlayer(int playerIdx);
 
+	// Swap the BigLaser trie entry to use OldBigLaser archive for KW bullet model creation.
+	static void swapBulletModelArchive(bool useOldBigLaser);
+
+	// Vtable hook for BulletSuperLaser::load — wraps with trie swap for KW bullets
+	static void bulletLoadHook(void *bullet);
+
 private:
 	BigLaserMode mMode[10];
 };

@@ -1316,13 +1316,14 @@ Game::BulletMgr *extraBigLaserBulletHook(Game::BulletMgr *mgr){
 	Flexlion::BigLaserModeMgr::resetBulletPools();
 	Flexlion::BigLaserModeMgr::resetWeaponTracking();
 	if(mode != Cmn::Def::Mode::cVersus){
-		// Split pool: Killer Wail bullets (BulletOldSuperLaser XLink)
+		// Split pool: Killer Wail bullets (BulletOldSuperLaser XLink + OldBigLaser model)
+		// Model swap happens in bulletLoadHook (vtable hook on BulletSuperLaser::load)
 		Flexlion::BigLaserModeMgr::sCreateAsPrincessCannon = false;
 		for(int i = 0; i < ary->getValidInfoNum(); i++){
 			void *b = (void*)Lp::Sys::Actor::create<Game::BulletSuperLaser>(mgr->getBulletParent(), NULL);
 			Flexlion::BigLaserModeMgr::registerBullet(b, false);
 		}
-		// Split pool: Princess Cannon bullets (BulletSuperLaser XLink)
+		// Split pool: Princess Cannon bullets (BulletSuperLaser XLink + BigLaser model)
 		Flexlion::BigLaserModeMgr::sCreateAsPrincessCannon = true;
 		for(int i = 0; i < ary->getValidInfoNum(); i++){
 			void *b = (void*)Lp::Sys::Actor::create<Game::BulletSuperLaser>(mgr->getBulletParent(), NULL);
@@ -1345,6 +1346,7 @@ Game::BulletMgr *extraBigLaserBulletHook(Game::BulletMgr *mgr){
 		}
 	} else{
 		// Split pool: KW and PC bullets for versus
+		// Model swap happens in bulletLoadHook (vtable hook on BulletSuperLaser::load)
 		Flexlion::BigLaserModeMgr::sCreateAsPrincessCannon = false;
 		for(int i = 0; i < ary->getValidInfoNum(); i++){
 			void *b = (void*)Lp::Sys::Actor::create<Game::BulletSuperLaser>(mgr->getBulletParent(), NULL);
