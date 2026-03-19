@@ -2,6 +2,7 @@
 #include "flexlion/ProcessMemory.hpp"
 #include "Cmn/Actor.h"
 #include "Cmn/IPlayerCustomInfo.h"
+#include "Lp/Sys/modelarc.h"
 
 namespace Flexlion {
 
@@ -17,6 +18,10 @@ typedef void (*SetLinkUserNameFn)(void*, const sead::SafeStringBase<char> *);
 
 // Dynamic getClassName flag: when true, Actor::create resolves XLink as "BulletSuperLaser" (Princess Cannon)
 bool BigLaserModeMgr::sCreateAsPrincessCannon = false;
+
+// Set by initWeaponXLink, read by setupWithModel — bridges the mode across the two calls
+// since iCustomPlayerInfo on the weapon may not be set yet at setupWithModel time.
+BigLaserMode BigLaserModeMgr::sLastCreateMode = cKillerWail;
 
 // Bullet pools: track pointers for per-shot elink/slink caching
 static void *sKWBullets[20];   // Killer Wail (BulletOldSuperLaser XLink)
@@ -45,6 +50,38 @@ void BigLaserModeMgr::resetBulletPools() {
 	sKWSLink = NULL;
 	sPCELink = NULL;
 	sPCSLink = NULL;
+}
+
+// Per-weapon tracking: weapon pointer + both pre-created models
+struct BigLaserWeaponTrack {
+	Cmn::PlayerWeapon *weapon;
+	BigLaserMode activeMode;
+	void *kwModel;  // OldBigLaser model (Killer Wail)
+	void *pcModel;  // BigLaser model (Princess Cannon)
+};
+
+static BigLaserWeaponTrack sWeaponTracks[10];
+static int sWeaponTrackCount = 0;
+
+void BigLaserModeMgr::trackWeapon(Cmn::PlayerWeapon *weapon, BigLaserMode setupMode) {
+	// Update existing entry if weapon already tracked
+	for (int i = 0; i < sWeaponTrackCount; i++) {
+		if (sWeaponTracks[i].weapon == weapon) {
+			sWeaponTracks[i].activeMode = setupMode;
+			return;
+		}
+	}
+	if (sWeaponTrackCount < 10) {
+		sWeaponTracks[sWeaponTrackCount].weapon = weapon;
+		sWeaponTracks[sWeaponTrackCount].activeMode = setupMode;
+		sWeaponTracks[sWeaponTrackCount].kwModel = NULL;
+		sWeaponTracks[sWeaponTrackCount].pcModel = NULL;
+		sWeaponTrackCount++;
+	}
+}
+
+void BigLaserModeMgr::resetWeaponTracking() {
+	sWeaponTrackCount = 0;
 }
 
 static bool isBulletPrincessCannon(void *bullet) {
@@ -123,6 +160,7 @@ Cmn::PlayerWeapon* BigLaserModeMgr::initWeaponXLink(Cmn::PlayerWeapon *weapon, v
 
 	// Default to KillerWail (S1) XLink name
 	char *xlinkName = (char *)"OldBigLaser";
+	sLastCreateMode = cKillerWail;
 
 	// Get player index from parent (PlayerCustomMgr+840 = IPlayerCustomInfo*)
 	if (sInstance && parent) {
@@ -131,6 +169,7 @@ Cmn::PlayerWeapon* BigLaserModeMgr::initWeaponXLink(Cmn::PlayerWeapon *weapon, v
 			Game::Player *player = info->vtable->getGamePlayer(info);
 			if (player) {
 				BigLaserMode mode = sInstance->getMode(player->mIndex);
+				sLastCreateMode = mode;
 				if (mode == cPrincessCannon) {
 					xlinkName = (char *)"BigLaser";
 				}
@@ -156,7 +195,149 @@ __attribute__((naked)) void BigLaserModeMgr::bigLaserJumpHook(){
 	asm("B _ZN3Cmn15PlayerCustomMgr27checkAndCreateSpecialWeaponEiNS_12PlayerCustom4KindEb_1D4");
 }
 
+// Function pointer to base PlayerWeapon::setupWithModel (IDA 0x710018983C, binary 0x18983C)
+static void (*sBaseSetupWithModel)(void*) = NULL;
+
+// Function pointer to model bone search (IDA 0x71017DE8D0, binary 0x17DE8D0)
+static int (*sFindBoneInModel)(void*, const sead::SafeStringBase<char>*) = NULL;
+
+// Model pre-registration: original sub_71003DEC68
+static void (*sOrigWeaponModelReg)(void*, u32, u32, char) = NULL;
+
+// Lp::Sys::ModelArc for OldBigLaser (loaded directly like rival/player model arcs)
+static Lp::Sys::ModelArc *sOldBigLaserArc = NULL;
+
+void BigLaserModeMgr::initModelHook() {
+	sBaseSetupWithModel = (decltype(sBaseSetupWithModel))ProcessMemory::MainAddr(0x18983C);
+	sFindBoneInModel = (decltype(sFindBoneInModel))ProcessMemory::MainAddr(0x17DE8D0);
+	sOrigWeaponModelReg = (decltype(sOrigWeaponModelReg))ProcessMemory::MainAddr(0x3DEC68);
+
+	// Load OldBigLaser archive early (same timing as KingSquid/Tornado ModelArcs)
+	sead::SafeStringBase<char> name = sead::SafeStringBase<char>::create("Wsp_OldBigLaser");
+	sOldBigLaserArc = new Lp::Sys::ModelArc(name, NULL, 0, NULL, NULL);
+}
+
+// Swap the active model on a tracked BigLaser weapon.
+// No model re-creation — both models were pre-created at setup time.
+// weapon+0x4F8 (cached model) is kept in sync so any future sBaseSetupWithModel
+// call by the game (e.g., during firing) uses the correct model.
+bool BigLaserModeMgr::checkAndResetupModel(Cmn::PlayerWeapon *weapon, BigLaserMode currentMode) {
+	for (int i = 0; i < sWeaponTrackCount; i++) {
+		if (sWeaponTracks[i].weapon != weapon) continue;
+		if (sWeaponTracks[i].activeMode == currentMode) return true;
+
+		void *targetModel = (currentMode == cKillerWail)
+			? sWeaponTracks[i].kwModel
+			: sWeaponTracks[i].pcModel;
+		if (!targetModel) return true;
+
+		*(void **)((char *)weapon + 0x338) = targetModel;
+		*(void **)((char *)weapon + 0x4F8) = targetModel;
+
+		sWeaponTracks[i].activeMode = currentMode;
+		return true;
+	}
+	return false;
+}
+
+// Called from bigLaserItemPickupHook — swaps pre-created model pointers.
+void BigLaserModeMgr::reSetupForPlayer(int playerIdx) {
+	for (int i = 0; i < sWeaponTrackCount; i++) {
+		Cmn::PlayerWeapon *w = sWeaponTracks[i].weapon;
+		if (!w || sWeaponTracks[i].activeMode == cPrincessCannon) continue;
+
+		if (!w->iCustomPlayerInfo) continue;
+		Game::Player *p = w->iCustomPlayerInfo->vtable->getGamePlayer(w->iCustomPlayerInfo);
+		if (!p || p->mIndex != playerIdx) continue;
+
+		void *pcModel = sWeaponTracks[i].pcModel;
+		if (!pcModel) break;
+
+		// Swap to PC model — no re-creation needed
+		*(void **)((char *)w + 0x338) = pcModel;
+		*(void **)((char *)w + 0x4F8) = pcModel;
+
+		// Re-find muzzle bone (same skeleton, but safety check)
+		sead::SafeStringBase<char> muzzleName("muzzle");
+		*(int *)((char *)w + 0x6B0) = sFindBoneInModel(pcModel, &muzzleName);
+
+		sWeaponTracks[i].activeMode = cPrincessCannon;
+		break;
+	}
+}
+
 } // namespace Flexlion
+
+// Wraps BL to sub_71003DEC68 at binary 0x3D08D4 (special weapon model pre-registration).
+void weaponModelPreRegHook(void *mgr, u32 type, u32 weaponId, char flag) {
+	if (!mgr) return;
+	Flexlion::sOrigWeaponModelReg(mgr, type, weaponId, flag);
+}
+
+// Replaces sub_71001A4EC0 (shared setupWithModel for all weapon types, binary 0x1A4EC0).
+// For BigLaser weapons: creates BOTH models at setup time (PC first, then KW).
+// Both models are pre-created so runtime switching is just a pointer swap —
+// no sBaseSetupWithModel re-call needed (which crashes from archive invalidation).
+// weapon+0x4F8 (cached model ptr) is kept in sync with the active model so the game's
+// own calls to sBaseSetupWithModel (e.g., during firing) use the correct model.
+void bigLaserSetupWithModelHook(Cmn::PlayerWeapon *weapon) {
+	if (!weapon) return;
+
+	char *weaponName = *(char **)((char *)weapon + 0x568);
+	bool isBigLaser = (weaponName && strcmp(weaponName, "Wsp_BigLaser") == 0
+	                   && Flexlion::sOldBigLaserArc != NULL);
+
+	if (isBigLaser) {
+		u64 origArchive = *(u64 *)((char *)weapon + 0x500);
+		char *origName = *(char **)((char *)weapon + 0x568);
+
+		// --- Step 1: Create PC model (BigLaser) with the original archive ---
+		Flexlion::sBaseSetupWithModel(weapon);
+		void *pcModel = *(void **)((char *)weapon + 0x338);
+
+		// --- Step 2: Create KW model (OldBigLaser) ---
+		*(u64 *)((char *)weapon + 0x500) = (u64)Flexlion::sOldBigLaserArc;
+		*(const char **)((char *)weapon + 0x568) = "Wsp_OldBigLaser";
+		*(u64 *)((char *)weapon + 0x4F8) = 0; // force re-creation
+		Flexlion::sBaseSetupWithModel(weapon);
+		void *kwModel = *(void **)((char *)weapon + 0x338);
+
+		// --- Step 3: Restore archive/name ---
+		*(u64 *)((char *)weapon + 0x500) = origArchive;
+		*(char **)((char *)weapon + 0x568) = origName;
+
+		// --- Step 4: Set initial active model based on mode ---
+		void *activeModel;
+		Flexlion::BigLaserMode initMode = Flexlion::BigLaserModeMgr::sLastCreateMode;
+		if (initMode == Flexlion::cKillerWail) {
+			activeModel = kwModel;
+		} else {
+			activeModel = pcModel;
+		}
+		*(void **)((char *)weapon + 0x338) = activeModel;
+		*(void **)((char *)weapon + 0x4F8) = activeModel;
+
+		// --- Step 5: Track both models ---
+		Flexlion::BigLaserModeMgr::trackWeapon(weapon, initMode);
+		// Store model pointers in the last tracked entry
+		for (int i = Flexlion::sWeaponTrackCount - 1; i >= 0; i--) {
+			if (Flexlion::sWeaponTracks[i].weapon == weapon) {
+				Flexlion::sWeaponTracks[i].kwModel = kwModel;
+				Flexlion::sWeaponTracks[i].pcModel = pcModel;
+				break;
+			}
+		}
+	} else {
+		Flexlion::sBaseSetupWithModel(weapon);
+	}
+
+	// Find "muzzle" bone in the active model
+	void *model = *(void **)((char *)weapon + 0x338);
+	if (model) {
+		sead::SafeStringBase<char> muzzleName("muzzle");
+		*(int *)((char *)weapon + 0x6B0) = Flexlion::sFindBoneInModel(model, &muzzleName);
+	}
+}
 
 // Shot hook: ensure the correct bullet type (KW vs PC) is used for each player's mode.
 //
@@ -236,8 +417,9 @@ void bigLaserItemPickupHook(Game::Player *player, int chargeValue) {
 	// Original behavior: *(player + 0xE40) = chargeValue
 	*(int*)((char*)player + 0xE40) = chargeValue;
 
-	// Set Princess Cannon mode
+	// Set Princess Cannon mode and re-setup weapon model (safe: we're in game logic phase)
 	if (Flexlion::BigLaserModeMgr::sInstance) {
 		Flexlion::BigLaserModeMgr::sInstance->setMode(player->mIndex, Flexlion::cPrincessCannon);
+		Flexlion::BigLaserModeMgr::reSetupForPlayer(player->mIndex);
 	}
 }

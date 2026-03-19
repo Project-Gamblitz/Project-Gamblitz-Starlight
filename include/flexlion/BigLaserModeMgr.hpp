@@ -32,6 +32,12 @@ public:
 	// Sets XLink user name on newly created BigLaser weapon
 	static Cmn::PlayerWeapon* initWeaponXLink(Cmn::PlayerWeapon *weapon, void *parent);
 
+	// Initialize model hook function pointers
+	static void initModelHook();
+
+	// Mode determined by initWeaponXLink, read by setupWithModel hook
+	static BigLaserMode sLastCreateMode;
+
 	// Split bullet pool: dynamic getClassName flag + tracking
 	static bool sCreateAsPrincessCannon;
 	static void registerBullet(void *bullet, bool isPrincessCannon);
@@ -46,6 +52,16 @@ public:
 	static void *sKWSLink;
 	static void *sPCELink;
 	static void *sPCSLink;
+
+	// Per-weapon tracking: both KW and PC models are pre-created at setup time.
+	// Runtime switching is a pointer swap (weapon+0x338 and 0x4F8), no re-creation.
+	static void trackWeapon(Cmn::PlayerWeapon *weapon, BigLaserMode setupMode);
+	static void resetWeaponTracking();
+	// Swaps active model pointer on tracked weapon (no model re-creation)
+	static bool checkAndResetupModel(Cmn::PlayerWeapon *weapon, BigLaserMode currentMode);
+
+	// Called from bigLaserItemPickupHook — swaps pre-created model pointers for PC mode.
+	static void reSetupForPlayer(int playerIdx);
 
 private:
 	BigLaserMode mMode[10];

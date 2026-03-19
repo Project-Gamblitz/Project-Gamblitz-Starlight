@@ -731,6 +731,7 @@ void init_starlion(){
 	new Game::PlayerWeaponTornado();
 	bigLaserModeMgr = new Flexlion::BigLaserModeMgr();
 	Flexlion::BigLaserModeMgr::initHook();
+	Flexlion::BigLaserModeMgr::initModelHook();
 	tornadoMgr = new Flexlion::InkstrikeMgr();
 	FsLogger::LogFormatDefaultDirect("[Gamblitz] Created InkstrikeMgr, 0x%x free RAM.\n", Collector::mHeapMgr->getCurrentHeap()->getFreeSize());
 	_BYTE randomBuf[0x28];
@@ -1109,6 +1110,8 @@ void hooks_init(){
 	extraBigLaserBulletHook(NULL);
 	bulletSuperLaserShotHook(NULL, NULL, 0, 0, NULL, NULL, 0);
 	bigLaserItemPickupHook(NULL, 0);
+	bigLaserSetupWithModelHook(NULL);
+	weaponModelPreRegHook(NULL, 0, 0, 0);
 	bulletSuperLaserGetClassNameOverride();
 	jetPackJetHook(0);
 	curl_easy_perform_hook(NULL);
@@ -1311,6 +1314,7 @@ Game::BulletMgr *extraBigLaserBulletHook(Game::BulletMgr *mgr){
 	}
 	Cmn::PlayerInfoAry *ary = Cmn::StaticMem::sInstance->mPlayerInfoAry;
 	Flexlion::BigLaserModeMgr::resetBulletPools();
+	Flexlion::BigLaserModeMgr::resetWeaponTracking();
 	if(mode != Cmn::Def::Mode::cVersus){
 		// Split pool: Killer Wail bullets (BulletOldSuperLaser XLink)
 		Flexlion::BigLaserModeMgr::sCreateAsPrincessCannon = false;
@@ -1391,14 +1395,9 @@ int weaponFixHook(gsys::Model *model, sead::SafeStringBase<char> lol){
 }
 
 void playerModelDrawHook(Cmn::PlayerWeapon *playerWeapon, sead::Matrix34<float> *mtx){
+	// Model re-setup is now done in bigLaserItemPickupHook (game logic phase).
+	// Calling sBaseSetupWithModel during draw phase crashes (NULL model from heap/render state mismatch).
 	playerWeapon->getRootBoneMtx(mtx);
-	if(playerWeapon->iCustomPlayerInfo == NULL){ 
-		return;
-	}
-	Game::Player *player = playerWeapon->iCustomPlayerInfo->vtable->getGamePlayer(playerWeapon->iCustomPlayerInfo);
-	if(player == NULL){
-		return;
-	}
 }
 
 bool clamCalcSleepHook(Game::VictoryClamHolding *clam){

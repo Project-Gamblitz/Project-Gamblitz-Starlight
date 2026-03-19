@@ -54,6 +54,10 @@
 
 // BigLaserItemOnline pickup -> set Princess Cannon mode
 00D68320 BL bigLaserItemPickupHook
+// PlayerWeaponBigLaser::setupWithModel -> swap model name for KW
+001A4EC0 B bigLaserSetupWithModelHook
+// Special weapon model pre-registration -> also register Wsp_OldBigLaser
+003D08D4 BL weaponModelPreRegHook
 // Player Weapon Mtx stuff
 0018A7EC+34 BL playerModelDrawHook
 
