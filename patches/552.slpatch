@@ -228,6 +228,14 @@
 01498ED4 1F150071 // cmp 4 -> 5
 014989AC BL LobbyRivalFixHook // create our rival
 01498B60 BL LobbyRivalGetPlayerTypeHook // map rival -> 4
+014B2A6C 3F150071 // cmp 4 -> 5
+014B28F4 3F150071 // cmp 4 -> 5
+014B2794 3F150071 // cmp 4 -> 5
+014B26E0 3F150071 // cmp 4 -> 5
+014B21D0 3F150071 // cmp 4 -> 5
+014B21AC DF160071 // cmp 4 -> 5
+014B2180 BL LobbyRivalGetPlayerTypeHook
+003A5790 3F150071
 
 //Remove splatfest from vs select
 014B2484 00008052
