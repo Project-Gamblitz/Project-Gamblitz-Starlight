@@ -640,6 +640,31 @@ CURLcode curl_easy_perform_hook(CURL *curl){
 	return curl_easy_perform(curl);
 }
 
+// Hook for human form registAnim: strips BigLaserP → BigLaser (KW default),
+// caches BigLaserP clip IDs for later PC mode swap on pickup.
+void registBigLaserAnimHumanHook(Game::PlayerAnimCtrlSet *animCtrlSet, int a1, char const*a2, bool a3, bool a4) {
+	register Game::PlayerMotion *motion asm("x19");
+
+	char s1Name[64];
+	const char *useName = a2;
+	const char *pPos = (a2 != NULL) ? strstr(a2, "BigLaserP") : NULL;
+
+	if (pPos != NULL) {
+		// Cache BigLaserP clip ID before stripping P (for later PC mode swap)
+		if (motion && motion->mPlayer) {
+			Flexlion::BigLaserModeMgr::cacheAnimClipId(animCtrlSet, motion->mPlayer->mIndex, a1, a2);
+		}
+
+		// Strip P for KW (default mode)
+		int prefixLen = (int)(pPos - a2) + 8; // includes "BigLaser" (8 chars)
+		memcpy(s1Name, a2, prefixLen);
+		strcpy(s1Name + prefixLen, pPos + 9); // skip the P, copy rest including null
+		useName = s1Name;
+	}
+
+	animCtrlSet->registAnim(a1, useName, a3, a4);
+}
+
 void registKingSquidAnimHook(Game::PlayerAnimCtrlSet *animCtrlSet, int a1,char const*a2,bool a3,bool a4){
 	register Game::PlayerMotion *motion asm("x19");
 	Starlion::PlayerKingSquid* kingsquid = ((Starlion::PlayerKingSquid*)motion->mPlayer->mPlayerKingSquid);
@@ -732,6 +757,7 @@ void init_starlion(){
 	bigLaserModeMgr = new Flexlion::BigLaserModeMgr();
 	Flexlion::BigLaserModeMgr::initHook();
 	Flexlion::BigLaserModeMgr::initModelHook();
+	Flexlion::BigLaserModeMgr::initAnimHook();
 	tornadoMgr = new Flexlion::InkstrikeMgr();
 	FsLogger::LogFormatDefaultDirect("[Gamblitz] Created InkstrikeMgr, 0x%x free RAM.\n", Collector::mHeapMgr->getCurrentHeap()->getFreeSize());
 	_BYTE randomBuf[0x28];
@@ -1129,6 +1155,7 @@ void hooks_init(){
 	playerModelSetupHook(NULL);
 	playerKingSquidCalcHook(NULL);
 	handleDisplayVersion(NULL);
+	registBigLaserAnimHumanHook(NULL, 0, NULL, 0, 0);
 	registKingSquidAnimHook(NULL, 0, NULL, 0, 0);
 	setupKingSquidAnimHook(NULL, NULL);
 	kingSquidAnimSetControllerHook(NULL, NULL);

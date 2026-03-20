@@ -61,6 +61,7 @@ void BigLaserModeMgr::resetBulletPools() {
 	sOrigTrieV6 = NULL;
 	sOrigTrieV10 = NULL;
 	sOldBigLaserModelRegistered = false;
+	resetAnimCache();
 }
 
 // Per-weapon tracking: weapon pointer + both pre-created models
@@ -465,6 +466,82 @@ void BigLaserModeMgr::reSetupForPlayer(int playerIdx) {
 	}
 }
 
+// --- BigLaser animation mode switching ---
+// Animation name resolution: sub_71017E3EC8(animResource, &safeString) → clipId in lower 32 bits
+static u64 (*sResolveAnimClip)(u64, void*) = NULL;
+
+// Per-player BigLaser animation clip cache (human form only)
+struct BigLaserAnimClip {
+	int animIdx;
+	u32 pcClipId;  // BigLaserP clip ID (for PC mode)
+};
+
+#define MAX_BL_ANIMS 12
+static BigLaserAnimClip sAnimClipCache[10][MAX_BL_ANIMS];
+static int sAnimClipCacheCount[10] = {};
+
+void BigLaserModeMgr::initAnimHook() {
+	sResolveAnimClip = (decltype(sResolveAnimClip))ProcessMemory::MainAddr(0x17E3EC8);
+}
+
+void BigLaserModeMgr::resetAnimCache() {
+	for (int i = 0; i < 10; i++) sAnimClipCacheCount[i] = 0;
+}
+
+void BigLaserModeMgr::cacheAnimClipId(void *animCtrlSet, int playerIdx, int animIdx, const char *pcName) {
+	// Lazy init (registration may fire before initAnimHook)
+	if (!sResolveAnimClip) {
+		sResolveAnimClip = (decltype(sResolveAnimClip))ProcessMemory::MainAddr(0x17E3EC8);
+	}
+	if (!sResolveAnimClip || playerIdx < 0 || playerIdx >= 10) return;
+
+	// Get animation resource from AnimCtrlSet (+320 → inner, +208 → animRes)
+	u64 inner = *(u64 *)((u8 *)animCtrlSet + 320);
+	if (!inner) return;
+	u64 animRes = *(u64 *)(inner + 208);
+	if (!animRes) return;
+
+	// Resolve BigLaserP clip ID
+	sead::SafeStringBase<char> nameStr(pcName);
+	u32 pcClip = (u32)sResolveAnimClip(animRes, &nameStr);
+
+	// Don't cache if animation not found
+	if ((u16)pcClip == 0xFFFF) return;
+
+	int &count = sAnimClipCacheCount[playerIdx];
+	if (count >= MAX_BL_ANIMS) return;
+
+	// Check for duplicate
+	for (int i = 0; i < count; i++) {
+		if (sAnimClipCache[playerIdx][i].animIdx == animIdx) return;
+	}
+
+	sAnimClipCache[playerIdx][count].animIdx = animIdx;
+	sAnimClipCache[playerIdx][count].pcClipId = pcClip;
+	count++;
+}
+
+void BigLaserModeMgr::swapPlayerAnimsToPC(Game::Player *player) {
+	if (!player) return;
+	int idx = player->mIndex;
+	if (idx < 0 || idx >= 10) return;
+
+	Game::PlayerMotion *motion = player->mPlayerMotion;
+	if (!motion) return;
+
+	Game::PlayerAnimCtrlSet *humanAcs = motion->mPlayerAnimCtrlSet;
+	if (!humanAcs) return;
+
+	u64 clipArrayBase = *(u64 *)((u8 *)humanAcs + 16);
+	if (!clipArrayBase) return;
+
+	for (int i = 0; i < sAnimClipCacheCount[idx]; i++) {
+		int aIdx = sAnimClipCache[idx][i].animIdx;
+		u32 *clipPtr = *(u32 **)(clipArrayBase + 8 * aIdx);
+		if (clipPtr) *clipPtr = sAnimClipCache[idx][i].pcClipId;
+	}
+}
+
 } // namespace Flexlion
 
 // Wraps BL to sub_71003DEC68 at binary 0x3D08D4 (special weapon model pre-registration).
@@ -654,9 +731,10 @@ void bigLaserItemPickupHook(Game::Player *player, int chargeValue) {
 	// Original behavior: *(player + 0xE40) = chargeValue
 	*(int*)((char*)player + 0xE40) = chargeValue;
 
-	// Set Princess Cannon mode and re-setup weapon model (safe: we're in game logic phase)
+	// Set Princess Cannon mode, re-setup weapon model, and swap animations
 	if (Flexlion::BigLaserModeMgr::sInstance) {
 		Flexlion::BigLaserModeMgr::sInstance->setMode(player->mIndex, Flexlion::cPrincessCannon);
 		Flexlion::BigLaserModeMgr::reSetupForPlayer(player->mIndex);
+		Flexlion::BigLaserModeMgr::swapPlayerAnimsToPC(player);
 	}
 }

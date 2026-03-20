@@ -9,6 +9,7 @@
 01002410+34 BL playerKingSquidCalcHook
 010F1AC4+7D0 BL kingSquidAnimSetControllerHook
 010F1AC4+6EC BL setupKingSquidAnimHook
+010F1AC4+3DC BL registBigLaserAnimHumanHook
 010F1AC4+3F4 BL registKingSquidAnimHook
 00FF81E4+2048:
 	LDR X0, [X19, #0xF50]

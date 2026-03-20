@@ -87,6 +87,7 @@ bool princessCannonHook(bool val);
 void bulletSuperLaserShotHook(void *bullet, void *player, int weaponId1, int weaponId2,
                               sead::Vector3<float> *pos, sead::Vector3<float> *dir, int param);
 void bigLaserItemPickupHook(Game::Player *player, int chargeValue);
+void registBigLaserAnimHumanHook(Game::PlayerAnimCtrlSet *animCtrlSet, int a1, char const*a2, bool a3, bool a4);
 void bigLaserSetupWithModelHook(Cmn::PlayerWeapon *weapon);
 void weaponModelPreRegHook(void *mgr, u32 type, u32 weaponId, char flag);
 const char *bulletSuperLaserGetClassNameOverride();

@@ -75,6 +75,12 @@ public:
 	// Construct KW param set (must be called after param manager is initialized)
 	static void initParamSets();
 
+	// BigLaser animation mode switching (human form)
+	static void initAnimHook();
+	static void cacheAnimClipId(void *animCtrlSet, int playerIdx, int animIdx, const char *pcName);
+	static void swapPlayerAnimsToPC(Game::Player *player);
+	static void resetAnimCache();
+
 private:
 	BigLaserMode mMode[10];
 };
