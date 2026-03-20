@@ -1315,6 +1315,7 @@ Game::BulletMgr *extraBigLaserBulletHook(Game::BulletMgr *mgr){
 	Cmn::PlayerInfoAry *ary = Cmn::StaticMem::sInstance->mPlayerInfoAry;
 	Flexlion::BigLaserModeMgr::resetBulletPools();
 	Flexlion::BigLaserModeMgr::resetWeaponTracking();
+	Flexlion::BigLaserModeMgr::initParamSets();
 	if(mode != Cmn::Def::Mode::cVersus){
 		// Split pool: Killer Wail bullets (BulletOldSuperLaser XLink + OldBigLaser model)
 		// Model swap happens in bulletLoadHook (vtable hook on BulletSuperLaser::load)

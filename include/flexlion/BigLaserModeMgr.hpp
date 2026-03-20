@@ -69,6 +69,12 @@ public:
 	// Vtable hook for BulletSuperLaser::load — wraps with trie swap for KW bullets
 	static void bulletLoadHook(void *bullet);
 
+	// Vtable hook for BulletSuperLaser::firstCalc — swaps param set for KW vs PC
+	static void bulletFirstCalcHook(void *bullet);
+
+	// Construct KW param set (must be called after param manager is initialized)
+	static void initParamSets();
+
 private:
 	BigLaserMode mMode[10];
 };

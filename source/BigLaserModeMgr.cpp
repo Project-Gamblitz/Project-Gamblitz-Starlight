@@ -1,5 +1,6 @@
 #include "flexlion/BigLaserModeMgr.hpp"
 #include "flexlion/ProcessMemory.hpp"
+#include "flexlion/Utils.hpp"
 #include "Cmn/Actor.h"
 #include "Cmn/IPlayerCustomInfo.h"
 #include "Lp/Sys/modelarc.h"
@@ -257,6 +258,107 @@ void BigLaserModeMgr::swapBulletModelArchive(bool useOldBigLaser) {
 // Original BulletSuperLaser::load (saved from vtable before patching)
 static void (*sOrigBulletSuperLaserLoad)(void*) = NULL;
 
+// Original BulletSuperLaser::firstCalc (saved from vtable before patching)
+static void (*sOrigBulletFirstCalc)(void*) = NULL;
+
+// SuperLaser param constructor: sub_71013C3294(void *paramSet, int flags)
+static void (*sSuperLaserParamCtor)(void*, int) = NULL;
+// SuperLaser bprm loader: sub_71013C3164(void *paramSet, const char *name)
+static void (*sSuperLaserBprmLoad)(void*, const char*) = NULL;
+
+// SuperLaser param set management: KW uses OldSuperLaser.bprm, PC uses SuperLaser.bprm.
+// We cache pointers to each param's value storage within the ORIGINAL set and do
+// in-place value swaps per-bullet. Game is single-threaded so this is safe.
+
+#define SUPERLASER_PARAM_COUNT 14
+
+// Byte offsets of each param object within the 0x370-byte param set
+static const int sParamByteOffsets[SUPERLASER_PARAM_COUNT] = {
+	208, 256, 304, 352, 400, 448, 496, 544, 592, 640, 688, 736, 784, 832
+};
+
+// KW values loaded from OldSuperLaser.bprm at init time (mutable, filled by initParamSets)
+static u32 sKWValues[SUPERLASER_PARAM_COUNT];
+
+// Cached pointers to each param's value storage (from getValue virtual call)
+static void *sParamValuePtrs[SUPERLASER_PARAM_COUNT];
+// Saved PC (bprm) values — restored after each KW bullet calc
+static u32 sSavedPCValues[SUPERLASER_PARAM_COUNT];
+static bool sParamPtrsCached = false;
+
+// Cache pointers to each param's value storage within the original param set,
+// then construct a temporary param set, load OldSuperLaser.bprm into it, and
+// extract the 14 param values to use for KW bullets.
+void BigLaserModeMgr::initParamSets() {
+	if (sParamPtrsCached) return;
+	if (!sSuperLaserParamCtor || !sSuperLaserBprmLoad) return;
+
+	u64 paramMgr = *(u64 *)ProcessMemory::MainAddr(0x2E6BEA0);
+	if (!paramMgr) return;
+
+	u64 paramSet = *(u64 *)(paramMgr + 896);
+	if (!paramSet) return;
+
+	// Cache pointers to PC param values (from the game's original SuperLaser.bprm set)
+	for (int i = 0; i < SUPERLASER_PARAM_COUNT; i++) {
+		u8 *paramObj = (u8 *)paramSet + sParamByteOffsets[i];
+		u64 vtable = *(u64 *)paramObj;
+		u64 fn = *(u64 *)(vtable + 216); // getValue virtual
+		sParamValuePtrs[i] = ((void *(*)(void *))fn)(paramObj);
+	}
+
+	// Construct a temporary param set on the starlight heap, load OldSuperLaser.bprm,
+	// and extract the 14 param values for KW bullets.
+	sead::Heap *heap = Utils::getStarlightHeap();
+	void *tempSet = heap->tryAlloc(0x370, 8);
+	if (tempSet) {
+		sSuperLaserParamCtor(tempSet, 0);
+		sSuperLaserBprmLoad(tempSet, "OldSuperLaser");
+
+		for (int i = 0; i < SUPERLASER_PARAM_COUNT; i++) {
+			u8 *paramObj = (u8 *)tempSet + sParamByteOffsets[i];
+			u64 vtable = *(u64 *)paramObj;
+			u64 fn = *(u64 *)(vtable + 216); // getValue virtual
+			void *valPtr = ((void *(*)(void *))fn)(paramObj);
+			if (i == 8) { // mKnockBackNoBarrierOff is u8
+				sKWValues[i] = *(u8 *)valPtr;
+			} else {
+				sKWValues[i] = *(u32 *)valPtr;
+			}
+		}
+		// Note: tempSet leaks on the starlight heap (0x370 bytes, once per game boot).
+		// Acceptable tradeoff — no destructor available and heap persists.
+	}
+
+	sParamPtrsCached = true;
+}
+
+// Overwrite param values in-place with KW defaults, saving PC originals.
+static void swapToKW() {
+	if (!sParamPtrsCached) return;
+	for (int i = 0; i < SUPERLASER_PARAM_COUNT; i++) {
+		if (i == 8) { // mKnockBackNoBarrierOff is u8
+			sSavedPCValues[i] = *(u8 *)sParamValuePtrs[i];
+			*(u8 *)sParamValuePtrs[i] = (u8)sKWValues[i];
+		} else {
+			sSavedPCValues[i] = *(u32 *)sParamValuePtrs[i];
+			*(u32 *)sParamValuePtrs[i] = sKWValues[i];
+		}
+	}
+}
+
+// Restore PC (bprm) values after KW bullet calc.
+static void restorePC() {
+	if (!sParamPtrsCached) return;
+	for (int i = 0; i < SUPERLASER_PARAM_COUNT; i++) {
+		if (i == 8) {
+			*(u8 *)sParamValuePtrs[i] = (u8)sSavedPCValues[i];
+		} else {
+			*(u32 *)sParamValuePtrs[i] = sSavedPCValues[i];
+		}
+	}
+}
+
 void BigLaserModeMgr::initModelHook() {
 	sBaseSetupWithModel = (decltype(sBaseSetupWithModel))ProcessMemory::MainAddr(0x18983C);
 	sFindBoneInModel = (decltype(sFindBoneInModel))ProcessMemory::MainAddr(0x17DE8D0);
@@ -264,6 +366,8 @@ void BigLaserModeMgr::initModelHook() {
 	sTrieGetByIndex = (decltype(sTrieGetByIndex))ProcessMemory::MainAddr(0x9768);
 	sTrieNameLookup = (decltype(sTrieNameLookup))ProcessMemory::MainAddr(0x877BC);
 	sRegisterModelArchive = (decltype(sRegisterModelArchive))ProcessMemory::MainAddr(0x3B6010);
+	sSuperLaserParamCtor = (decltype(sSuperLaserParamCtor))ProcessMemory::MainAddr(0x13C3294);
+	sSuperLaserBprmLoad = (decltype(sSuperLaserBprmLoad))ProcessMemory::MainAddr(0x13C3164);
 
 	// Load OldBigLaser archive early (same timing as KingSquid/Tornado ModelArcs)
 	sead::SafeStringBase<char> name = sead::SafeStringBase<char>::create("Wsp_OldBigLaser");
@@ -275,6 +379,11 @@ void BigLaserModeMgr::initModelHook() {
 	Cmn::ActorVtable *bslVtable = (Cmn::ActorVtable *)ProcessMemory::MainAddr(0x2a46e90);
 	sOrigBulletSuperLaserLoad = (void (*)(void *))bslVtable->load;
 	bslVtable->load = (u64)BigLaserModeMgr::bulletLoadHook;
+
+	// Hook BulletSuperLaser::firstCalc for per-bullet param set swapping (KW vs PC).
+	// firstCalc drives the state machine which calls cState_Shot calc and reads params.
+	sOrigBulletFirstCalc = (void (*)(void *))bslVtable->firstCalc;
+	bslVtable->firstCalc = (u64)BigLaserModeMgr::bulletFirstCalcHook;
 }
 
 // Vtable hook for BulletSuperLaser::load.
@@ -289,6 +398,21 @@ void BigLaserModeMgr::bulletLoadHook(void *bullet) {
 	sOrigBulletSuperLaserLoad(bullet);
 	if (isKW) {
 		swapBulletModelArchive(false);
+	}
+}
+
+// Vtable hook for BulletSuperLaser::firstCalc.
+// Overwrites param values in-place with KW defaults for KW bullets,
+// restores PC values after the original firstCalc completes.
+void BigLaserModeMgr::bulletFirstCalcHook(void *bullet) {
+	if (!sParamPtrsCached) initParamSets(); // lazy init (stage load may precede first render)
+	bool isKW = !isBulletPrincessCannon(bullet);
+	if (isKW && sParamPtrsCached) {
+		swapToKW();
+	}
+	sOrigBulletFirstCalc(bullet);
+	if (isKW && sParamPtrsCached) {
+		restorePC();
 	}
 }
 
@@ -501,8 +625,21 @@ void bulletSuperLaserShotHook(void *bullet, void *player, int weaponId1, int wea
 		}
 	}
 
+	// Lazy init (stage load may precede first render where initModelHook sets function ptrs)
+	if (!Flexlion::sParamPtrsCached) Flexlion::BigLaserModeMgr::initParamSets();
+
+	// Swap param values in-place so KW bullets use OldSuperLaser.bprm values during shot setup
+	bool shotIsKW = !Flexlion::isBulletPrincessCannon(shotBullet);
+	if (shotIsKW && Flexlion::sParamPtrsCached) {
+		Flexlion::swapToKW();
+	}
+
 	// Call original BulletSuperLaser::shot on the (possibly swapped) bullet
 	Flexlion::sBulletSuperLaserShotOrig(shotBullet, player, weaponId1, weaponId2, pos, dir, param);
+
+	if (shotIsKW && Flexlion::sParamPtrsCached) {
+		Flexlion::restorePC();
+	}
 }
 
 // Replaces BulletSuperLaser::getClassName (binary 0x58ACB4) via slpatch B redirect.
