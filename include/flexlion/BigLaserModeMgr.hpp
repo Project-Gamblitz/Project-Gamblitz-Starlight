@@ -81,6 +81,11 @@ public:
 	static void swapPlayerAnimsToPC(Game::Player *player);
 	static void swapPlayerAnimsToKW(Game::Player *player);
 	static void resetAnimCache();
+	
+	static void playerFirstCalc(Game::Player *player, int currentFrame);
+	static void reSetupForPlayerKW(int playerIdx);
+	static void swapPlayerAnimsToKW(Game::Player *player);
+	int mPCEndFrame[10];  // field in the class
 
 	// Reverse of reSetupForPlayer — swaps model back to KW
 	static void reSetupForPlayerKW(int playerIdx);
