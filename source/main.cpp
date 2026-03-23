@@ -311,9 +311,6 @@ void playerFirstCalcHook(Game::Player *player){
 	tornadoMgr->playerFirstCalc(player);
 	Game::PlayerWeaponTornado::sInstance->playerFirstCalc(player);
 	Game::PlayerWeaponSuperShot::sInstance->playerFirstCalc(player);
-    if (bigLaserModeMgr != NULL) {
-        Flexlion::BigLaserModeMgr::playerFirstCalc(player, Game::MainMgr::sInstance->mPaintGameFrame);
-    }
 
 }
 
@@ -1375,8 +1372,7 @@ Game::BulletMgr *extraBigLaserBulletHook(Game::BulletMgr *mgr){
 				Lp::Sys::Actor::create<Game::BulletSpSuperBall>(mgr->getBulletParent(), NULL);
 			}
 		}
-	} 
-	else{
+	} else{
 		// Split pool: KW and PC bullets for versus
 		// Model swap happens in bulletLoadHook (vtable hook on BulletSuperLaser::load)
 		Flexlion::BigLaserModeMgr::sCreateAsPrincessCannon = false;
