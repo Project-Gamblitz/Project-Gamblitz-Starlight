@@ -11,7 +11,6 @@
 *.o
 *.til
 *.pchtxt
-*.Nin_NX_NVN.szs
 .vscode/
 temp/
 Spl2_RE/
