@@ -5,6 +5,21 @@
 #include "Cmn/IPlayerCustomInfo.h"
 #include "Lp/Sys/modelarc.h"
 
+extern "C" {
+    extern u8 _ZTVN4Game27MessagePlayerPerformSpecialE[];
+    extern void *_ZN3Cmn18MessageBroadcaster9sInstanceE;
+    void _ZN3Cmn17MessageDispatcher15dispatchMessageERKNS_7MessageE(void *, const void *);
+}
+
+static void dispatchPerformSpecial(Game::Player *player) {
+    u64 msg[2];
+    msg[0] = (u64)(_ZTVN4Game27MessagePlayerPerformSpecialE + 0x10);
+    msg[1] = (u64)player;
+    if (_ZN3Cmn18MessageBroadcaster9sInstanceE)
+        _ZN3Cmn17MessageDispatcher15dispatchMessageERKNS_7MessageE(
+            _ZN3Cmn18MessageBroadcaster9sInstanceE, msg);
+}
+
 namespace Flexlion {
 
 BigLaserModeMgr *BigLaserModeMgr::sInstance = NULL;
@@ -709,6 +724,11 @@ void bulletSuperLaserShotHook(void *bullet, void *player, int weaponId1, int wea
 	bool shotIsKW = !Flexlion::isBulletPrincessCannon(shotBullet);
 	if (shotIsKW && Flexlion::sParamPtrsCached) {
 		Flexlion::swapToKW();
+	}
+
+	// Count Killer Wail shots toward the results screen special count
+	if (shotIsKW && player != NULL) {
+		dispatchPerformSpecial((Game::Player *)player);
 	}
 
 	// Call original BulletSuperLaser::shot on the (possibly swapped) bullet
