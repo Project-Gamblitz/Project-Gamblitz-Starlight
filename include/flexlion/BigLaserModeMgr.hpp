@@ -79,7 +79,11 @@ public:
 	static void initAnimHook();
 	static void cacheAnimClipId(void *animCtrlSet, int playerIdx, int animIdx, const char *pcName);
 	static void swapPlayerAnimsToPC(Game::Player *player);
+	static void swapPlayerAnimsToKW(Game::Player *player);
 	static void resetAnimCache();
+
+	// Reverse of reSetupForPlayer — swaps model back to KW
+	static void reSetupForPlayerKW(int playerIdx);
 
 private:
 	BigLaserMode mMode[10];
