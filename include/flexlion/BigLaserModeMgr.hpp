@@ -80,6 +80,11 @@ public:
 	static void cacheAnimClipId(void *animCtrlSet, int playerIdx, int animIdx, const char *pcName);
 	static void swapPlayerAnimsToPC(Game::Player *player);
 	static void resetAnimCache();
+	
+	static void playerFirstCalc(Game::Player *player, int currentFrame);
+	static void reSetupForPlayerKW(int playerIdx);
+	static void swapPlayerAnimsToKW(Game::Player *player);
+	int mPCEndFrame[10];  // field in the class
 
 private:
 	BigLaserMode mMode[10];

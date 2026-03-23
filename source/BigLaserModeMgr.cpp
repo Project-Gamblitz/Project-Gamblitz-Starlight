@@ -4,6 +4,7 @@
 #include "Cmn/Actor.h"
 #include "Cmn/IPlayerCustomInfo.h"
 #include "Lp/Sys/modelarc.h"
+#include "Game/MainMgr.h"
 
 extern "C" {
     extern u8 _ZTVN4Game27MessagePlayerPerformSpecialE[];
@@ -66,17 +67,17 @@ void BigLaserModeMgr::registerBullet(void *bullet, bool isPrincessCannon) {
 }
 
 void BigLaserModeMgr::resetBulletPools() {
-	sKWCount = 0;
-	sPCCount = 0;
-	sKWELink = NULL;
-	sKWSLink = NULL;
-	sPCELink = NULL;
-	sPCSLink = NULL;
-	sBigLaserTrieEntry = 0;
-	sOrigTrieV6 = NULL;
-	sOrigTrieV10 = NULL;
-	sOldBigLaserModelRegistered = false;
-	resetAnimCache();
+    sKWCount = 0;
+    sPCCount = 0;
+    sKWELink = NULL;
+    sKWSLink = NULL;
+    sPCELink = NULL;
+    sPCSLink = NULL;
+    sBigLaserTrieEntry = 0;
+    sOrigTrieV6 = NULL;
+    sOrigTrieV10 = NULL;
+    sOldBigLaserModelRegistered = false;
+    resetAnimCache();
 }
 
 // Per-weapon tracking: weapon pointer + both pre-created models
@@ -168,6 +169,7 @@ void BigLaserModeMgr::setMode(int playerIdx, BigLaserMode mode){
 void BigLaserModeMgr::reset(){
 	for(int i = 0; i < 10; i++){
 		mMode[i] = cKillerWail;
+		mPCEndFrame[i] = 0;
 	}
 }
 
@@ -489,6 +491,7 @@ static u64 (*sResolveAnimClip)(u64, void*) = NULL;
 struct BigLaserAnimClip {
 	int animIdx;
 	u32 pcClipId;  // BigLaserP clip ID (for PC mode)
+    u32 kwClipId; 
 };
 
 #define MAX_BL_ANIMS 12
@@ -530,9 +533,20 @@ void BigLaserModeMgr::cacheAnimClipId(void *animCtrlSet, int playerIdx, int anim
 	for (int i = 0; i < count; i++) {
 		if (sAnimClipCache[playerIdx][i].animIdx == animIdx) return;
 	}
+	
+	// Resolve KW clip ID (strip the P from BigLaserP)
+	char kwName[64];
+	const char *pPos2 = strstr(pcName, "BigLaserP");
+	int prefixLen = (int)(pPos2 - pcName) + 8;
+	memcpy(kwName, pcName, prefixLen);
+	strcpy(kwName + prefixLen, pPos2 + 9);
+	sead::SafeStringBase<char> kwNameStr(kwName);
+	u32 kwClip = (u32)sResolveAnimClip(animRes, &kwNameStr);
+	if ((u16)kwClip == 0xFFFF) return;
 
 	sAnimClipCache[playerIdx][count].animIdx = animIdx;
 	sAnimClipCache[playerIdx][count].pcClipId = pcClip;
+    sAnimClipCache[playerIdx][count].kwClipId = kwClip; 
 	count++;
 }
 
@@ -555,6 +569,65 @@ void BigLaserModeMgr::swapPlayerAnimsToPC(Game::Player *player) {
 		u32 *clipPtr = *(u32 **)(clipArrayBase + 8 * aIdx);
 		if (clipPtr) *clipPtr = sAnimClipCache[idx][i].pcClipId;
 	}
+}
+
+void BigLaserModeMgr::swapPlayerAnimsToKW(Game::Player *player) {
+    if (!player) return;
+    int idx = player->mIndex;
+    if (idx < 0 || idx >= 10) return;
+
+    Game::PlayerMotion *motion = player->mPlayerMotion;
+    if (!motion) return;
+
+    Game::PlayerAnimCtrlSet *humanAcs = motion->mPlayerAnimCtrlSet;
+    if (!humanAcs) return;
+
+    u64 clipArrayBase = *(u64 *)((u8 *)humanAcs + 16);
+    if (!clipArrayBase) return;
+
+    for (int i = 0; i < sAnimClipCacheCount[idx]; i++) {
+        int aIdx = sAnimClipCache[idx][i].animIdx;
+        u32 *clipPtr = *(u32 **)(clipArrayBase + 8 * aIdx);
+        if (clipPtr) *clipPtr = sAnimClipCache[idx][i].kwClipId;
+    }
+}
+
+void BigLaserModeMgr::reSetupForPlayerKW(int playerIdx) {
+    for (int i = 0; i < sWeaponTrackCount; i++) {
+        Cmn::PlayerWeapon *w = sWeaponTracks[i].weapon;
+        if (!w || sWeaponTracks[i].activeMode == cKillerWail) continue;
+
+        if (!w->iCustomPlayerInfo) continue;
+        Game::Player *p = w->iCustomPlayerInfo->vtable->getGamePlayer(w->iCustomPlayerInfo);
+        if (!p || p->mIndex != playerIdx) continue;
+
+        void *kwModel = sWeaponTracks[i].kwModel;
+        if (!kwModel) break;
+
+        *(void **)((char *)w + 0x338) = kwModel;
+        *(void **)((char *)w + 0x4F8) = kwModel;
+
+        sead::SafeStringBase<char> muzzleName("muzzle");
+        *(int *)((char *)w + 0x6B0) = sFindBoneInModel(kwModel, &muzzleName);
+
+        sWeaponTracks[i].activeMode = cKillerWail;
+        break;
+    }
+}
+
+void BigLaserModeMgr::playerFirstCalc(Game::Player *player, int currentFrame) {
+    if (!sInstance || !player) return;
+    int idx = player->mIndex;
+    if (idx < 0 || idx >= 10) return;
+
+    if (sInstance->mMode[idx] == cPrincessCannon && sInstance->mPCEndFrame[idx] > 0) {
+        if (currentFrame >= sInstance->mPCEndFrame[idx]) {
+            sInstance->mPCEndFrame[idx] = 0;
+            sInstance->setMode(idx, cKillerWail);
+            reSetupForPlayerKW(idx);
+            swapPlayerAnimsToKW(player);
+        }
+    }
 }
 
 } // namespace Flexlion
@@ -725,11 +798,12 @@ void bulletSuperLaserShotHook(void *bullet, void *player, int weaponId1, int wea
 	if (shotIsKW && Flexlion::sParamPtrsCached) {
 		Flexlion::swapToKW();
 	}
-
+	
 	// Count Killer Wail shots toward the results screen special count
 	if (shotIsKW && player != NULL) {
 		dispatchPerformSpecial((Game::Player *)player);
 	}
+
 
 	// Call original BulletSuperLaser::shot on the (possibly swapped) bullet
 	Flexlion::sBulletSuperLaserShotOrig(shotBullet, player, weaponId1, weaponId2, pos, dir, param);
@@ -753,8 +827,10 @@ void bigLaserItemPickupHook(Game::Player *player, int chargeValue) {
 
 	// Set Princess Cannon mode, re-setup weapon model, and swap animations
 	if (Flexlion::BigLaserModeMgr::sInstance) {
-		Flexlion::BigLaserModeMgr::sInstance->setMode(player->mIndex, Flexlion::cPrincessCannon);
-		Flexlion::BigLaserModeMgr::reSetupForPlayer(player->mIndex);
-		Flexlion::BigLaserModeMgr::swapPlayerAnimsToPC(player);
-	}
+        Flexlion::BigLaserModeMgr::sInstance->setMode(player->mIndex, Flexlion::cPrincessCannon);
+        Flexlion::BigLaserModeMgr::sInstance->mPCEndFrame[player->mIndex] =
+            Game::MainMgr::sInstance->mPaintGameFrame + 600;
+        Flexlion::BigLaserModeMgr::reSetupForPlayer(player->mIndex);
+        Flexlion::BigLaserModeMgr::swapPlayerAnimsToPC(player);
+    }
 }
