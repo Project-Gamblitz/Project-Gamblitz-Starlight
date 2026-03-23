@@ -2,6 +2,24 @@
 const int startflightdelay = 40; // delay from when a point is chosen to when the tornado is actually launched
 const float tornadoTankZOffset = -3.0f;
 
+extern "C" {
+    extern u8 _ZTVN4Game27MessagePlayerPerformSpecialE[];
+    extern void *_ZN3Cmn18MessageBroadcaster9sInstanceE;
+    void _ZN3Cmn17MessageDispatcher15dispatchMessageERKNS_7MessageE(void *, const void *);
+}
+#define MessagePlayerPerformSpecialVtable _ZTVN4Game27MessagePlayerPerformSpecialE
+#define MessageBroadcasterInstance _ZN3Cmn18MessageBroadcaster9sInstanceE
+#define dispatchMessage _ZN3Cmn17MessageDispatcher15dispatchMessageERKNS_7MessageE
+
+static void informPerformSpecial(Game::Player *player) {
+    u64 msg[2];
+    msg[0] = (u64)(MessagePlayerPerformSpecialVtable + 0x10);
+    msg[1] = (u64)player;
+    if (MessageBroadcasterInstance)
+        dispatchMessage(MessageBroadcasterInstance, msg);
+    player->informStartSpecialToLayout(0x11);
+}
+
 namespace Flexlion{
     InkstrikeMgr *InkstrikeMgr::sInstance = NULL;
     InkstrikeMgr::InkstrikeMgr(){
@@ -127,7 +145,7 @@ namespace Flexlion{
 					}
 				}
 				playerState[id] = TornadoState::cShootPrepare;
-				player->informStartSpecialToLayout();
+				informPerformSpecial(player);
 				mWasAHeld[id] = false;
 				if(bullets[id] != NULL) bullets[id]->mStateMachine.changeState(BSAState::cState_Wait);
 				if(isCtrlPerformer){
@@ -219,7 +237,7 @@ namespace Flexlion{
 					mPendingDest[id] = miniMapAt;
 					mShootPrepareFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
 					playerState[id] = TornadoState::cShootPrepare;
-					player->informStartSpecialToLayout();
+					informPerformSpecial(player);
 					if(bullets[id] != NULL) bullets[id]->mStateMachine.changeState(BSAState::cState_Wait);
 					if(mMap != NULL){
 						mMap->setVisible(false);
