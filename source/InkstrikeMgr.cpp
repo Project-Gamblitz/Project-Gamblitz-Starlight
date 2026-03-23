@@ -127,6 +127,7 @@ namespace Flexlion{
 					}
 				}
 				playerState[id] = TornadoState::cShootPrepare;
+				player->informStartSpecialToLayout();
 				mWasAHeld[id] = false;
 				if(bullets[id] != NULL) bullets[id]->mStateMachine.changeState(BSAState::cState_Wait);
 				if(isCtrlPerformer){
@@ -218,6 +219,7 @@ namespace Flexlion{
 					mPendingDest[id] = miniMapAt;
 					mShootPrepareFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
 					playerState[id] = TornadoState::cShootPrepare;
+					player->informStartSpecialToLayout();
 					if(bullets[id] != NULL) bullets[id]->mStateMachine.changeState(BSAState::cState_Wait);
 					if(mMap != NULL){
 						mMap->setVisible(false);

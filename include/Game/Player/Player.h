@@ -93,6 +93,7 @@ namespace Game {
         void change_DemoPlaceAnim(Game::Player::ResultAnim, int);
         void replaceTeamColor(sead::Color4f const&);
 		void informGetWeapon_Impl_(int, int, int, bool);
+		void informStartSpecialToLayout();
 		void fillInkMagazine();
 		void startMarked_Common(int, int, int, Game::Player::MarkingType);
 		void startMarked_Sender(int, int, Game::Player::MarkingType, int, unsigned int);
