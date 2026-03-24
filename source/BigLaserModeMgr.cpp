@@ -9,7 +9,13 @@ extern "C" {
     extern u8 _ZTVN4Game27MessagePlayerPerformSpecialE[];
     extern void *_ZN3Cmn18MessageBroadcaster9sInstanceE;
     void _ZN3Cmn17MessageDispatcher15dispatchMessageERKNS_7MessageE(void *, const void *);
+    void _ZN6xlink222EnumPropertyDefinitionC2EPKcb(void *, const char *, bool);
+    void _ZN6xlink222EnumPropertyDefinition12setEntryBuf_EiPNS0_5EntryE(void *, int, void *);
+    void _ZN6xlink222EnumPropertyDefinition5entryEiPKc(void *, int, const char *);
 }
+#define EnumPropDefCtor _ZN6xlink222EnumPropertyDefinitionC2EPKcb
+#define EnumPropDefSetEntryBuf _ZN6xlink222EnumPropertyDefinition12setEntryBuf_EiPNS0_5EntryE
+#define EnumPropDefEntry _ZN6xlink222EnumPropertyDefinition5entryEiPKc
 
 static void dispatchPerformSpecial(Game::Player *player) {
     u64 msg[2];
@@ -179,35 +185,20 @@ void BigLaserModeMgr::initHook(){
 }
 
 // Called right after Actor::create<PlayerWeaponBigLaser> in the jump hook.
-// parent = PlayerCustomMgr* (X19). PlayerCustomMgr+840 = IPlayerCustomInfo*.
-// Reads the player's BigLaserMode to decide which XLink user name to set:
-//   KillerWail (default)  → "OldBigLaser"  → PlayerWeapon_OldBigLaser (S1 effects)
-//   PrincessCannon (pickup) → "BigLaser"   → PlayerWeapon_BigLaser    (5.5.2 effects)
+// parent = PlayerCustomMgr* (X19). Sets sLastCreateMode for model setup.
+// XLink user stays vanilla "PlayerWeapon_BigLaser" — asset selection via BigLaserMode property.
 Cmn::PlayerWeapon* BigLaserModeMgr::initWeaponXLink(Cmn::PlayerWeapon *weapon, void *parent) {
-	u64 *origVtable = *(u64 **)weapon;
-	SetLinkUserNameFn realSetLinkUserName = (SetLinkUserNameFn)origVtable[87];
-
-	// Default to KillerWail (S1) XLink name
-	char *xlinkName = (char *)"OldBigLaser";
 	sLastCreateMode = cKillerWail;
 
-	// Get player index from parent (PlayerCustomMgr+840 = IPlayerCustomInfo*)
 	if (sInstance && parent) {
 		Cmn::IPlayerCustomInfo *info = *(Cmn::IPlayerCustomInfo **)((char *)parent + 840);
 		if (info && info->vtable && info->vtable->getGamePlayer) {
 			Game::Player *player = info->vtable->getGamePlayer(info);
 			if (player) {
-				BigLaserMode mode = sInstance->getMode(player->mIndex);
-				sLastCreateMode = mode;
-				if (mode == cPrincessCannon) {
-					xlinkName = (char *)"BigLaser";
-				}
+				sLastCreateMode = sInstance->getMode(player->mIndex);
 			}
 		}
 	}
-
-	sead::SafeStringBase<char> name = sead::SafeStringBase<char>::create(xlinkName);
-	realSetLinkUserName(weapon, &name);
 
 	return weapon;
 }
@@ -382,6 +373,76 @@ static void restorePC() {
 	}
 }
 
+// --- BigLaserMode XLink local property ---
+// Enum property pushed onto PlayerWeaponBigLaser's XLink so the slink user can
+// switch assets (OnActivate sound) between KW and PC via "switch BigLaserMode local".
+
+static _BYTE sBigLaserModePropBuf[0x78];
+static bool sBigLaserModePropInit = false;
+struct BLModeEnumEntry { u64 name_ptr; u32 value; u32 _pad; };
+static BLModeEnumEntry sBigLaserModeEntries[2];
+
+static void initBigLaserModeProperty() {
+	if (sBigLaserModePropInit) return;
+	EnumPropDefCtor(sBigLaserModePropBuf, "BigLaserMode", false);
+	memset(sBigLaserModeEntries, 0, sizeof(sBigLaserModeEntries));
+	sBigLaserModeEntries[0].value = (u32)-1;
+	sBigLaserModeEntries[1].value = (u32)-1;
+	EnumPropDefSetEntryBuf(sBigLaserModePropBuf, 2, sBigLaserModeEntries);
+	EnumPropDefEntry(sBigLaserModePropBuf, 0, "cKillerWail");
+	EnumPropDefEntry(sBigLaserModePropBuf, 1, "cPrincessCannon");
+	sBigLaserModePropInit = true;
+}
+
+static int (*sOrigWeaponSetXlinkLocalPropDef)(void *, int) = NULL;
+static int (*sOrigWeaponCountXlinkLocalProp)(void *) = NULL;
+
+static int weaponSetXlinkLocalPropDefHook(void *self, int idx) {
+	int result = sOrigWeaponSetXlinkLocalPropDef(self, idx);
+	initBigLaserModeProperty();
+	Lp::Sys::XLinkIUser *xlinkUser = (Lp::Sys::XLinkIUser *)((char *)self + 0x2E8);
+	xlinkUser->pushLocalPropertyDefinition((xlink2::PropertyDefinition *)sBigLaserModePropBuf);
+	return result + 1;
+}
+
+static int weaponCountXlinkLocalPropHook(void *self) {
+	return sOrigWeaponCountXlinkLocalProp(self) + 1;
+}
+
+static void setWeaponBigLaserMode(Cmn::PlayerWeapon *weapon, BigLaserMode mode) {
+	Lp::Sys::XLink *xlink = *(Lp::Sys::XLink **)((char *)weapon + 0x320);
+	if (xlink) {
+		int baseCount = sOrigWeaponCountXlinkLocalProp ? sOrigWeaponCountXlinkLocalProp(weapon) : 0;
+		xlink->setLocalPropertyValue(baseCount, (float)mode);
+	}
+}
+
+// Vtable hook for PlayerWeaponBigLaser::fourthCalc.
+// The XLink system caches the matrix POINTER from getXLinkMtx at init time.
+// After a model swap, the cached pointer still reads from the old model's matrix.
+// This hook copies the active model's matrix to the inactive model each frame,
+// keeping the cached pointer's data correct regardless of which model is active.
+static void (*sOrigWeaponFourthCalc)(void *) = NULL;
+
+static void weaponFourthCalcHook(void *weapon) {
+	sOrigWeaponFourthCalc(weapon);
+
+	void *activeModel = *(void **)((char *)weapon + 0x338);
+	if (!activeModel) return;
+
+	for (int i = 0; i < sWeaponTrackCount; i++) {
+		if (sWeaponTracks[i].weapon != (Cmn::PlayerWeapon *)weapon) continue;
+
+		void *otherModel = (sWeaponTracks[i].activeMode == cKillerWail)
+			? sWeaponTracks[i].pcModel
+			: sWeaponTracks[i].kwModel;
+		if (otherModel && otherModel != activeModel) {
+			memcpy((char *)otherModel + 0x58, (char *)activeModel + 0x58, 0x30);
+		}
+		break;
+	}
+}
+
 void BigLaserModeMgr::initModelHook() {
 	sBaseSetupWithModel = (decltype(sBaseSetupWithModel))ProcessMemory::MainAddr(0x18983C);
 	sFindBoneInModel = (decltype(sFindBoneInModel))ProcessMemory::MainAddr(0x17DE8D0);
@@ -391,6 +452,18 @@ void BigLaserModeMgr::initModelHook() {
 	sRegisterModelArchive = (decltype(sRegisterModelArchive))ProcessMemory::MainAddr(0x3B6010);
 	sSuperLaserParamCtor = (decltype(sSuperLaserParamCtor))ProcessMemory::MainAddr(0x13C3294);
 	sSuperLaserBprmLoad = (decltype(sSuperLaserBprmLoad))ProcessMemory::MainAddr(0x13C3164);
+
+	// Hook PlayerWeaponBigLaser XLink property vtable entries to push BigLaserMode enum.
+	// PlayerWeaponBigLaser ActorVtable at binary 0x29FA4E0.
+	Cmn::ActorVtable *pwblVtable = (Cmn::ActorVtable *)ProcessMemory::MainAddr(0x29FA4E0);
+	sOrigWeaponSetXlinkLocalPropDef = (int (*)(void *, int))pwblVtable->setXlinkLocalPropertyDefinition;
+	pwblVtable->setXlinkLocalPropertyDefinition = (u64)weaponSetXlinkLocalPropDefHook;
+	sOrigWeaponCountXlinkLocalProp = (int (*)(void *))pwblVtable->countXlinkLocalProperty;
+	pwblVtable->countXlinkLocalProperty = (u64)weaponCountXlinkLocalPropHook;
+
+	// Hook fourthCalc to sync inactive model matrix (XLink caches matrix pointer at init)
+	sOrigWeaponFourthCalc = (void (*)(void *))pwblVtable->fourthCalc;
+	pwblVtable->fourthCalc = (u64)weaponFourthCalcHook;
 
 	// Load OldBigLaser archive early (same timing as KingSquid/Tornado ModelArcs)
 	sead::SafeStringBase<char> name = sead::SafeStringBase<char>::create("Wsp_OldBigLaser");
@@ -456,6 +529,7 @@ bool BigLaserModeMgr::checkAndResetupModel(Cmn::PlayerWeapon *weapon, BigLaserMo
 		*(void **)((char *)weapon + 0x338) = targetModel;
 		*(void **)((char *)weapon + 0x4F8) = targetModel;
 
+		setWeaponBigLaserMode(weapon, currentMode);
 		sWeaponTracks[i].activeMode = currentMode;
 		return true;
 	}
@@ -475,6 +549,25 @@ void BigLaserModeMgr::reSetupForPlayer(int playerIdx) {
 		void *pcModel = sWeaponTracks[i].pcModel;
 		if (!pcModel) break;
 
+		// Sync both models' matrices to the player's current position before swapping.
+		// The XLink caches a matrix pointer from init time (kwModel+0x58). If that matrix
+		// is stale (last KW position), sounds play at the wrong location.
+		void *kwModel = sWeaponTracks[i].kwModel;
+		if (kwModel) {
+			sead::Vector3<float> pos = p->mPosition;
+			float *mtx = (float *)((char *)kwModel + 0x58);
+			mtx[0] = 1; mtx[1] = 0; mtx[2] = 0; mtx[3] = pos.mX;
+			mtx[4] = 0; mtx[5] = 1; mtx[6] = 0; mtx[7] = pos.mY;
+			mtx[8] = 0; mtx[9] = 0; mtx[10] = 1; mtx[11] = pos.mZ;
+		}
+		if (pcModel) {
+			sead::Vector3<float> pos = p->mPosition;
+			float *mtx = (float *)((char *)pcModel + 0x58);
+			mtx[0] = 1; mtx[1] = 0; mtx[2] = 0; mtx[3] = pos.mX;
+			mtx[4] = 0; mtx[5] = 1; mtx[6] = 0; mtx[7] = pos.mY;
+			mtx[8] = 0; mtx[9] = 0; mtx[10] = 1; mtx[11] = pos.mZ;
+		}
+
 		// Swap to PC model — no re-creation needed
 		*(void **)((char *)w + 0x338) = pcModel;
 		*(void **)((char *)w + 0x4F8) = pcModel;
@@ -483,6 +576,7 @@ void BigLaserModeMgr::reSetupForPlayer(int playerIdx) {
 		sead::SafeStringBase<char> muzzleName("muzzle");
 		*(int *)((char *)w + 0x6B0) = sFindBoneInModel(pcModel, &muzzleName);
 
+		setWeaponBigLaserMode(w, cPrincessCannon);
 		sWeaponTracks[i].activeMode = cPrincessCannon;
 		break;
 	}
@@ -608,6 +702,7 @@ void BigLaserModeMgr::reSetupForPlayerKW(int playerIdx) {
 		sead::SafeStringBase<char> muzzleName("muzzle");
 		*(int *)((char *)w + 0x6B0) = sFindBoneInModel(kwModel, &muzzleName);
 
+		setWeaponBigLaserMode(w, cKillerWail);
 		sWeaponTracks[i].activeMode = cKillerWail;
 		break;
 	}
