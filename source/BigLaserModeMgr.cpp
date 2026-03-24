@@ -492,7 +492,15 @@ void BigLaserModeMgr::bulletLoadHook(void *bullet) {
 // restores PC values after the original firstCalc completes.
 void BigLaserModeMgr::bulletFirstCalcHook(void *bullet) {
 	if (!sParamPtrsCached || !sKWValuesLoaded) initParamSets();
-	bool isKW = !isBulletPrincessCannon(bullet);
+	// If no player is in PC mode, ALL bullets use KW params (fixes remote shots
+	// that may land in PC-pool bullets because the shot hook only patches one call site).
+	bool anyPC = false;
+	if (sInstance) {
+		for (int i = 0; i < 10; i++) {
+			if (sInstance->getMode(i) == cPrincessCannon) { anyPC = true; break; }
+		}
+	}
+	bool isKW = anyPC ? !isBulletPrincessCannon(bullet) : true;
 	if (isKW && sParamPtrsCached && sKWValuesLoaded) {
 		swapToKW();
 	}
