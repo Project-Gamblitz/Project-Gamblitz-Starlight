@@ -11,6 +11,20 @@ extern "C" {
     void _ZN3Cmn17MessageDispatcher15dispatchMessageERKNS_7MessageE(void *, const void *);
 }
 
+static void sendPerformSpecialNet(Game::Player *player) {
+    if (!player->mPlayerNetControl) return;
+    Game::PlayerCloneHandle *handle = player->mPlayerNetControl->mCloneHandle;
+    if (!handle) return;
+    bool isOffline = !Game::MainMgr::sInstance || Game::MainMgr::sInstance->cloneObjMgr->mIsOfflineScene;
+    if (isOffline) return;
+    Game::PlayerCloneObj *cloneObj = handle->mPlayerCloneObj;
+    if (!cloneObj) return;
+    Game::PlayerStateCloneEvent event;
+    memset(&event, 0, sizeof(event));
+    event._data[32] = 22;
+    cloneObj->pushPlayerStateEvent(event);
+}
+
 static void dispatchPerformSpecial(Game::Player *player) {
     u64 msg[2];
     msg[0] = (u64)(_ZTVN4Game27MessagePlayerPerformSpecialE + 0x10);
@@ -18,6 +32,7 @@ static void dispatchPerformSpecial(Game::Player *player) {
     if (_ZN3Cmn18MessageBroadcaster9sInstanceE)
         _ZN3Cmn17MessageDispatcher15dispatchMessageERKNS_7MessageE(
             _ZN3Cmn18MessageBroadcaster9sInstanceE, msg);
+    sendPerformSpecialNet(player);
 }
 
 namespace Flexlion {

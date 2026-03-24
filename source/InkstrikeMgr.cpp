@@ -11,12 +11,28 @@ extern "C" {
 #define MessageBroadcasterInstance _ZN3Cmn18MessageBroadcaster9sInstanceE
 #define dispatchMessage _ZN3Cmn17MessageDispatcher15dispatchMessageERKNS_7MessageE
 
+// Send PerformSpecial network event (type 22) so remote consoles also count the special.
+static void sendPerformSpecialNet(Game::Player *player) {
+    if (!player->mPlayerNetControl) return;
+    Game::PlayerCloneHandle *handle = player->mPlayerNetControl->mCloneHandle;
+    if (!handle) return;
+    bool isOffline = !Game::MainMgr::sInstance || Game::MainMgr::sInstance->cloneObjMgr->mIsOfflineScene;
+    if (isOffline) return;
+    Game::PlayerCloneObj *cloneObj = handle->mPlayerCloneObj;
+    if (!cloneObj) return;
+    Game::PlayerStateCloneEvent event;
+    memset(&event, 0, sizeof(event));
+    event._data[32] = 22; // PerformSpecial event type
+    cloneObj->pushPlayerStateEvent(event);
+}
+
 static void informPerformSpecial(Game::Player *player) {
     u64 msg[2];
     msg[0] = (u64)(MessagePlayerPerformSpecialVtable + 0x10);
     msg[1] = (u64)player;
     if (MessageBroadcasterInstance)
         dispatchMessage(MessageBroadcasterInstance, msg);
+    sendPerformSpecialNet(player);
     player->informStartSpecialToLayout(0x11);
 }
 
