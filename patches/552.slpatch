@@ -276,3 +276,6 @@
 // informDamage_WithVoiceAndRumble: hook playDamageVoiceAndRumble
 010105B0 BL playDamageVoiceAndRumbleHook
 
+// Always show Shifty Stations on PBs [YoshiCrystal]
+// Not sure if this will show on rotations
+00410CC4 1F2003D5
