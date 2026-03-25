@@ -938,5 +938,19 @@ void bigLaserItemPickupHook(Game::Player *player, int chargeValue) {
 		Flexlion::BigLaserModeMgr::sInstance->setMode(player->mIndex, Flexlion::cPrincessCannon);
 		Flexlion::BigLaserModeMgr::reSetupForPlayer(player->mIndex);
 		Flexlion::BigLaserModeMgr::swapPlayerAnimsToPC(player);
+
+		// Sync PC mode to remote consoles via state event
+		if (player->mPlayerNetControl) {
+			Game::PlayerCloneHandle *handle = player->mPlayerNetControl->mCloneHandle;
+			if (handle) {
+				bool isOffline = !Game::MainMgr::sInstance || Game::MainMgr::sInstance->cloneObjMgr->mIsOfflineScene;
+				if (!isOffline && handle->mPlayerCloneObj) {
+					Game::PlayerStateCloneEvent event;
+					memset(&event, 0, sizeof(event));
+					event._data[32] = 58; // PACKET_BIGLASER_PC
+					handle->mPlayerCloneObj->pushPlayerStateEvent(event);
+				}
+			}
+		}
 	}
 }

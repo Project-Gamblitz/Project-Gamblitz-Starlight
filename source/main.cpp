@@ -223,6 +223,7 @@ static void (*unpackStateEventOriginal)(Game::Player *player, Game::PlayerStateC
 #define PACKET_START_BARRIER 55
 #define PACKET_END_BARRIER   56
 #define PACKET_ALL_MARKING   57
+#define PACKET_BIGLASER_PC   58
 
 void receiveEndBarrier_Net_Reimpl(Game::Player *player){
 	player->mBarrierEndFrm = 0;
@@ -289,6 +290,15 @@ void unpackStateEventHook(Game::Player *player, Game::PlayerStateCloneEvent *eve
 	if(packetValue == PACKET_ALL_MARKING){
 		int markingGameFrame = *(int*)(event->_data + 24);
 		player->receiveAllMarking(markingGameFrame);
+		return;
+	}
+	if(packetValue == PACKET_BIGLASER_PC){
+		// Remote player picked up BigLaserItemOnline → set their mode to PC
+		if(bigLaserModeMgr != NULL){
+			bigLaserModeMgr->setMode(player->mIndex, Flexlion::cPrincessCannon);
+			Flexlion::BigLaserModeMgr::reSetupForPlayer(player->mIndex);
+			Flexlion::BigLaserModeMgr::swapPlayerAnimsToPC(player);
+		}
 		return;
 	}
 	unpackStateEventOriginal(player, event, gameFrame);
