@@ -354,30 +354,42 @@ void BigLaserModeMgr::initParamSets() {
 			sKWValuesLoaded = true;
 		}
 	}
-}
 
-// Overwrite param values in-place with KW defaults, saving PC originals.
-static void swapToKW() {
-	if (!sParamPtrsCached || !sKWValuesLoaded) return;
-	for (int i = 0; i < SUPERLASER_PARAM_COUNT; i++) {
-		if (i == 8) { // mKnockBackNoBarrierOff is u8
-			sSavedPCValues[i] = *(u8 *)sParamValuePtrs[i];
-			*(u8 *)sParamValuePtrs[i] = (u8)sKWValues[i];
-		} else {
-			sSavedPCValues[i] = *(u32 *)sParamValuePtrs[i];
-			*(u32 *)sParamValuePtrs[i] = sKWValues[i];
+	// Permanently set global params to KW. This way ALL callers of shot()
+	// (local AND remote) use KW params by default. PC shots explicitly swap to PC.
+	if (sParamPtrsCached && sKWValuesLoaded) {
+		for (int i = 0; i < SUPERLASER_PARAM_COUNT; i++) {
+			if (i == 8) {
+				sSavedPCValues[i] = *(u8 *)sParamValuePtrs[i];
+				*(u8 *)sParamValuePtrs[i] = (u8)sKWValues[i];
+			} else {
+				sSavedPCValues[i] = *(u32 *)sParamValuePtrs[i];
+				*(u32 *)sParamValuePtrs[i] = sKWValues[i];
+			}
 		}
 	}
 }
 
-// Restore PC (bprm) values after KW bullet calc.
-static void restorePC() {
+// Temporarily swap to PC params (for Princess Cannon shots/calcs).
+static void swapToPC() {
 	if (!sParamPtrsCached || !sKWValuesLoaded) return;
 	for (int i = 0; i < SUPERLASER_PARAM_COUNT; i++) {
 		if (i == 8) {
 			*(u8 *)sParamValuePtrs[i] = (u8)sSavedPCValues[i];
 		} else {
 			*(u32 *)sParamValuePtrs[i] = sSavedPCValues[i];
+		}
+	}
+}
+
+// Restore KW params after PC bullet calc.
+static void restoreKW() {
+	if (!sParamPtrsCached || !sKWValuesLoaded) return;
+	for (int i = 0; i < SUPERLASER_PARAM_COUNT; i++) {
+		if (i == 8) {
+			*(u8 *)sParamValuePtrs[i] = (u8)sKWValues[i];
+		} else {
+			*(u32 *)sParamValuePtrs[i] = sKWValues[i];
 		}
 	}
 }
@@ -492,21 +504,14 @@ void BigLaserModeMgr::bulletLoadHook(void *bullet) {
 // restores PC values after the original firstCalc completes.
 void BigLaserModeMgr::bulletFirstCalcHook(void *bullet) {
 	if (!sParamPtrsCached || !sKWValuesLoaded) initParamSets();
-	// If no player is in PC mode, ALL bullets use KW params (fixes remote shots
-	// that may land in PC-pool bullets because the shot hook only patches one call site).
-	bool anyPC = false;
-	if (sInstance) {
-		for (int i = 0; i < 10; i++) {
-			if (sInstance->getMode(i) == cPrincessCannon) { anyPC = true; break; }
-		}
-	}
-	bool isKW = anyPC ? !isBulletPrincessCannon(bullet) : true;
-	if (isKW && sParamPtrsCached && sKWValuesLoaded) {
-		swapToKW();
+	// Global params are permanently KW. Only swap to PC for PC-pool bullets.
+	bool isPC = isBulletPrincessCannon(bullet);
+	if (isPC && sParamPtrsCached && sKWValuesLoaded) {
+		swapToPC();
 	}
 	sOrigBulletFirstCalc(bullet);
-	if (isKW && sParamPtrsCached && sKWValuesLoaded) {
-		restorePC();
+	if (isPC && sParamPtrsCached && sKWValuesLoaded) {
+		restoreKW();
 	}
 }
 
@@ -867,26 +872,26 @@ void bulletSuperLaserShotHook(void *bullet, void *player, int weaponId1, int wea
 	if (!Flexlion::sParamPtrsCached || !Flexlion::sKWValuesLoaded)
 		Flexlion::BigLaserModeMgr::initParamSets();
 
-	// Swap param values in-place so KW bullets use OldSuperLaser.bprm values during shot setup
-	bool shotIsKW = !Flexlion::isBulletPrincessCannon(shotBullet);
-	if (shotIsKW && Flexlion::sParamPtrsCached && Flexlion::sKWValuesLoaded) {
-		Flexlion::swapToKW();
+	// Global params are permanently KW. For PC shots, temporarily swap to PC.
+	bool shotIsPC = Flexlion::isBulletPrincessCannon(shotBullet);
+	if (shotIsPC && Flexlion::sParamPtrsCached && Flexlion::sKWValuesLoaded) {
+		Flexlion::swapToPC();
 	}
 
 	// Count Killer Wail shots toward the results screen special count
-	if (shotIsKW && player != NULL) {
+	if (!shotIsPC && player != NULL) {
 		dispatchPerformSpecial((Game::Player *)player);
 	}
 
 	// Call original BulletSuperLaser::shot on the (possibly swapped) bullet
 	Flexlion::sBulletSuperLaserShotOrig(shotBullet, player, weaponId1, weaponId2, pos, dir, param);
 
-	if (shotIsKW && Flexlion::sParamPtrsCached && Flexlion::sKWValuesLoaded) {
-		Flexlion::restorePC();
+	if (shotIsPC && Flexlion::sParamPtrsCached && Flexlion::sKWValuesLoaded) {
+		Flexlion::restoreKW();
 	}
 
 	// Princess Cannon is a one-time use — revert to Killer Wail after firing
-	if (!shotIsKW && player != NULL && Flexlion::BigLaserModeMgr::sInstance != NULL) {
+	if (shotIsPC && player != NULL && Flexlion::BigLaserModeMgr::sInstance != NULL) {
 		Game::Player *p = (Game::Player *)player;
 		Flexlion::BigLaserModeMgr::sInstance->setMode(p->mIndex, Flexlion::cKillerWail);
 		Flexlion::BigLaserModeMgr::reSetupForPlayerKW(p->mIndex);
