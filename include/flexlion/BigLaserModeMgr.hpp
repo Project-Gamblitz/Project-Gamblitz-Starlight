@@ -86,8 +86,8 @@ public:
 	static void reSetupForPlayerKW(int playerIdx);
 
 	// Public param swap wrappers (for remote bullet clone event handling)
-	static void swapParamsToPC();
-	static void restoreParamsToKW();
+	static void swapParamsToKW();
+	static void restoreParamsToPC();
 
 private:
 	BigLaserMode mMode[10];

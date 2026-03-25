@@ -186,20 +186,26 @@ void handleBulletCloneEventHook(Game::BulletCloneHandle *cloneHandle, Game::Play
 		}
 	}
 
-	// BigLaser remote shot (event type 109): swap params to PC if remote player is in PC mode.
-	// Global params are permanently KW, so remote PC shots need explicit param swap.
+	// BigLaser remote shot (event type 109): global params are PC (game default).
+	// For KW shots (the common case), swap to KW before the impl runs.
+	bool bigLaserKW = false;
 	bool bigLaserPC = false;
 	if((int)event->mType == 109 && bigLaserModeMgr != NULL && player != NULL){
-		if(bigLaserModeMgr->getMode(player->mIndex) == Flexlion::cPrincessCannon){
+		Flexlion::BigLaserModeMgr::initParamSets();
+		if(bigLaserModeMgr->getMode(player->mIndex) == Flexlion::cKillerWail){
+			bigLaserKW = true;
+			Flexlion::BigLaserModeMgr::swapParamsToKW();
+		} else {
 			bigLaserPC = true;
-			Flexlion::BigLaserModeMgr::swapParamsToPC();
 		}
 	}
 
 	handleBulletCloneEventImpl(cloneHandle, player, event, clonefrm);
 
+	if(bigLaserKW){
+		Flexlion::BigLaserModeMgr::restoreParamsToPC();
+	}
 	if(bigLaserPC){
-		Flexlion::BigLaserModeMgr::restoreParamsToKW();
 		// Revert PC mode to KW after remote PC shot (one-time use)
 		bigLaserModeMgr->setMode(player->mIndex, Flexlion::cKillerWail);
 	}
