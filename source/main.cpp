@@ -1168,6 +1168,7 @@ void hooks_init(){
 	renderEntrypoint(NULL, NULL);
 	extraBigLaserBulletHook(NULL);
 	bulletSuperLaserShotHook(NULL, NULL, 0, 0, NULL, NULL, 0);
+	choiceBgmHook(NULL);
 	bigLaserItemPickupHook(NULL, 0);
 	bigLaserSetupWithModelHook(NULL);
 	weaponModelPreRegHook(NULL, 0, 0, 0);

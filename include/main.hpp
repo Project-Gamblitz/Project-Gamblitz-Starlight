@@ -93,6 +93,7 @@ void weaponModelPreRegHook(void *mgr, u32 type, u32 weaponId, char flag);
 const char *bulletSuperLaserGetClassNameOverride();
 void showFps();
 void actorDbHook(Lp::Utl::ByamlIter *iter, const char **a, const char *b);
+void choiceBgmHook(void* pThis);
 
 int weaponFixHook(gsys::Model *model, sead::SafeStringBase<char> lol);
 void playerModelDrawHook(Cmn::PlayerWeapon *playerWeapon, sead::Matrix34<float> *mtx);

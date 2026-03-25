@@ -279,3 +279,17 @@
 // Always show Shifty Stations on PBs [YoshiCrystal]
 // Not sure if this will show on rotations
 00410CC4 1F2003D5
+
+
+// ---- Extend BGM slots from 16 to 25 ----
+// 1. getVersusBgmNum: change MOV W8, #16 -> MOV W8, #25 (default versus path)
+000E86B8 28038052
+
+// 2. Replace choiceBgm entirely with our hook that uses static storage sized for 25 BGMs.
+//    This fixes the crash: the original function has both the free-node pool and the
+//    PtrArray buffer hardcoded to 16 entries on the stack. With 25 BGMs requested,
+//    bgmfuncthign exhausts the pool at node 17 (NULL deref) AND overflows the buffer.
+//    NOTE: The setBuffer capacity patch (376A28) is intentionally omitted here —
+//    choiceBgmHook never calls setBuffer; it manages its own static struct.
+// 	  special thanks to mr claude for this shit i was going to end it all
+00376950 B choiceBgmHook

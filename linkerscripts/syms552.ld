@@ -920,3 +920,5 @@ _ZN4Game6Player24playDamageVoiceAndRumbleERKNS_12DamageReasonEb = 0x01010E94 - 0
 _ZN4Game6Player25emitAndPlay_StealthDamageEiN3Cmn3Def3DMGERKNS_12DamageReasonE = 0x0101A7D0 - 0x2EBE000;
 
 _ZN4Game6Player22emitAndPlay_BarrierHitERKN4sead7Vector3IfEEb = 0x0102487C - 0x2EBE000;
+
+bgmfuncthign = 0x3778FC - 0x2EBE000;											  
