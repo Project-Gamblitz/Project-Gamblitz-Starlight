@@ -394,6 +394,10 @@ static void restoreKW() {
 	}
 }
 
+// Public wrappers for param swapping (called from handleBulletCloneEventHook)
+void BigLaserModeMgr::swapParamsToPC() { swapToPC(); }
+void BigLaserModeMgr::restoreParamsToKW() { restoreKW(); }
+
 // --- BigLaserMode sound switching via onActivate hook ---
 // Instead of XLink property conditions (which require slink compiler support),
 // hook the weapon's onActivate to manually play the correct sound asset.
@@ -748,6 +752,14 @@ void bigLaserSetupWithModelHook(Cmn::PlayerWeapon *weapon) {
 				if (model) {
 					sead::SafeStringBase<char> muzzleName("muzzle");
 					*(int *)((char *)weapon + 0x6B0) = Flexlion::sFindBoneInModel(model, &muzzleName);
+				}
+				// setupWithModel may re-register animations (resetting to KW clips).
+				// Re-apply PC animations if the weapon is currently in PC mode.
+				if (Flexlion::sWeaponTracks[i].activeMode == Flexlion::cPrincessCannon) {
+					if (weapon->iCustomPlayerInfo && weapon->iCustomPlayerInfo->vtable) {
+						Game::Player *p = weapon->iCustomPlayerInfo->vtable->getGamePlayer(weapon->iCustomPlayerInfo);
+						if (p) Flexlion::BigLaserModeMgr::swapPlayerAnimsToPC(p);
+					}
 				}
 				return;
 			}

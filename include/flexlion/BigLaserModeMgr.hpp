@@ -85,6 +85,10 @@ public:
 	// Reverse of reSetupForPlayer — swaps model back to KW
 	static void reSetupForPlayerKW(int playerIdx);
 
+	// Public param swap wrappers (for remote bullet clone event handling)
+	static void swapParamsToPC();
+	static void restoreParamsToKW();
+
 private:
 	BigLaserMode mMode[10];
 };

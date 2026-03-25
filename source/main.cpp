@@ -2,6 +2,7 @@
 #include "flexlion/PlayerWeaponSuperShot.hpp"
 #include "flexlion/PlayerWeaponTornado.hpp"
 #include "flexlion/BigLaserModeMgr.hpp"
+#include "flexlion/BetaDelivery.hpp"
 #include "Cui/MsgWindow.h"
 #include "Game/BulletBombBase.h"
 
@@ -184,9 +185,24 @@ void handleBulletCloneEventHook(Game::BulletCloneHandle *cloneHandle, Game::Play
 			tornadoMgr->mRemoteShotPending[id] = true;
 		}
 	}
-	//FsLogger::LogFormatDefaultDirect("\nEvent:\nType: %i\nPos: %.2f %.2f %.2f\nVel: %.2f %.2f %.2f\nPlayerId: %i\n_unk: %i\n\n", 
-	//event->mType, event->mPos.mX, event->mPos.mY, event->mPos.mZ, event->mVel.mX, event->mVel.mY, event->mVel.mZ, event->mPlayerId, event->_unk);
+
+	// BigLaser remote shot (event type 109): swap params to PC if remote player is in PC mode.
+	// Global params are permanently KW, so remote PC shots need explicit param swap.
+	bool bigLaserPC = false;
+	if((int)event->mType == 109 && bigLaserModeMgr != NULL && player != NULL){
+		if(bigLaserModeMgr->getMode(player->mIndex) == Flexlion::cPrincessCannon){
+			bigLaserPC = true;
+			Flexlion::BigLaserModeMgr::swapParamsToPC();
+		}
+	}
+
 	handleBulletCloneEventImpl(cloneHandle, player, event, clonefrm);
+
+	if(bigLaserPC){
+		Flexlion::BigLaserModeMgr::restoreParamsToKW();
+		// Revert PC mode to KW after remote PC shot (one-time use)
+		bigLaserModeMgr->setMode(player->mIndex, Flexlion::cKillerWail);
+	}
 }
 
 // Barrier network sync — unpackStateEvent hook
@@ -481,6 +497,17 @@ void renderEntrypoint(agl::DrawContext *drawContext, sead::TextWriter *textWrite
 	if(!Utils::isSceneLoaded() && bigLaserModeMgr != NULL){
 		bigLaserModeMgr->reset();
 	}
+
+#ifdef IS_BETA
+	{
+		static bool sBetaDeliveryDone = false;
+		if (!sBetaDeliveryDone && Utils::isSceneLoaded() && Cmn::StaticMem::sInstance) {
+			Flexlion::pushBetaGearDeliveries();
+			sBetaDeliveryDone = true;
+		}
+		if (!Utils::isSceneLoaded()) sBetaDeliveryDone = false;
+	}
+#endif
 
 	// Debug: show collision attribute under Inkstrike cursor
 	if(mTextWriter != NULL){
