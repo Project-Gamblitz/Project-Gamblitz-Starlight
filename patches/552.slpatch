@@ -293,3 +293,6 @@
 //    choiceBgmHook never calls setBuffer; it manages its own static struct.
 // 	  special thanks to mr claude for this shit i was going to end it all
 00376950 B choiceBgmHook
+
+// reduce Last Ditch Effort units from 24 to 18
+0107D21C 0050261E
