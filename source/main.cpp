@@ -125,6 +125,8 @@ bool Game::Utl::ActorFactoryBase::isNoActor() const{
 
 static bool tsthk = 0;
 
+static bool (*isSleepingAllOrig)(Game::BulletMgr*);
+
 static int custommgrjpt[27];
 
 static void (*miniMapCamCalcImpl)(Game::MiniMapCamera *_this);
@@ -765,6 +767,21 @@ void kingSquidAnimSetControllerHook(Game::AnimSetController *anim, gsys::Partial
 	kingsquid->mKingSquidAnimCtrl->setMatSlot(1);
 	kingsquid->mKingSquidAnimCtrl->load();
 	kingsquid->mKingSquidAnimCtrl->setPartialSkeletalAnm(cool);
+}bool isSleepingAllHook(Game::BulletMgr *mgr){
+    if(mgr == NULL) return true;
+    if(tornadoMgr != NULL){
+        tornadoMgr->mMatchEnding = true;
+        for(int i = 0; i < 10; i++){
+            Flexlion::BulletSuperArtillery *bsa = tornadoMgr->bullets[i];
+            if(bsa != NULL && bsa->isActive())
+                return false;
+            if(tornadoMgr->playerState[i] == Flexlion::TornadoState::cAim ||
+               tornadoMgr->playerState[i] == Flexlion::TornadoState::cShootPrepare ||
+               tornadoMgr->playerState[i] == Flexlion::TornadoState::cShoot)
+                return false;
+        }
+    }
+    return isSleepingAllOrig(mgr);
 }
 
 void init_starlion(){
@@ -821,7 +838,8 @@ void init_starlion(){
 
 	updateCursorEffectOrig = (void (*)(Game::MiniMap*))
 		ProcessMemory::MainAddr(0x00A146E4);
-
+		
+	isSleepingAllOrig = (bool (*)(Game::BulletMgr*))ProcessMemory::MainAddr(0x4E936C);
 }
 
 void playerModelSetupHook(Game::PlayerModel *pmodel){
@@ -1229,6 +1247,7 @@ void hooks_init(){
 	LobbyRivalFixHook(NULL);
 	LobbyRivalGetPlayerTypeHook(NULL);
 	isInSpecialForShotGuideHook(NULL);
+	isSleepingAllHook(NULL);
 }
 
 int LobbyRivalGetPlayerTypeHook(Cmn::SaveDataCmn *saveDataCmn){

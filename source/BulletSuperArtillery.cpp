@@ -158,6 +158,7 @@ BulletSuperArtillery::BulletSuperArtillery() {
     mXLinkMtx = sead::Matrix34<float>::ident;
     mBurstRadius = 0.0f;
     mBurstFrm = 0;
+	mMatchEnding = false;
 }
 
 // ============================================================
@@ -198,7 +199,7 @@ void BulletSuperArtillery::prepare(Game::Player *sender) {
     asLpActor()->reserveActivate(true);
 }
 
-void BulletSuperArtillery::launch(sead::Vector3<float> src, sead::Vector3<float> dst, int paintgamefrm) {
+void BulletSuperArtillery::launch(sead::Vector3<float> src, sead::Vector3<float> dst, int paintgamefrm, bool forcedByMatchEnd) {
     mFrom = src;
     mTo = dst;
     mStartFrm = paintgamefrm;
@@ -208,6 +209,7 @@ void BulletSuperArtillery::launch(sead::Vector3<float> src, sead::Vector3<float>
     mRot.mY = atan2f(src.mX - dst.mX, src.mZ - dst.mZ) + MATH_PI;
     if (mRot.mY > MATH_PI * 2.0f) mRot.mY -= MATH_PI * 2.0f;
     mFlightActive = true;
+    mMatchEnding = forcedByMatchEnd;
 
     // Update xlink root matrix to target position
     mXLinkMtx = {{
@@ -238,6 +240,7 @@ void BulletSuperArtillery::reset() {
     mHasBurst = false;
     mBurstRadius = 0.0f;
     mBurstFrm = 0;
+	mMatchEnding = false;
 }
 
 // ============================================================
@@ -322,7 +325,7 @@ void BulletSuperArtillery::stateEnterPronounce() {
 void BulletSuperArtillery::statePronounce() {
     calcFlight();
     int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mStartFrm;
-    int flightTime = (mSender != NULL && mSender->isInTrouble_Dying()) ? 150 : BSA_FLIGHT_TIME;
+    int flightTime = (mMatchEnding || (mSender != NULL && mSender->isInTrouble_Dying())) ? 150 : BSA_FLIGHT_TIME;
     if (elapsed >= flightTime) {
         mStateMachine.changeState(cState_Burst);
     }
@@ -406,7 +409,7 @@ void BulletSuperArtillery::calcTankBone() {
 
 void BulletSuperArtillery::calcFlight() {
     int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mStartFrm;
-    int flightTime = (mSender != NULL && mSender->isInTrouble_Dying()) ? 150 : BSA_FLIGHT_TIME;
+    int flightTime = (mMatchEnding || (mSender != NULL && mSender->isInTrouble_Dying())) ? 150 : BSA_FLIGHT_TIME;
     float anim = float(elapsed) / float(flightTime);
     if (anim > 1.0f) anim = 1.0f;
 

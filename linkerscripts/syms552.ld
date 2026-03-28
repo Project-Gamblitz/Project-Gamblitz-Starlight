@@ -201,6 +201,7 @@ _ZN3Cmn12TeamColorMgr12calcInkColorERKN4sead7Color4fEfbb = 0x144618 - 0x2EBE000;
 _ZNK3Cmn12TeamColorMgr11getColorSetENS0_4KindEi = 0x144920 - 0x2EBE000;
 _ZNK3Cmn12TeamColorMgr18findColorSetByNameEPNS_12TeamColorSetERKN4sead14SafeStringBaseIcEE = 0x144A64 - 0x2EBE000;
 _ZNK4Game9PlayerMgr22getControlledPerformerEv = 0x10E6D2C - 0x2EBE000;
+_ZNK4Game9BulletMgr13isSleepingAllEv = 0x04E936C - 0x2EBE000;
 _ZNK4Game6Player25getVClam_HoldingNormalNumEv = 0x1024550 - 0x2EBE000;
 _ZNK4Game6Player25getVClam_HoldingGoldenNumEv = 0x1024588 - 0x2EBE000;
 _ZN4Game6Player21informGetWeapon_Impl_Eiiib = 0xFF05D8 - 0x2EBE000;
