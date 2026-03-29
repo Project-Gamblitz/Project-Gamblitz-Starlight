@@ -12,6 +12,7 @@ extern "C" {
     void _ZN6xlink222EnumPropertyDefinition12setEntryBuf_EiPNS0_5EntryE(void *, int, void *);
     void _ZN6xlink222EnumPropertyDefinition5entryEiPKc(void *, int, const char *);
     void _ZN2Lp3Sys5XLink12killAllSoundEv(void *xlink);
+	Lp::Sys::ActorClassIterNodeBase* _ZN4Game20BulletGraduallyPaint22getClassIterNodeStaticEv();
     // VTV symbols for manual F32PropertyDefinition construction
     extern u8 _ZTVN6xlink221F32PropertyDefinitionE[];
     extern u8 _ZTVN4sead22BufferedSafeStringBaseIcEE[];
@@ -28,11 +29,11 @@ const float BSA_FLIGHT_HEIGHT = 300.0f;
 const float tornadoTankZOffset = -3.0f;
 
 // Burst parameters
-const float BSA_BURST_RADIUS_START = 10.0f;   // Initial paint/hitbox radius
-const float BSA_BURST_RADIUS_MAX   = 100.0f;  // Maximum radius
-const float BSA_BURST_RADIUS_GROW  = 1.0f;    // Radius growth per frame
+const float BSA_BURST_RADIUS_START = 20.0f;   // Initial paint/hitbox radius
+const float BSA_BURST_RADIUS_MAX   = 200.0f;  // Maximum radius
+const float BSA_BURST_RADIUS_GROW  = 2.0f;    // Radius growth per frame
 const int   BSA_BURST_DAMAGE       = 25;       // 2.5 HP per frame (internal units: 25 = 2.5% of 1000 max HP)
-const int   BSA_BURST_DURATION     = 180;      // Frames before burst ends (3 seconds at 60fps)
+const int   BSA_BURST_DURATION     = 120;      // Frames before burst ends (3 seconds at 60fps)
 
 namespace Flexlion {
 
@@ -259,7 +260,7 @@ void BulletSuperArtillery::vtFourthCalc(BulletSuperArtillery *self) {
     if (self->mFlightActive) {
         self->updateModelMatrix();
     } else if (self->mHasBurst) {
-        self->calcBurstPaintAndDamage();
+        self->calcBurstFollow();
     } else {
         // Only render tank bone tornado if InkstrikeMgr state is cAim or cShootPrepare
         InkstrikeMgr *mgr = InkstrikeMgr::sInstance;
@@ -428,29 +429,57 @@ void BulletSuperArtillery::calcFlight() {
 }
 
 void BulletSuperArtillery::doBurst() {
-    if (mSender == NULL) return;
+    if(mSender == NULL) return;
 
-    // Set BulletDistance = distance from controlled player (listener proxy) to burst pos, capped at 128
+    static auto initFn = (void(*)(void*, void*))ProcessMemory::MainAddr(0x4DDE04);
+
+	// Set BulletDistance = distance from controlled player (listener proxy) to burst pos, capped at 128
     Lp::Sys::XLink *xlink = getXLink();
-    if (xlink) {
+    if(xlink){
         Game::Player *listener = Game::PlayerMgr::sInstance->getControlledPerformer();
-        if (listener) {
+        if(listener){
             float dx = listener->mPosition.mX - mPos.mX;
             float dy = listener->mPosition.mY - mPos.mY;
             float dz = listener->mPosition.mZ - mPos.mZ;
-            float dist = sqrtf(dx * dx + dy * dy + dz * dz);
-            if (dist > 128.0f) dist = 128.0f;
+            float dist = sqrtf(dx*dx + dy*dy + dz*dz);
+            if(dist > 128.0f) dist = 128.0f;
             xlink->setLocalPropertyValue(1, dist);
         }
     }
 
-    // Initialize burst state — BSA handles paint and damage itself
-    mBurstRadius = BSA_BURST_RADIUS_START;
-    mBurstFrm = 0;
+    Lp::Sys::ActorClassIterNodeBase *iterNode = _ZN4Game20BulletGraduallyPaint22getClassIterNodeStaticEv();
+    Game::BulletGraduallyPaint *paint = (Game::BulletGraduallyPaint*)iterNode->derivedFrontSleepingActor();
+    if(paint != NULL){
+        BulletGraduallyPaintInitArg arg;
+        memset(&arg, 0, sizeof(arg));
+        arg.texType     = 11;
+        arg.posX        = mTo.mX;
+        arg.posY        = mTo.mY;
+        arg.posZ        = mTo.mZ;
+        arg.startRadius = BSA_BURST_RADIUS_START;
+        arg.endRadius   = BSA_BURST_RADIUS_MAX;
+        arg.totalFrames = (float)BSA_BURST_DURATION;
+        arg.team        = (int)*(Cmn::Def::Team*)(_actorBase + 0x328);
+        arg.flags       = 1;
+        initFn(paint, &arg);
+        paint->asLpActor()->reserveActivate(true);
+    }
 
     mFlightActive = false;
     mHasBurst = true;
+    mBurstRadius = BSA_BURST_RADIUS_START;
+    mBurstFrm = 0;
 }
+// it doesn't build because of errors, Claude said:
+
+// Two fixes:
+// 
+// derivedFrontSleepingActor doesn't exist — check your ActorClassIterNodeBase header for the correct sleeping actor method name. It might be derivedFrontInactiveActor or similar. If none exists, use reserveActivate differently.
+// BulletGraduallyPaint extends Cmn::Actor not our custom BSA class, so cast it directly:
+// 
+// cppLp::Sys::ActorClassIterNodeBase *iterNode = _ZN4Game20BulletGraduallyPaint22getClassIterNodeStaticEv();
+// Game::BulletGraduallyPaint *paint = (Game::BulletGraduallyPaint*)iterNode->derivedFrontActiveActor();
+// Wait — active actors are already running. We need a sleeping/inactive one. Can you check what methods ActorClassIterNodeBase has available? Share the header or search in IDA for methods on that class.
 
 void BulletSuperArtillery::calcBurstFollow() {
     mBurstFrm++;
@@ -467,69 +496,69 @@ void BulletSuperArtillery::calcBurstFollow() {
     }
 }
 
-void BulletSuperArtillery::calcBurstPaintAndDamage() {
-    // Paint ink each frame — Artillery00 = PaintTexType 11
-    sead::Vector3<float> groundNrm = {0.0f, 1.0f, 0.0f};
-    sead::Vector2<float> paintSize = {mBurstRadius, mBurstRadius};
-    sead::Vector3<float> vel = sead::Vector3<float>::zero;
-    Cmn::Def::Team team = *(Cmn::Def::Team *)(_actorBase + 0x328);
-    // Sphere check radius = half paint size (matches 9-param wrapper logic)
-    float sphereRadius = mBurstRadius * 0.5f;
-    Game::PaintUtl::requestColAndPaint(
-        mTo, paintSize, vel,
-        (Game::PaintTexType)11, team,
-        groundNrm, true, -1, sphereRadius, false);
-
-    // Damage enemies within burst radius
-    float radiusSq = mBurstRadius * mBurstRadius;
-
-    // --- Players (PvP only — no enemy players exist in training mode) ---
-    Game::PlayerMgr *pmgr = Game::PlayerMgr::sInstance;
-    if (pmgr && mSender) {
-        int senderTeamInt = (int)team;
-        for (int i = 0; i < pmgr->mTotalPlayers; i++) {
-            Game::Player *p = pmgr->getPerformerAt(i);
-            if (!p) continue;
-            if ((int)p->mTeam == senderTeamInt) continue;
-            float dx = p->mPosition.mX - mTo.mX;
-            float dy = p->mPosition.mY - mTo.mY;
-            float dz = p->mPosition.mZ - mTo.mZ;
-            float distSq = dx * dx + dy * dy + dz * dz;
-            if (distSq < radiusSq) {
-                sead::Vector3<float> hitDir = {dx, dy, dz};
-                Game::DamageReason reason;
-                reason.mWeaponId = -1;
-                reason.mClassType = 0;
-                p->receiveDamage_Net(mSender->mIndex, (Cmn::Def::DMG)BSA_BURST_DAMAGE, hitDir, reason, false, false, false);
-            }
-        }
-    }
-
-    // --- Sighter targets (training dummies, EnemyBase subclass) ---
-    {
-        Lp::Sys::ActorClassIterNodeBase *iterNode = Game::SighterTarget::getClassIterNodeStatic();
-        for (Game::SighterTarget *st = (Game::SighterTarget *)iterNode->derivedFrontActiveActor();
-             st != NULL;
-             st = (Game::SighterTarget *)iterNode->derivedNextActiveActor((Lp::Sys::Actor *)st))
-        {
-            // Game::Actor::mPos at offset 0x39C from object start
-            sead::Vector3<float> *stPos = (sead::Vector3<float> *)((u8 *)st + 0x39C);
-            float dx = stPos->mX - mTo.mX;
-            float dy = stPos->mY - mTo.mY;
-            float dz = stPos->mZ - mTo.mZ;
-            float distSq = dx * dx + dy * dy + dz * dz;
-            if (distSq < radiusSq) {
-                // EnemyBase::mHealth at offset 0x574
-                u32 *health = (u32 *)((u8 *)st + 0x574);
-                if (*health > (u32)BSA_BURST_DAMAGE) {
-                    *health -= BSA_BURST_DAMAGE;
-                } else {
-                    *health = 0;
-                }
-            }
-        }
-    }
-}
+//void BulletSuperArtillery::calcBurstPaintAndDamage() {
+//    // Paint ink each frame — Artillery00 = PaintTexType 11
+//    sead::Vector3<float> groundNrm = {0.0f, 1.0f, 0.0f};
+//    sead::Vector2<float> paintSize = {mBurstRadius, mBurstRadius};
+//    sead::Vector3<float> vel = sead::Vector3<float>::zero;
+//    Cmn::Def::Team team = *(Cmn::Def::Team *)(_actorBase + 0x328);
+//    // Sphere check radius = half paint size (matches 9-param wrapper logic)
+//    float sphereRadius = mBurstRadius * 0.5f;
+//    Game::PaintUtl::requestColAndPaint(
+//        mTo, paintSize, vel,
+//        (Game::PaintTexType)11, team,
+//        groundNrm, true, -1, sphereRadius, false);
+//
+//    // Damage enemies within burst radius
+//    float radiusSq = mBurstRadius * mBurstRadius;
+//
+//    // --- Players (PvP only — no enemy players exist in training mode) ---
+//    Game::PlayerMgr *pmgr = Game::PlayerMgr::sInstance;
+//    if (pmgr && mSender) {
+//        int senderTeamInt = (int)team;
+//        for (int i = 0; i < pmgr->mTotalPlayers; i++) {
+//            Game::Player *p = pmgr->getPerformerAt(i);
+//            if (!p) continue;
+//            if ((int)p->mTeam == senderTeamInt) continue;
+//            float dx = p->mPosition.mX - mTo.mX;
+//            float dy = p->mPosition.mY - mTo.mY;
+//            float dz = p->mPosition.mZ - mTo.mZ;
+//            float distSq = dx * dx + dy * dy + dz * dz;
+//            if (distSq < radiusSq) {
+//                sead::Vector3<float> hitDir = {dx, dy, dz};
+//                Game::DamageReason reason;
+//                reason.mWeaponId = -1;
+//                reason.mClassType = 0;
+//                p->receiveDamage_Net(mSender->mIndex, (Cmn::Def::DMG)BSA_BURST_DAMAGE, hitDir, reason, false, false, false);
+//            }
+//        }
+//    }
+//
+//    // --- Sighter targets (training dummies, EnemyBase subclass) ---
+//    {
+//        Lp::Sys::ActorClassIterNodeBase *iterNode = Game::SighterTarget::getClassIterNodeStatic();
+//        for (Game::SighterTarget *st = (Game::SighterTarget *)iterNode->derivedFrontActiveActor();
+//             st != NULL;
+//             st = (Game::SighterTarget *)iterNode->derivedNextActiveActor((Lp::Sys::Actor *)st))
+//        {
+//            // Game::Actor::mPos at offset 0x39C from object start
+//            sead::Vector3<float> *stPos = (sead::Vector3<float> *)((u8 *)st + 0x39C);
+//            float dx = stPos->mX - mTo.mX;
+//            float dy = stPos->mY - mTo.mY;
+//            float dz = stPos->mZ - mTo.mZ;
+//            float distSq = dx * dx + dy * dy + dz * dz;
+//            if (distSq < radiusSq) {
+//                // EnemyBase::mHealth at offset 0x574
+//                u32 *health = (u32 *)((u8 *)st + 0x574);
+//                if (*health > (u32)BSA_BURST_DAMAGE) {
+//                    *health -= BSA_BURST_DAMAGE;
+//                } else {
+//                    *health = 0;
+//                }
+//            }
+//        }
+//    }
+//}
 
 void BulletSuperArtillery::updateModelMatrix() {
     if (!mFlightActive) return;
