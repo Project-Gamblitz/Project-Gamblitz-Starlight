@@ -1,4 +1,5 @@
 #include "flexlion/InkstrikeMgr.hpp"
+#include "flexlion/BigLaserModeMgr.hpp"
 const int startflightdelay = 40; // delay from when a point is chosen to when the tornado is actually launched
 const float tornadoTankZOffset = -3.0f;
 
@@ -155,6 +156,20 @@ namespace Flexlion{
 					autoDest = player->mPosition;
 					autoDest.mY = 3000.0f;
 					autoDest = Utils::calcGroundPos(player, autoDest);
+					// Check if Princess Cannon was picked up - Cancel special
+					Flexlion::BigLaserMode checkMode = Flexlion::BigLaserModeMgr::sInstance->getMode(player->mIndex);
+					if (checkMode == Flexlion::cPrincessCannon) {
+						playerState[id] = TornadoState::cNone;
+						mWasAHeld[id] = false;
+						if(bullets[id] != NULL && bullets[id]->isActive()){
+							bullets[id]->cancel();
+						}
+						if(isCtrlPerformer){
+							Game::MiniMap *mMap = Utils::getMinimap();
+							if(mMap != NULL) mMap->setVisible(true);
+						}
+						break;
+					}
 				}
 				if(isOnline) bulletCloneHandle->sendEvent_Shot(player->mIndex, player->mPosition, autoDest, Game::BulletCloneEvent::Type::BulletTypeInkstrike, 0);
 				isAppliedWeapon[id] = 0;
