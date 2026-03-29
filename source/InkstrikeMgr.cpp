@@ -110,6 +110,8 @@ namespace Flexlion{
         sead::Vector3<float> miniMapAt = sead::Vector3<float>::zero;
         bool isOnline = !Game::MainMgr::sInstance->cloneObjMgr->mIsOfflineScene;
         auto bulletCloneHandle = player->mPlayerNetControl->mCloneHandle->mBulletCloneHandle;
+		// Check if Princess Cannon was picked up - Cancel special
+		Flexlion::BigLaserMode checkMode = Flexlion::BigLaserModeMgr::sInstance->getMode(player->mIndex);
         this->detectChangeState(player);
         float camdst = float(playerState[id] == TornadoState::cAim);
         if(isCtrlPerformer) cameraanim+=(camdst - cameraanim) * 0.2f;
@@ -118,9 +120,8 @@ namespace Flexlion{
         case TornadoState::cNone:
             break;
         case TornadoState::cAim:
-		
-            if(player->isInTrouble_Dying() || !player->isAlive()){
-                // Player died without choosing a spot — cancel special
+            if(player->isInTrouble_Dying() || !player->isAlive() || checkMode == Flexlion::cPrincessCannon){
+                // Player died without choosing a spot or picked up princess cannon — cancel special
                 playerState[id] = TornadoState::cNone;
 				mWasAHeld[id] = false;
                 if(bullets[id] != NULL && bullets[id]->isActive()){
@@ -156,20 +157,6 @@ namespace Flexlion{
 					autoDest = player->mPosition;
 					autoDest.mY = 3000.0f;
 					autoDest = Utils::calcGroundPos(player, autoDest);
-					// Check if Princess Cannon was picked up - Cancel special
-					Flexlion::BigLaserMode checkMode = Flexlion::BigLaserModeMgr::sInstance->getMode(player->mIndex);
-					if (checkMode == Flexlion::cPrincessCannon) {
-						playerState[id] = TornadoState::cNone;
-						mWasAHeld[id] = false;
-						if(bullets[id] != NULL && bullets[id]->isActive()){
-							bullets[id]->cancel();
-						}
-						if(isCtrlPerformer){
-							Game::MiniMap *mMap = Utils::getMinimap();
-							if(mMap != NULL) mMap->setVisible(true);
-						}
-						break;
-					}
 				}
 				if(isOnline) bulletCloneHandle->sendEvent_Shot(player->mIndex, player->mPosition, autoDest, Game::BulletCloneEvent::Type::BulletTypeInkstrike, 0);
 				isAppliedWeapon[id] = 0;
