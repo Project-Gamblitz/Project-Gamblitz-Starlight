@@ -4,6 +4,7 @@
 #include "Lp/Utl.h"
 #include "sead/vector.h"
 #include "sead/matrix.h"
+#include "Game/BulletGraduallyPaint.h"
 
 namespace Game {
     class Player;
