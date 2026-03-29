@@ -1,6 +1,7 @@
 #include "flexlion/InkstrikeMgr.hpp"
 #include "flexlion/BigLaserModeMgr.hpp"
 const int startflightdelay = 40; // delay from when a point is chosen to when the tornado is actually launched
+const int playerdelay = 60; // 60 frames Shoot_Tornado waiting for the player to transition from tornado cShoot to cNone, matches Splatoon 1 timing
 const float tornadoTankZOffset = -3.0f;
 
 
@@ -309,7 +310,7 @@ namespace Flexlion{
 			Prot::ObfStore(&player->mSpecialLeftFrame, flightDelay);
 			Prot::ObfStore(&player->mLayoutSpecialState, -1); // negative total → gauge shows 0%
 			int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mShootFrm[id];
-			if(elapsed >= flightDelay){
+			if(elapsed >= playerdelay){
 				Prot::ObfStore(&player->mSpecialLeftFrame, 0);
 				playerState[id] = TornadoState::cNone;
 				player->mPlayerMotion->animSeq_3C = -1;
