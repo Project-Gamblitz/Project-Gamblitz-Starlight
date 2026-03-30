@@ -23,6 +23,7 @@ namespace Flexlion{
         void playerThirdCalc(Game::Player *player);
         void informShotInkstrike(Game::Player *player, sead::Vector3<float> pos, sead::Vector3<float> dest, int paintgamefrm);
         void onCalc();
+		bool mMatchEnding;
         Lp::Sys::ModelArc *mTornadoArc;
         Lp::Sys::ModelArc *mTornadoMonitorArc;
         TornadoState playerState[10];

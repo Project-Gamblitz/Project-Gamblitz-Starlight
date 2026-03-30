@@ -1,6 +1,9 @@
 #include "flexlion/InkstrikeMgr.hpp"
+#include "flexlion/BigLaserModeMgr.hpp"
 const int startflightdelay = 40; // delay from when a point is chosen to when the tornado is actually launched
+const int playerdelay = 60; // 60 frames Shoot_Tornado waiting for the player to transition from tornado cShoot to cNone, matches Splatoon 1 timing
 const float tornadoTankZOffset = -3.0f;
+
 
 extern "C" {
     extern u8 _ZTVN4Game27MessagePlayerPerformSpecialE[];
@@ -57,7 +60,7 @@ namespace Flexlion{
     void InkstrikeMgr::informShotInkstrike(Game::Player *player, sead::Vector3<float> pos, sead::Vector3<float> dest, int paintgamefrm){
         if(bullets[player->mIndex] != NULL && !bullets[player->mIndex]->mFlightActive){
             // BSA is already active from prepare(), transition it to flight
-            bullets[player->mIndex]->launch(pos, dest, paintgamefrm);
+            bullets[player->mIndex]->launch(pos, dest, paintgamefrm, mMatchEnding);
             isAppliedWeapon[player->mIndex] = 0;
         }
     }
@@ -71,6 +74,7 @@ namespace Flexlion{
                 }
                 resetBSAStatics();
                 isBulletDeinit = 1;
+				mMatchEnding = false;
             }
             return;
         }
@@ -107,6 +111,8 @@ namespace Flexlion{
         sead::Vector3<float> miniMapAt = sead::Vector3<float>::zero;
         bool isOnline = !Game::MainMgr::sInstance->cloneObjMgr->mIsOfflineScene;
         auto bulletCloneHandle = player->mPlayerNetControl->mCloneHandle->mBulletCloneHandle;
+		// Check if Princess Cannon was picked up - Cancel special
+		Flexlion::BigLaserMode checkMode = Flexlion::BigLaserModeMgr::sInstance->getMode(player->mIndex);
         this->detectChangeState(player);
         float camdst = float(playerState[id] == TornadoState::cAim);
         if(isCtrlPerformer) cameraanim+=(camdst - cameraanim) * 0.2f;
@@ -115,8 +121,8 @@ namespace Flexlion{
         case TornadoState::cNone:
             break;
         case TornadoState::cAim:
-            if(player->isInTrouble_Dying() || !player->isAlive()){
-                // Player died without choosing a spot — cancel special
+            if(player->isInTrouble_Dying() || !player->isAlive() || checkMode == Flexlion::cPrincessCannon){
+                // Player died without choosing a spot or picked up princess cannon — cancel special
                 playerState[id] = TornadoState::cNone;
 				mWasAHeld[id] = false;
                 if(bullets[id] != NULL && bullets[id]->isActive()){
@@ -128,10 +134,15 @@ namespace Flexlion{
                 }
                 break;
             }
-            if(!player->isInSpecial()){
+            if(!player->isInSpecial() || mMatchEnding){
 				sead::Vector3<float> autoDest;
-				if(isCtrlPerformer && mAimValid[id] && Lp::Utl::getCtrl(0)->isHoldContinue(starlight::Controller::Buttons::A, 1)){
-					// Special ran out while aiming at valid position — use cursor position
+					if(mMatchEnding){
+						// Match ended — use player position.
+						autoDest = player->mPosition;
+						autoDest.mY = 3000.0f;
+						autoDest = Utils::calcGroundPos(player, autoDest);
+					} else if(isCtrlPerformer && mAimValid[id] && Lp::Utl::getCtrl(0)->isHoldContinue(starlight::Controller::Buttons::A, 1)){
+					// Special ran out or match ended while aiming at valid position — use cursor position
 					const float halfCanvas = 360.0f;
 					float halfFovyRad = camerafovy * 0.5f * MATH_PI / 180.0f;
 					float tanHalfFovy = sinf(halfFovyRad) / cosf(halfFovyRad);
@@ -160,6 +171,7 @@ namespace Flexlion{
 						mapXLink->searchAndPlayWrap("Pronounce", false, &decideHandle);
 					}
 				}
+				player->resetPaintGauge(0, 0, 0, 0);
 				playerState[id] = TornadoState::cShootPrepare;
 				informPerformSpecial(player);
 				mWasAHeld[id] = false;
@@ -273,7 +285,7 @@ namespace Flexlion{
             Prot::ObfStore(&player->mSpecialLeftFrame, startflightdelay);
             Prot::ObfStore(&player->mLayoutSpecialState, -1); // negative total → gauge shows 0%
             int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mShootPrepareFrm[id];
-            if(elapsed >= startflightdelay || player->isInTrouble_Dying()){
+            if(elapsed >= startflightdelay || player->isInTrouble_Dying() || mMatchEnding){
                 // Get launch position from ink tank bone
                 sead::Vector3<float> launchPos = player->mPosition;
                 Cmn::PlayerCustomPart *tank = player->getTank();
@@ -298,7 +310,7 @@ namespace Flexlion{
 			Prot::ObfStore(&player->mSpecialLeftFrame, flightDelay);
 			Prot::ObfStore(&player->mLayoutSpecialState, -1); // negative total → gauge shows 0%
 			int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mShootFrm[id];
-			if(elapsed >= flightDelay){
+			if(elapsed >= playerdelay){
 				Prot::ObfStore(&player->mSpecialLeftFrame, 0);
 				playerState[id] = TornadoState::cNone;
 				player->mPlayerMotion->animSeq_3C = -1;

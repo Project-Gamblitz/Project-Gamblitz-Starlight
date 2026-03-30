@@ -297,3 +297,7 @@
 
 // aquaball free movement on walls
 01037300 30000014
+
+// isSleepingAll hook — wait for tornado before ending match
+00F8D7E8 BL isSleepingAllHook
+0137533C BL isSleepingAllHook

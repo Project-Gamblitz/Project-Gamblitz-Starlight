@@ -34,6 +34,7 @@ public:
     int mStartFrm;
     bool mFlightActive;
     bool mHasBurst;
+	bool mMatchEnding;
     sead::Matrix34<float> mXLinkMtx;
     float mBurstRadius;
     int mBurstFrm;
@@ -45,7 +46,7 @@ public:
     static BulletSuperArtillery *create(Lp::Sys::Actor *parent, gsys::Model *model, Cmn::Def::Team team);
 
     void prepare(Game::Player *sender);
-    void launch(sead::Vector3<float> src, sead::Vector3<float> dst, int paintgamefrm);
+    void launch(sead::Vector3<float> src, sead::Vector3<float> dst, int paintgamefrm, bool forcedByMatchEnd = false);
     void cancel();
     bool isActive() const;
     void reset();
