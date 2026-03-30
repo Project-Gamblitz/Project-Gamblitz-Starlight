@@ -1211,7 +1211,6 @@ void hooks_init(){
 	stepPaintTypeHook(NULL);
 	fixEffHook(NULL);
 	playerModelResourceLoadHook(NULL, NULL);
-	createPlayerModelHook(Cmn::Def::Team::Alpha, sead::SafeStringBase<char>::create("test"), *(Lp::Sys::ModelArc*)NULL, *(Lp::Utl::ModelCreateArg*)NULL, NULL);
 	damageReasonHook(NULL, *(Game::DamageReason*)NULL, NULL, 0, 0, 0);
 	GetCharKindHook(NULL, 0);
 	isInInkstrikeCarryHook(NULL);
@@ -1222,7 +1221,6 @@ void hooks_init(){
 	emitAndPlay_StealthDamageHook(NULL, 0, (Cmn::Def::DMG)0, *(Game::DamageReason*)NULL);
 	PlaySuperArmorUse();
 	healPlayerSuperLandingHook(NULL);
-	createHumanModelHook(sead::SafeStringBase<char>::create("test"), Cmn::Def::Team::Alpha, *(Game::PlayerModelResource*)NULL,  *(Lp::Utl::ModelCreateArg*)NULL,  *(Lp::Utl::AnimCreateArg*)NULL, Cmn::Def::PlayerModelType::InkGirl, *(sead::RingBuffer<int>*)NULL);
 	msnArmorHook(0, Cmn::Def::GearKind::cHead, 0);
 	CustomizeSeqBaseLoadHook(NULL, NULL);
 	CustomizeAmiiboCbHelperFunc();
@@ -1303,30 +1301,6 @@ void playerModelResourceLoadHook(Game::PlayerModelResource *res, sead::Heap *hea
 	rivalHalfArc = (Lp::Sys::ModelArc *)res->mHalfArcs.mPtr[6];
 	if(rivalHalfArc == NULL) rivalHalfArc = new Lp::Sys::ModelArc(sead::SafeStringBase<char>::create("Rival00_Hlf"), heap, 0, NULL, NULL);
 	rivalFullArc = new Lp::Sys::ModelArc(sead::SafeStringBase<char>::create("Player04"), heap, 0, NULL, NULL);
-}
-
-gsys::Model *createHumanModelHook(sead::SafeStringBase<char> const& name, Cmn::Def::Team team, Game::PlayerModelResource &res, const Lp::Utl::ModelCreateArg &arg, Lp::Utl::AnimCreateArg const&animarg, Cmn::Def::PlayerModelType modeltype, sead::RingBuffer<int> const&hairinfo){
-	register Game::PlayerModel *x19 asm("x19");
-	u64 tmparc = res.mHumanArcs.mPtr[2];
-	if(modeltype == Cmn::Def::PlayerModelType::OctGirl and x19->mPlayer->mPlayerInfo->mModelId == 54){
-		res.mHumanArcs.mPtr[2] = (u64)rivalFullArc;
-	}
-	gsys::Model *model = Cmn::PlayerCustomUtl::createPlayerModelHuman(name, team, res, arg, animarg, modeltype, hairinfo);
-	res.mHumanArcs.mPtr[2] = tmparc;
-	return model;
-}
-
-gsys::Model *createPlayerModelHook(Cmn::Def::Team team,sead::SafeStringBase<char> const& name,Lp::Sys::ModelArc &arc,Lp::Utl::ModelCreateArg const&createArg,sead::Heap *heap){
-	Game::PlayerModelResource *res = &Game::PlayerMgr::sInstance->mModelResource;
-	Lp::Sys::ModelArc *useArc = &arc;
-	register Game::PlayerModel *x19 asm("x19");
-	if(((Lp::Sys::ModelArc *)res->mHalfArcs.mPtr[0]) == useArc and x19->mPlayer->mPlayerInfo->mModelId == 0){
-		useArc = inkGirlHalfNewArc;
-	} else if(((Lp::Sys::ModelArc *)res->mHalfArcs.mPtr[2]) == useArc and x19->mPlayer->mPlayerInfo->mModelId == 54){ // nacho asked to add this for his hair
-		useArc = rivalHalfArc;
-	}
-	gsys::Model *model = Cmn::GfxUtl::createModel(team, name, *useArc, createArg, heap);
-	return model;
 }
 
 int stepPaintTypeHook(Game::PlayerStepPaint *step){

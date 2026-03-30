@@ -39,8 +39,6 @@
 
 // Some Hair Hook
 010E6668+18 BL playerModelResourceLoadHook
-010EC034+344 BL createHumanModelHook
-010EC034+370 BL createPlayerModelHook
 
 // Weapon
 01066298:
