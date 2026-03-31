@@ -77,7 +77,6 @@ public:
     void calcFlight();
     void doBurst();
     void calcBurstFollow();
-    void calcBurstPaintAndDamage();
     void updateModelMatrix();
     void doSleep();
 
