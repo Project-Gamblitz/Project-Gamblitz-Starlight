@@ -247,7 +247,7 @@
 003A5790 3F150071
 
 //Remove splatfest from vs select
-014B2484 00008052
+//014B2484 00008052
 
 // Resource Heap Size Bump (if using merged testfire ptcl)
 0039FA90 00E0A152 // static res
@@ -260,6 +260,18 @@
 // StartBarrier — replace stubbed sendEvent_StartBarrier tail call inside startBarrier_Common
 // 3.1.0 IDA ref: BL at 0x7100e45f64, 5.5.2: B at 0x710101964C (tail call to stub at 0x7101100FE0)
 0101964C B sendEvent_StartBarrierHook
+
+// EndDeviled — replace stubbed sendEvent_EndDeviled BL inside Player::thirdCalc
+// 5.5.1 IDA: BL at 0x7101004980 (inside thirdCalc 0x7101002410), stub at 0x7101101048
+// thirdCalc starts at same offset in 5.5.1 and 5.5.2, so call site offset is identical.
+// By this point thirdCalc has already cleared local deviled fields via Prot::ObfStore + plain write.
+01004980 BL sendEvent_EndDeviledHook
+
+// StartDeviled — replace stubbed sendEvent_StartDeviled tail-call inside Player::startDeviled_Sender
+// 5.5.1 IDA: B at 0x7101029088 (inside startDeviled_Sender 0x7101028EBC), stub at 0x7101101040
+// Args at call site: X0=netCtrl(player+0xFF8), W1=deviledCountMax, W2=duration(pre-subtracted), W3=1.
+// startDeviled_Sender is named in 5.5.1; tail-call offset should be identical in 5.5.2.
+01029088 B sendEvent_StartDeviledHook
 
 // playDamageHook barrier
 01049CA0 BL playDamageVoiceAndRumbleHook
@@ -277,7 +289,6 @@
 // Always show Shifty Stations on PBs [YoshiCrystal]
 // Not sure if this will show on rotations
 00410CC4 1F2003D5
-
 
 // ---- Extend BGM slots from 16 to 25 ----
 // 1. getVersusBgmNum: change MOV W8, #16 -> MOV W8, #25 (default versus path)
@@ -301,3 +312,18 @@
 // isSleepingAll hook — wait for tornado before ending match
 00F8D7E8 BL isSleepingAllHook
 0137533C BL isSleepingAllHook
+
+// AutoMatch LAN Init Fix DONT TOUCH PLEASE
+0036C960 BL autoMatchLanInitHook
+
+// Lan on Versus Lobby and change local to lan
+0149D070 03000014
+0149D080 08000014
+
+//Save Game on LAN Match [Custom Splatfest Patch]
+01365890 20008052
+
+//Fix MatchingSave [Custom Splatfest Patch]
+00376F80 20008052
+01365694 20008052
+

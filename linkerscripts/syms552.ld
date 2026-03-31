@@ -715,6 +715,7 @@ _ZN4Game12PlayerEffect24emitAndPlay_SuperArmorEdEv = 0x107884C - 0x2EBE000;
 _ZN4Game12PlayerEffect28emitAndPlay_SuperArmorVanishEv = 0x1078A34 - 0x2EBE000;
 _ZN4Game6Player19startBarrier_CommonEii = 0x101947C - 0x2EBE000;
 _ZN4Game12PlayerEffect23emitAndPlay_StartMarkedEPKNS_6PlayerE = 0x1077488 - 0x2EBE000;
+_ZN4Game12PlayerEffect24emitAndPlay_StartDeviledEv = 0x10775B4 - 0x2EBE000;
 
 _ZN3Cmn16PlayerCustomPart19emitAndPlay_PutBackEv = 0x0018B5D0 - 0x2EBE000;
 _ZN3Cmn12PlayerWeapon13setLinkActionENS0_11InkActionIDEb = 0x001A5360 - 0x2EBE000;

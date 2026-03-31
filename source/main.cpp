@@ -226,11 +226,59 @@ static void (*unpackStateEventOriginal)(Game::Player *player, Game::PlayerStateC
 #define PACKET_END_BARRIER   56
 #define PACKET_ALL_MARKING   57
 #define PACKET_BIGLASER_PC   58
+#define PACKET_END_DEVILED   59
+#define PACKET_START_DEVILED 60
 
 void receiveEndBarrier_Net_Reimpl(Game::Player *player){
 	player->mBarrierEndFrm = 0;
 	player->_B80 = 0;
 	player->mIsInBarrier = 0;
+}
+
+// Reimplementation of Game::Player::receiveEndDeviled_Net (3.1.0: 0x7100e465d0).
+// Called on the remote clone when its owner's deviled state ends.
+// 3.1.0 original cleared *(this+0xB98)=0LL (deviled count + timer as one u64).
+// In 5.5.2 the deviled count at +0xBA8 is Prot::ObfStore-protected; timer at +0xBAC is plain.
+// Struct offset mapping 3.1.0 → 5.5.2: PlayerTrouble +0xF40→+0xF60, deviled +0xB98→+0xBA8.
+void receiveEndDeviled_Net_Reimpl(Game::Player *player) {
+	// Guard from 3.1.0: skip if bit 2 of _354 is set (state flag present in both versions).
+	if ((*(u32*)((u8*)player + 0x354) & 4) != 0) return;
+	// Clear obfuscated deviled count and plain deviled timer.
+	// Equivalent of 3.1.0's single 0LL write that covered both fields.
+	Prot::ObfStore((u32*)((u8*)player + 0xBA8), 0);  // deviled count (Prot-protected, +0xBA8)
+	*(u32*)((u8*)player + 0xBAC) = 0;                // deviled timer (+0xBAC)
+}
+
+// Reimplementation of Game::Player::receiveStartDeviled_Net (3.1.0: 0x7100e46508).
+// Called on the remote clone when its owner starts a deviled state.
+// Args: deviledCountMax (a2), duration (a3, pre-subtracted by caller, clamped ≥ 1), emitEffect (a4&1).
+// Struct offset mapping 3.1.0 → 5.5.2: deviled count +0xB98→+0xBA8, timer +0xB9C→+0xBAC,
+// PlayerTrouble +0xF40→+0xF60, PlayerEffect +0xF98→+0xFB8 (all shifted +0x20).
+void receiveStartDeviled_Net_Reimpl(Game::Player *player, int deviledCountMax, int duration, bool emitEffect) {
+	// Guard: skip if bit 2 of _354 is set (same state flag as EndDeviled guard).
+	if ((*(u32*)((u8*)player + 0x354) & 4) != 0) return;
+	// Guard: PlayerTrouble field at +0x5C must be nonzero (deviled-vulnerability count must be > 0).
+	// 3.1.0: *(*(this+3904)+92) != 0, where 3904=0xF40→0xF60 in 5.5.2, 92=0x5C.
+	u8 *playerTrouble = *(u8**)((u8*)player + 0xF60);
+	if (playerTrouble == NULL) return;
+	if (*(u8*)(playerTrouble + 0x5C) == 0) return;
+	// Clamp remaining duration to >= 1 (mirrors 3.1.0: max(1, a3 - currentFrame), but
+	// sendEvent_StartDeviledHook already passes the pre-subtracted duration from the sender).
+	int remaining = (duration >= 1) ? duration : 1;
+	// Emit StartDeviled visual/audio effect on this clone's PlayerEffect, if requested.
+	// PlayerEffect pointer at +0xFB8 (was +0xF98 in 3.1.0).
+	if (emitEffect) {
+		Game::PlayerEffect *effect = *(Game::PlayerEffect**)((u8*)player + 0xFB8);
+		if (effect != NULL) effect->emitAndPlay_StartDeviled();
+	}
+	// Update deviled count (Prot-protected at +0xBA8) and timer (plain at +0xBAC).
+	// 3.1.0 logic: if count <= 0 OR stored-timer > remaining → update timer.
+	//              if count < deviledCountMax → bump count up to deviledCountMax.
+	int currentCount = (int)Prot::ObfLoad((u32*)((u8*)player + 0xBA8));
+	if (currentCount <= 0 || *(int*)((u8*)player + 0xBAC) > remaining)
+		*(int*)((u8*)player + 0xBAC) = remaining;
+	if (currentCount < deviledCountMax)
+		Prot::ObfStore((u32*)((u8*)player + 0xBA8), (u32)deviledCountMax);
 }
 
 // Reimplementation of Game::Player::receiveStartBarrier_Net (3.1.0: 0x7100e45d68)
@@ -277,6 +325,41 @@ void sendEvent_StartBarrierHook(Game::PlayerNetControl *netCtrl, int barrierEndF
 	handle->mPlayerCloneObj->pushPlayerStateEvent(event);
 }
 
+// Reimplementation of stubbed Game::PlayerNetControl::sendEvent_EndDeviled (5.5.2: 0x01101048).
+// Hooked at the BL call site 0x01004980 inside Player::thirdCalc (same offset in 5.5.1 and 5.5.2).
+// By the time this is called the caller has already cleared the local deviled fields via
+// Prot::ObfStore(player+0xBA8, 0) and *(player+0xBAC)=0, so we only need to push the event.
+// Pattern mirrors sendStateEvent_EndMarked (3.1.0: 0x7100e77df0): construct event,
+// set packet byte 32 (packStateEvent_EndDeviled equivalent: byte 32 = PACKET_END_DEVILED), push.
+void sendEvent_EndDeviledHook(Game::PlayerNetControl *netCtrl) {
+	if (netCtrl == NULL || netCtrl->mCloneHandle == NULL) return;
+	Game::PlayerCloneHandle *handle = netCtrl->mCloneHandle;
+	if (handle->mCloneObjMgr->mIsOfflineScene) return;
+	Game::PlayerStateCloneEvent event;
+	memset(&event, 0, sizeof(event));
+	event._data[32] = PACKET_END_DEVILED;  // packStateEvent_EndDeviled equivalent
+	handle->mPlayerCloneObj->pushPlayerStateEvent(event);
+}
+
+// Reimplementation of stubbed Game::PlayerNetControl::sendEvent_StartDeviled (5.5.2: 0x01101040).
+// Hooked at the B tail-call 0x01029088 inside Player::startDeviled_Sender (5.5.1: 0x7101029088).
+// Caller passes: X0=netCtrl (player+0xFF8), W1=deviledCountMax, W2=duration (pre-subtracted,
+// clamped ≥ 0 at call site), W3=1 (emitEffect, always true from startDeviled_Sender).
+// Mirrors sendEvent_StartBarrierHook: pack args at DWORD[6]/DWORD[7] (bytes 24-31),
+// which are transmitted as raw U32 (unlike bytes 0-23 which suffer lossy float compression).
+void sendEvent_StartDeviledHook(Game::PlayerNetControl *netCtrl, int deviledCountMax, int duration, bool emitEffect) {
+	if (netCtrl == NULL || netCtrl->mCloneHandle == NULL) return;
+	Game::PlayerCloneHandle *handle = netCtrl->mCloneHandle;
+	if (handle->mCloneObjMgr->mIsOfflineScene) return;
+	Game::PlayerStateCloneEvent event;
+	memset(&event, 0, sizeof(event));
+	event._data[32] = PACKET_START_DEVILED;
+	// DWORD[6] = deviledCountMax, DWORD[7] = duration (pre-subtracted remaining frames).
+	*(int*)(event._data + 24) = deviledCountMax;
+	*(int*)(event._data + 28) = duration;
+	handle->mPlayerCloneObj->pushPlayerStateEvent(event);
+}
+
 void unpackStateEventHook(Game::Player *player, Game::PlayerStateCloneEvent *event, u32 gameFrame){
 	u8 packetValue = event->_data[32];
 	if(packetValue == PACKET_END_BARRIER){
@@ -301,6 +384,20 @@ void unpackStateEventHook(Game::Player *player, Game::PlayerStateCloneEvent *eve
 			Flexlion::BigLaserModeMgr::reSetupForPlayer(player->mIndex);
 			Flexlion::BigLaserModeMgr::swapPlayerAnimsToPC(player);
 		}
+		return;
+	}
+	if(packetValue == PACKET_END_DEVILED){
+		// Remote player's deviled state ended — clear it on this clone.
+		// Calls receiveEndDeviled_Net_Reimpl (port of 3.1.0: 0x7100e465d0).
+		receiveEndDeviled_Net_Reimpl(player);
+		return;
+	}
+	if(packetValue == PACKET_START_DEVILED){
+		// Remote player started deviled state — apply it on this clone.
+		// Calls receiveStartDeviled_Net_Reimpl (port of 3.1.0: 0x7100e46508).
+		int deviledCountMax = *(int*)(event->_data + 24);
+		int duration        = *(int*)(event->_data + 28);
+		receiveStartDeviled_Net_Reimpl(player, deviledCountMax, duration, true);
 		return;
 	}
 	unpackStateEventOriginal(player, event, gameFrame);
@@ -840,6 +937,10 @@ void init_starlion(){
 		ProcessMemory::MainAddr(0x00A146E4);
 		
 	isSleepingAllOrig = (bool (*)(Game::BulletMgr*))ProcessMemory::MainAddr(0x4E936C);
+
+	// Initialize MatchJoint LAN function pointers
+	MatchJointLan::init();
+
 }
 
 void playerModelSetupHook(Game::PlayerModel *pmodel){
@@ -1235,6 +1336,8 @@ void hooks_init(){
 	handleBulletCloneEventHook(NULL, NULL, NULL, 0);
 	unpackStateEventHook(NULL, NULL, 0);
 	sendEvent_StartBarrierHook(NULL, 0, 0);
+	sendEvent_EndDeviledHook(NULL);
+	sendEvent_StartDeviledHook(NULL, 0, 0, false);
 	playDamageVoiceAndRumbleHook(NULL, *(Game::DamageReason*)NULL, 0);
 	emitAndPlay_StealthDamageHook(NULL, 0, (Cmn::Def::DMG)0, *(Game::DamageReason*)NULL);
 	PlaySuperArmorUse();
@@ -1246,6 +1349,8 @@ void hooks_init(){
 	LobbyRivalGetPlayerTypeHook(NULL);
 	isInSpecialForShotGuideHook(NULL);
 	isSleepingAllHook(NULL);
+	// AutoMatch LAN session init (BL hook inside reqAutoMatch)
+	autoMatchLanInitHook(NULL);
 }
 
 int LobbyRivalGetPlayerTypeHook(Cmn::SaveDataCmn *saveDataCmn){

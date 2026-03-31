@@ -15,6 +15,7 @@
 #include "xlink2/handle.hpp"
 #include "sead/random.h"
 #include "gamblitz/automatch.hpp"
+#include "gamblitz/MatchJointLan.h"
 //#include "EffectMgr.hpp"
 
 ushort GetCharKindHook(uintptr_t _this, ushort charKind);
@@ -33,6 +34,8 @@ void miniMapCamCalcHook(Game::MiniMapCamera *_this);
 void handleBulletCloneEventHook(Game::BulletCloneHandle *cloneHandle, Game::Player *player, Game::BulletCloneEvent *event, int clonefrm);
 void unpackStateEventHook(Game::Player *player, Game::PlayerStateCloneEvent *event, u32 gameFrame);
 void sendEvent_StartBarrierHook(Game::PlayerNetControl *netCtrl, int barrierEndFrm, int sourcePlayerIdx);
+void sendEvent_EndDeviledHook(Game::PlayerNetControl *netCtrl);
+void sendEvent_StartDeviledHook(Game::PlayerNetControl *netCtrl, int deviledCountMax, int duration, bool emitEffect);
 bool isInInkstrikeCarryHook(Game::Player *player);
 
 void damageReasonHook(Game::VersusBeatenPage *page, Game::DamageReason &reason, Cmn::PlayerInfo const*attackerInfo, int dieFrm, int uiAppearFrm, bool iwannaslep);
@@ -106,6 +109,7 @@ void handleCreateObj();
 void autoMatchTest();
 bool rivalOctohook(Cmn::Def::PlayerModelType modeltyape);
 
+void autoMatchLanInitHook(void* a1);    // DefaultMatchingSeq state 16 — critical LAN fix
 // Main
 void renderEntrypoint(agl::DrawContext *drawContext, sead::TextWriter *textWriter);
 void hooks_init();
