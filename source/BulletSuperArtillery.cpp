@@ -5,6 +5,7 @@
 #include "Game/PaintUtl.h"
 #include "Game/DamageReason.h"
 #include "Game/SighterTarget.h"
+#include "nn/fs.h"
 
 extern "C" {
     void _ZN3Cmn5ActorC2Ev(void *);
@@ -33,9 +34,9 @@ const float BSA_BURST_RADIUS_MAX   = 225.0f;  // Maximum radius
 const float BSA_BURST_RADIUS_GROW  = 0.5f;    // Radius growth per frame
 const float BSA_BURST_TEX_ROTATION = 30.0f; // texture rotation per paint
 const float BSA_BURST_ROT_FRAMES   = 3.0f; // how many frames per rotation step (can be different)
-const int  	BSA_BURST_FRAMES	   = 3;		// how many frames each time paint is applied
+const int  	BSA_BURST_FRAMES	   = 4;		// how many frames each time paint is applied
 const int   BSA_BURST_DAMAGE       = 25;       // 2.5 HP per frame (internal units: 25 = 2.5% of 1000 max HP)
-const int   BSA_BURST_DURATION     = 120;      // Frames before burst ends
+const int   BSA_BURST_DURATION     = 150;      // Frames before burst ends
 
 namespace Flexlion {
 
@@ -454,19 +455,57 @@ void BulletSuperArtillery::doBurst() {
     mFlightActive = false;
     mHasBurst = true;
 }
+static float s_BSA_BURST_RADIUS_START = BSA_BURST_RADIUS_START;
+static float s_BSA_BURST_RADIUS_MAX   = BSA_BURST_RADIUS_MAX;
+static float s_BSA_BURST_RADIUS_GROW  = BSA_BURST_RADIUS_GROW;
+static float s_BSA_BURST_TEX_ROTATION = BSA_BURST_TEX_ROTATION;
+static float s_BSA_BURST_ROT_FRAMES   = BSA_BURST_ROT_FRAMES;
+static int   s_BSA_BURST_FRAMES       = BSA_BURST_FRAMES;
+static int   s_BSA_BURST_DAMAGE       = BSA_BURST_DAMAGE;
+static int   s_BSA_BURST_DURATION     = BSA_BURST_DURATION;
+
+//static void loadBurstConfig() {
+//    nn::fs::FileHandle file;
+//    nn::Result rc = nn::fs::OpenFile(&file, "sd:/GamblitzDev/blitz_burst.txt", nn::fs::OpenMode_Read);
+//    if(rc.IsSuccess()){
+//        s64 fileSize = 0;
+//        nn::fs::GetFileSize(&fileSize, file);
+//        char buf[256] = {};
+//        nn::fs::ReadFile(file, 0, buf, fileSize);
+//        nn::fs::CloseFile(file);
+//        sscanf(buf,
+//            "BSA_BURST_RADIUS_START=%f\n"
+//            "BSA_BURST_RADIUS_MAX=%f\n"
+//            "BSA_BURST_RADIUS_GROW=%f\n"
+//            "BSA_BURST_TEX_ROTATION=%f\n"
+//            "BSA_BURST_ROT_FRAMES=%f\n"
+//            "BSA_BURST_FRAMES=%d\n"
+//            "BSA_BURST_DAMAGE=%d\n"
+//            "BSA_BURST_DURATION=%d\n",
+//            &s_BSA_BURST_RADIUS_START,
+//            &s_BSA_BURST_RADIUS_MAX,
+//            &s_BSA_BURST_RADIUS_GROW,
+//            &s_BSA_BURST_TEX_ROTATION,
+//            &s_BSA_BURST_ROT_FRAMES,
+//            &s_BSA_BURST_FRAMES,
+//            &s_BSA_BURST_DAMAGE,
+//            &s_BSA_BURST_DURATION);
+//    }
+//}
 
 void BulletSuperArtillery::calcBurstFollow() {
+	int PlayerIndex = mSender->mIndex;
     mBurstFrm++;
-    float increment = (BSA_BURST_RADIUS_MAX - BSA_BURST_RADIUS_START) / (float)BSA_BURST_DURATION;
-    float currentRadius = BSA_BURST_RADIUS_START + (float)mBurstFrm * increment;
-    if(currentRadius > BSA_BURST_RADIUS_MAX) currentRadius = BSA_BURST_RADIUS_MAX;
+    float increment = (s_BSA_BURST_RADIUS_MAX - s_BSA_BURST_RADIUS_START) / (float)s_BSA_BURST_DURATION;
+    float currentRadius = s_BSA_BURST_RADIUS_START + (float)mBurstFrm * increment;
+    if(currentRadius > s_BSA_BURST_RADIUS_MAX) currentRadius = s_BSA_BURST_RADIUS_MAX;
 
     // Paint every 2 frames
-    if(mBurstFrm % BSA_BURST_FRAMES == 0){
+    if(mBurstFrm % s_BSA_BURST_FRAMES == 0){
         // Rotate texture each paint application
         // Each call rotates by 20 degrees — requestColAndPaint's vel parameter
         // can be used to rotate the texture by passing a rotated direction vector
-		float rotAngle = (float)(mBurstFrm / BSA_BURST_ROT_FRAMES) * (BSA_BURST_TEX_ROTATION * MATH_PI / 180.0f);
+		float rotAngle = (float)(mBurstFrm / s_BSA_BURST_ROT_FRAMES) * (s_BSA_BURST_TEX_ROTATION * MATH_PI / 180.0f);
         sead::Vector3<float> vel;
         vel.mX = sinf(rotAngle);
         vel.mY = 0.0f;
@@ -477,33 +516,42 @@ void BulletSuperArtillery::calcBurstFollow() {
         Game::PaintUtl::requestColAndPaint(
             mTo, paintSize, vel,
             (Game::PaintTexType)11, team,
-            sead::Vector3<float>::ey, true, -1, 50.0f, true);
+            sead::Vector3<float>::ey, false, PlayerIndex, 10.0f, false);
         Game::PaintUtl::requestColAndPaint(
             mTo, paintSize, vel,
             (Game::PaintTexType)11, team,
-            sead::Vector3<float>::ey, true, -1, 50.0f, true);
+            sead::Vector3<float>::ey, false, PlayerIndex, 10.0f, false);
+        Game::PaintUtl::requestColAndPaint(
+            mTo, paintSize, vel,
+            (Game::PaintTexType)11, team,
+            sead::Vector3<float>::ey, false, PlayerIndex, 10.0f, false);
+        Game::PaintUtl::requestColAndPaint(
+            mTo, paintSize, vel,
+            (Game::PaintTexType)11, team,
+            sead::Vector3<float>::ey, false, PlayerIndex, 10.0f, false);
 			
 		sead::Vector3<float> paintPosHigh = mTo;
-		paintPosHigh.mY += 25.0f; // 25 units up
+		paintPosHigh.mY += 50.0f; // 50 units up
         Game::PaintUtl::requestColAndPaint(
             paintPosHigh, paintSize, vel,
             (Game::PaintTexType)11, team,
-            sead::Vector3<float>::ey, true, -1, 50.0f, true);
+            sead::Vector3<float>::ey, true, PlayerIndex, 10.0f, true);
         Game::PaintUtl::requestColAndPaint(
             paintPosHigh, paintSize, vel,
             (Game::PaintTexType)11, team,
-            sead::Vector3<float>::ey, true, -1, 50.0f, true);
+            sead::Vector3<float>::ey, true, PlayerIndex, 10.0f, true);
 			
 		sead::Vector3<float> paintPosLow = mTo;
-		paintPosLow.mY -= 25.0f; // 25 units down
+		paintPosLow.mY -= 50.0f; // 50 units down
         Game::PaintUtl::requestColAndPaint(
             paintPosLow, paintSize, vel,
             (Game::PaintTexType)11, team,
-            sead::Vector3<float>::ey, true, -1, 50.0f, true);
+            sead::Vector3<float>::ey, true, PlayerIndex, 10.0f, true);
         Game::PaintUtl::requestColAndPaint(
             paintPosLow, paintSize, vel,
             (Game::PaintTexType)11, team,
-            sead::Vector3<float>::ey, true, -1, 50.0f, true);
+            sead::Vector3<float>::ey, true, PlayerIndex, 10.0f, true);
+		
     }
 
     // Damage every frame regardless
@@ -522,12 +570,13 @@ void BulletSuperArtillery::calcBurstFollow() {
                 Game::DamageReason reason;
                 reason.mWeaponId = -1;
                 reason.mClassType = 0;
-                p->receiveDamage_Net(mSender->mIndex, (Cmn::Def::DMG)BSA_BURST_DAMAGE, hitDir, reason, false, false, false);
+                p->receiveDamage_Net(mSender->mIndex, (Cmn::Def::DMG)s_BSA_BURST_DAMAGE, hitDir, reason, false, false, false);
             }
         }
     }
 
-    if(mBurstFrm >= BSA_BURST_DURATION)
+    if(mBurstFrm >= s_BSA_BURST_DURATION)
+		//loadBurstConfig();
         doSleep();
 }
 
