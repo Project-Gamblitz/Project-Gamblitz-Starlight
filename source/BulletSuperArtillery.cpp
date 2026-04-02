@@ -30,11 +30,11 @@ const float tornadoTankZOffset = -3.0f;
 
 // Burst parameters
 const float BSA_BURST_RADIUS_START = 0.0f;   // Initial paint/hitbox radius
-const float BSA_BURST_RADIUS_MAX   = 225.0f;  // Maximum radius
+const float BSA_BURST_RADIUS_MAX   = 250.0f;  // Maximum radius
 const float BSA_BURST_RADIUS_GROW  = 0.5f;    // Radius growth per frame
 const float BSA_BURST_TEX_ROTATION = 30.0f; // texture rotation per paint
 const float BSA_BURST_ROT_FRAMES   = 3.0f; // how many frames per rotation step (can be different)
-const int  	BSA_BURST_FRAMES	   = 4;		// how many frames each time paint is applied
+const int  	BSA_BURST_FRAMES	   = 3;		// how many frames each time paint is applied
 const int   BSA_BURST_DAMAGE       = 25;       // 2.5 HP per frame (internal units: 25 = 2.5% of 1000 max HP)
 const int   BSA_BURST_DURATION     = 150;      // Frames before burst ends
 
@@ -516,41 +516,77 @@ void BulletSuperArtillery::calcBurstFollow() {
         Game::PaintUtl::requestColAndPaint(
             mTo, paintSize, vel,
             (Game::PaintTexType)11, team,
-            sead::Vector3<float>::ey, false, PlayerIndex, 50.0f, false);
+            sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
+			
+		sead::Vector3<float> paintPosSSHigh = mTo;
+		paintPosSSHigh.mY += 200.0f; // units up
         Game::PaintUtl::requestColAndPaint(
-            mTo, paintSize, vel,
+            paintPosSSHigh, paintSize, vel,
             (Game::PaintTexType)11, team,
-            sead::Vector3<float>::ey, false, PlayerIndex, 50.0f, false);
+            sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
+			
+		sead::Vector3<float> paintPosSHigh = mTo;
+		paintPosSHigh.mY += 160.0f; // units up
         Game::PaintUtl::requestColAndPaint(
-            mTo, paintSize, vel,
+            paintPosSHigh, paintSize, vel,
             (Game::PaintTexType)11, team,
-            sead::Vector3<float>::ey, false, PlayerIndex, 50.0f, false);
-        Game::PaintUtl::requestColAndPaint(
-            mTo, paintSize, vel,
-            (Game::PaintTexType)11, team,
-            sead::Vector3<float>::ey, false, PlayerIndex, 50.0f, false);
+            sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
 			
 		sead::Vector3<float> paintPosHigh = mTo;
-		paintPosHigh.mY += 50.0f; // 40 units up
+		paintPosHigh.mY += 120.0f; // units up
         Game::PaintUtl::requestColAndPaint(
             paintPosHigh, paintSize, vel,
             (Game::PaintTexType)11, team,
-            sead::Vector3<float>::ey, true, PlayerIndex, 50.0f, true);
+            sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
+			
+		sead::Vector3<float> paintPosMHigh = mTo;
+		paintPosMHigh.mY += 80.0f; // units up
         Game::PaintUtl::requestColAndPaint(
-            paintPosHigh, paintSize, vel,
+            paintPosMHigh, paintSize, vel,
             (Game::PaintTexType)11, team,
-            sead::Vector3<float>::ey, true, PlayerIndex, 50.0f, true);
+            sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
+			
+		sead::Vector3<float> paintPosLHigh = mTo;
+		paintPosLHigh.mY += 40.0f; // units up
+        Game::PaintUtl::requestColAndPaint(
+            paintPosLHigh, paintSize, vel,
+            (Game::PaintTexType)11, team,
+            sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
+			
+		sead::Vector3<float> paintPosLLow = mTo;
+		paintPosLLow.mY -= 40.0f; // units down
+        Game::PaintUtl::requestColAndPaint(
+            paintPosLLow, paintSize, vel,
+            (Game::PaintTexType)11, team,
+            sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
+			
+		sead::Vector3<float> paintPosMLow = mTo;
+		paintPosMLow.mY -= 80.0f; // units down
+        Game::PaintUtl::requestColAndPaint(
+            paintPosMLow, paintSize, vel,
+            (Game::PaintTexType)11, team,
+            sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
 			
 		sead::Vector3<float> paintPosLow = mTo;
-		paintPosLow.mY -= 50.0f; // 40 units down
+		paintPosLow.mY -= 120.0f; // units down
         Game::PaintUtl::requestColAndPaint(
             paintPosLow, paintSize, vel,
             (Game::PaintTexType)11, team,
-            sead::Vector3<float>::ey, true, PlayerIndex, 50.0f, true);
+            sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
+			
+		sead::Vector3<float> paintPosSLow = mTo;
+		paintPosSLow.mY -= 160.0f; // units down
         Game::PaintUtl::requestColAndPaint(
-            paintPosLow, paintSize, vel,
+            paintPosSLow, paintSize, vel,
             (Game::PaintTexType)11, team,
-            sead::Vector3<float>::ey, true, PlayerIndex, 50.0f, true);
+            sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
+			
+		sead::Vector3<float> paintPosSSLow = mTo;
+		paintPosSSLow.mY -= 200.0f; // units down
+        Game::PaintUtl::requestColAndPaint(
+            paintPosSSLow, paintSize, vel,
+            (Game::PaintTexType)11, team,
+            sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
 		
     }
 

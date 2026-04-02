@@ -1030,8 +1030,7 @@ void EnemyBall::paintHitBullet_() {
         *nrmGnd,
         true,
         -1,
-        -1.0f,
-        false);
+        -1.0f);
 }
 
 void EnemyBall::setDirectionToPhysics_() {
