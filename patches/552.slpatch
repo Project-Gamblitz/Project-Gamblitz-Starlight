@@ -327,3 +327,5 @@
 00376F80 20008052
 01365694 20008052
 
+//Inkstrike Paint set as special paint
+00FC3918 BL requestPaintImplHook

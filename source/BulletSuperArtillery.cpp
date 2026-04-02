@@ -16,6 +16,7 @@ extern "C" {
     // VTV symbols for manual F32PropertyDefinition construction
     extern u8 _ZTVN6xlink221F32PropertyDefinitionE[];
     extern u8 _ZTVN4sead22BufferedSafeStringBaseIcEE[];
+	extern bool gSpecialWeaponPaint;
 }
 #define CmnActorCtor _ZN3Cmn5ActorC2Ev
 #define EnumPropDefCtor _ZN6xlink222EnumPropertyDefinitionC2EPKcb
@@ -510,6 +511,7 @@ void BulletSuperArtillery::calcBurstFollow() {
         vel.mX = sinf(rotAngle);
         vel.mY = 0.0f;
         vel.mZ = cosf(rotAngle);
+		gSpecialWeaponPaint = true;
 
         sead::Vector2<float> paintSize = {currentRadius, currentRadius};
         Cmn::Def::Team team = *(Cmn::Def::Team*)(_actorBase + 0x328);
@@ -587,7 +589,8 @@ void BulletSuperArtillery::calcBurstFollow() {
             paintPosSSLow, paintSize, vel,
             (Game::PaintTexType)11, team,
             sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
-		
+
+		gSpecialWeaponPaint = false;
     }
 
     // Damage every frame regardless

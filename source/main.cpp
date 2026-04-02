@@ -55,6 +55,32 @@ extern "C" sead::ExpHeap *flexGetStarlightHeap(){
 	return mStarlightHeap;
 };
 
+// Special weapon paint flag — suppresses gauge fill for Inkstrike paint
+bool gSpecialWeaponPaint = false;
+
+static void (*requestPaintImplOrig)(
+    int, int, int,
+    const sead::Vector3<float>*, const sead::Vector3<float>*,
+    const sead::Vector2<float>*, const sead::Vector2<float>*,
+    int, const char*, int, unsigned int, const int*,
+    bool, bool, bool, int);
+
+void requestPaintImplHook(
+    int paintCommandType, int playerIndex, int frame,
+    const sead::Vector3<float>* pos, const sead::Vector3<float>* nrm,
+    const sead::Vector2<float>* size, const sead::Vector2<float>* paintDir,
+    int team, const char* paintType,
+    int texType, unsigned int objPaintIdx,
+    const int* alpha, bool overwrite, bool a14, bool a15, int a16)
+{
+    if (gSpecialWeaponPaint && paintCommandType == 0)
+        paintCommandType = 2;
+    requestPaintImplOrig(
+        paintCommandType, playerIndex, frame,
+        pos, nrm, size, paintDir, team, paintType,
+        texType, objPaintIdx, alpha, overwrite, a14, a15, a16);
+}
+
 static Starlion::KingSquidMgr *kingSquidMgr = NULL;
 static Cmn::CtrlChecker *ctrlChecker = NULL;
 static Starlion::S1Inkstrike *mS1Inkstrike = NULL;
@@ -937,6 +963,8 @@ void init_starlion(){
 		ProcessMemory::MainAddr(0x00A146E4);
 		
 	isSleepingAllOrig = (bool (*)(Game::BulletMgr*))ProcessMemory::MainAddr(0x4E936C);
+	
+	requestPaintImplOrig = (decltype(requestPaintImplOrig))ProcessMemory::MainAddr(0xFC1BAC);
 
 	// Initialize MatchJoint LAN function pointers
 	MatchJointLan::init();
@@ -1349,6 +1377,7 @@ void hooks_init(){
 	LobbyRivalGetPlayerTypeHook(NULL);
 	isInSpecialForShotGuideHook(NULL);
 	isSleepingAllHook(NULL);
+	requestPaintImplHook(0, 0, 0, NULL, NULL, NULL, NULL, 0, NULL, 0, 0, NULL, 0, 0, 0, 0);
 	// AutoMatch LAN session init (BL hook inside reqAutoMatch)
 	autoMatchLanInitHook(NULL);
 }
