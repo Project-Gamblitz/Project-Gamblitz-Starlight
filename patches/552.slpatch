@@ -317,8 +317,8 @@
 0036C960 BL autoMatchLanInitHook
 
 // Lan on Versus Lobby and change local to lan
-0149D070 03000014
-0149D080 08000014
+// 0149D070 03000014
+// 0149D080 08000014
 
 //Save Game on LAN Match [Custom Splatfest Patch]
 01365890 20008052

@@ -1,6 +1,7 @@
 #include "flexlion/BulletSuperArtillery.hpp"
 #include "flexlion/InkstrikeMgr.hpp"
 #include "Game/Player/Player.h"
+#include "Game/Player/PlayerDamage.h"
 #include "Game/MainMgr.h"
 #include "Game/PaintUtl.h"
 #include "Game/DamageReason.h"
@@ -37,7 +38,10 @@ const float BSA_BURST_TEX_ROTATION = 30.0f; // texture rotation per paint
 const float BSA_BURST_ROT_FRAMES   = 3.0f; // how many frames per rotation step (can be different)
 const int  	BSA_BURST_FRAMES	   = 3;		// how many frames each time paint is applied
 const int   BSA_BURST_DAMAGE       = 25;       // 2.5 HP per frame (internal units: 25 = 2.5% of 1000 max HP)
+const float BSA_BURST_DMG_START	   = 120.0f;  // 12.0 HP at burst start
+const float BSA_BURST_DMG_END      = 30.0f;   // 3.0 HP at burst end
 const int   BSA_BURST_DURATION     = 150;      // Frames before burst ends
+const int   BSA_BURST_DMG_DURATION = 180;      // Frames damage duration
 
 namespace Flexlion {
 
@@ -501,10 +505,10 @@ void BulletSuperArtillery::calcBurstFollow() {
     float currentRadius = s_BSA_BURST_RADIUS_START + (float)mBurstFrm * increment;
     if(currentRadius > s_BSA_BURST_RADIUS_MAX) currentRadius = s_BSA_BURST_RADIUS_MAX;
 
-    // Paint every 2 frames
+    // Paint every x frames
     if(mBurstFrm % s_BSA_BURST_FRAMES == 0){
         // Rotate texture each paint application
-        // Each call rotates by 20 degrees — requestColAndPaint's vel parameter
+        // Each call rotates by x degrees — requestColAndPaint's vel parameter
         // can be used to rotate the texture by passing a rotated direction vector
 		float rotAngle = (float)(mBurstFrm / s_BSA_BURST_ROT_FRAMES) * (s_BSA_BURST_TEX_ROTATION * MATH_PI / 180.0f);
         sead::Vector3<float> vel;
@@ -620,30 +624,94 @@ void BulletSuperArtillery::calcBurstFollow() {
 
 		gSpecialWeaponPaint = false;
     }
+	// --- Damage (every frame) ---
+    // Cylinder hitbox: horizontal radius expands 50→250, height ±300 from landing Y
+    const float hitRadiusStart = 12.5f;
+    const float hitRadiusEnd   = 125.0f;
+    const float hitHalfHeight  = 5000.0f;
+    float t = (float)mBurstFrm / (float)BSA_BURST_DMG_DURATION;
+    if (t > 1.0f) t = 1.0f;
+    float hitRadius = hitRadiusStart + (hitRadiusEnd - hitRadiusStart) * t;
+    float hitRadiusSq = hitRadius * hitRadius;
 
-    // Damage every frame regardless
-    float radiusSq = currentRadius * currentRadius;
+    // Linearly decaying damage: 120→30 internal units (12.0→3.0 HP)
+    int dmg = (int)(BSA_BURST_DMG_START + (BSA_BURST_DMG_END - BSA_BURST_DMG_START) * t);
+    if (dmg < (int)BSA_BURST_DMG_END) dmg = (int)BSA_BURST_DMG_END;
+
     Game::PlayerMgr *pmgr = Game::PlayerMgr::sInstance;
-    if(pmgr && mSender){
+    if (pmgr && mSender) {
         int senderTeamInt = (int)*(Cmn::Def::Team*)(_actorBase + 0x328);
-        for(int i = 0; i < pmgr->mTotalPlayers; i++){
+
+        // DamageReason: classType=2 (cSpecial), weaponId=TORNADO_SPECIAL_ID
+        Game::DamageReason reason;
+        reason.mWeaponId = TORNADO_SPECIAL_ID;
+        reason.mClassType = 2; // cSpecial — shows "Splatted by [Special Icon]!"
+
+        for (int i = 0; i < pmgr->mTotalPlayers; i++) {
             Game::Player *p = pmgr->getPerformerAt(i);
-            if(!p || (int)p->mTeam == senderTeamInt) continue;
+            if (!p || (int)p->mTeam == senderTeamInt) continue;
+
+            // Cylinder check: XZ distance for radius, Y distance for height
             float dx = p->mPosition.mX - mTo.mX;
-            float dy = p->mPosition.mY - mTo.mY;
             float dz = p->mPosition.mZ - mTo.mZ;
-            if(dx*dx + dy*dy + dz*dz < radiusSq){
-                sead::Vector3<float> hitDir = {dx, dy, dz};
-                Game::DamageReason reason;
-                reason.mWeaponId = -1;
-                reason.mClassType = 0;
-                p->receiveDamage_Net(mSender->mIndex, (Cmn::Def::DMG)s_BSA_BURST_DAMAGE, hitDir, reason, false, false, false);
+            float horizontalDistSq = dx * dx + dz * dz;
+            float dy = p->mPosition.mY - mTo.mY;
+
+            if (horizontalDistSq < hitRadiusSq && (dy > -hitHalfHeight && dy < hitHalfHeight)) {
+                // No knockback by default; mild knockback only for invincible players
+                sead::Vector3<float> hitDir = {0.0f, 0.0f, 0.0f};
+                if (p->isInSuperArmor() || p->isInBarrier()) {
+                    float hDist = sqrtf(horizontalDistSq);
+                    if (hDist > 0.1f) {
+                        hitDir.mX = (dx / hDist) * 2.0f;
+                        hitDir.mZ = (dz / hDist) * 2.0f;
+                    }
+                }
+
+                p->receiveDamage_Net(
+                    mSender->mIndex,
+                    (Cmn::Def::DMG)dmg,
+                    hitDir,
+                    reason,
+                    false, false, false);
+            }
+        }
+		// Also damage SighterTargets (training dummies)
+        auto stIterNode = Game::SighterTarget::getClassIterNodeStatic();
+        for (Game::SighterTarget *st = (Game::SighterTarget *)stIterNode->derivedFrontActiveActor();
+             st != NULL;
+             st = (Game::SighterTarget *)stIterNode->derivedNextActiveActor(st))
+        {
+            if ((int)st->mTeam == senderTeamInt) continue;
+			
+            // Skip dummies not in a hittable state (0x590 = state DWORD)
+            u32 stState = *(u32 *)((u8 *)st + 0x590);
+            if (stState == 3) continue;
+
+            // PlayerDamage pointer at 0x5E8 — skip if not initialized
+            u64 playerDamage = *(u64 *)((u8 *)st + 0x5E8);
+            if (!playerDamage) continue;
+
+            float *stPos = (float *)((u8 *)st + 0x39C);
+            float sdx = stPos[0] - mTo.mX;
+            float sdz = stPos[2] - mTo.mZ;
+            float sdy = stPos[1] - mTo.mY;
+
+            if (sdx * sdx + sdz * sdz < hitRadiusSq && sdy > -hitHalfHeight && sdy < hitHalfHeight) {
+                Game::PlayerDamage::informDamage(
+                    (void *)playerDamage,
+                    mSender->mIndex,
+                    (Cmn::Def::DMG)dmg,
+                    reason,
+                    true);
+				
+                // Set "was hit by bullet" flag — triggers damage processing
+                *(u32 *)((u8 *)st + 0x4F8) |= 2;
             }
         }
     }
 
-    if(mBurstFrm >= s_BSA_BURST_DURATION)
-		//loadBurstConfig();
+    if (mBurstFrm >= s_BSA_BURST_DURATION)
         doSleep();
 }
 

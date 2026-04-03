@@ -884,7 +884,8 @@ _ZN4Game16PlayerNetControl21sendSignal_AllMarkingEv = 0x01101180 - 0x2EBE000;
 
 _ZN4Game6Player17receiveDamage_NetEiN3Cmn3Def3DMGERKN4sead7Vector3IfEERKNS_12DamageReasonEbbb = 0x0101A034 - 0x2EBE000;
 _ZN4Game6Player22informDamage_ForceKillEiRKNS_12DamageReasonE = 0x10103BC - 0x2EBE000;
-_ZN4Game12PlayerDamage12informDamageEiN3Cmn3Def3DMGERKNS_12DamageReasonEb = 0x1066D50 - 0x2EBE000;
+_ZN4Game12PlayerDamage12informDamageEPviN3Cmn3Def3DMGERKNS_12DamageReasonEb = 0x1066D50 - 0x2EBE000;
+_ZN4Game16PlayerSilhouette13processDamageEiN3Cmn3Def3DMGERKNS_12DamageReasonE = 0x1119CA8 - 0x2EBE000;
 
 /* Player bullet damage — the real HP damage function used by bullet collision system */
 _PlayerApplyBulletDamage = 0x1028DCC - 0x2EBE000;
