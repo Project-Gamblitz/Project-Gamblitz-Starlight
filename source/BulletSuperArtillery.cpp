@@ -520,6 +520,20 @@ void BulletSuperArtillery::calcBurstFollow() {
             (Game::PaintTexType)11, team,
             sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
 			
+		sead::Vector3<float> paintPosXXSHigh = mTo;
+		paintPosXXSHigh.mY += 280.0f; // units up
+        Game::PaintUtl::requestColAndPaint(
+            paintPosXXSHigh, paintSize, vel,
+            (Game::PaintTexType)11, team,
+            sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
+			
+		sead::Vector3<float> paintPosXSHigh = mTo;
+		paintPosXSHigh.mY += 240.0f; // units up
+        Game::PaintUtl::requestColAndPaint(
+            paintPosXSHigh, paintSize, vel,
+            (Game::PaintTexType)11, team,
+            sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
+			
 		sead::Vector3<float> paintPosSSHigh = mTo;
 		paintPosSSHigh.mY += 200.0f; // units up
         Game::PaintUtl::requestColAndPaint(
@@ -587,6 +601,20 @@ void BulletSuperArtillery::calcBurstFollow() {
 		paintPosSSLow.mY -= 200.0f; // units down
         Game::PaintUtl::requestColAndPaint(
             paintPosSSLow, paintSize, vel,
+            (Game::PaintTexType)11, team,
+            sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
+			
+		sead::Vector3<float> paintPosXSLow = mTo;
+		paintPosXSLow.mY -= 240.0f; // units down
+        Game::PaintUtl::requestColAndPaint(
+            paintPosXSLow, paintSize, vel,
+            (Game::PaintTexType)11, team,
+            sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
+			
+		sead::Vector3<float> paintPosXXSLow = mTo;
+		paintPosXXSLow.mY -= 280.0f; // units down
+        Game::PaintUtl::requestColAndPaint(
+            paintPosXXSLow, paintSize, vel,
             (Game::PaintTexType)11, team,
             sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
 
