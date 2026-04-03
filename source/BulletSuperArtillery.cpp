@@ -673,7 +673,7 @@ void BulletSuperArtillery::calcBurstFollow() {
                     (Cmn::Def::DMG)dmg,
                     hitDir,
                     reason,
-                    false, false, false);
+                    true, false, false);
             }
         }
 		// Also damage SighterTargets (training dummies)
