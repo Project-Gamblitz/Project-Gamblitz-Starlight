@@ -121,8 +121,8 @@ namespace Flexlion{
         case TornadoState::cNone:
             break;
         case TornadoState::cAim:
-            if(player->isInTrouble_Dying() || !player->isAlive() || checkMode == Flexlion::cPrincessCannon){
-                // Player died without choosing a spot or picked up princess cannon — cancel special
+            if(player->isInTrouble_Dying() || !player->isAlive() || checkMode == Flexlion::cPrincessCannon || (!player->isInSpecial() && player->mSpecialWeaponId != TORNADO_SPECIAL_ID)){
+                // Player died without choosing a spot or picked up princess cannon or changed weapon in shooting range — cancel special
                 playerState[id] = TornadoState::cNone;
 				mWasAHeld[id] = false;
                 if(bullets[id] != NULL && bullets[id]->isActive()){
