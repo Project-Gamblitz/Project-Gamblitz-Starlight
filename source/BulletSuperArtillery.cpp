@@ -32,7 +32,7 @@ const float tornadoTankZOffset = -3.0f;
 
 // Burst parameters
 const float BSA_BURST_RADIUS_START = 0.0f;   // Initial paint/hitbox radius
-const float BSA_BURST_RADIUS_MAX   = 280.0f;  // Maximum radius - 300 would be actually 15%
+const float BSA_BURST_RADIUS_MAX   = 300.0f;  // Maximum radius - 300 would be actually 15%
 const float BSA_BURST_RADIUS_GROW  = 0.5f;    // Radius growth per frame
 const float BSA_BURST_TEX_ROTATION = 30.0f; // texture rotation per paint
 const float BSA_BURST_ROT_FRAMES   = 2.0f; // how many frames per rotation step (can be different)
@@ -271,7 +271,7 @@ void BulletSuperArtillery::vtSecondCalc(BulletSuperArtillery *self) {
     float t = (float)self->mBurstFrm / (float)BSA_BURST_DMG_DURATION;
     if (t > 1.0f) t = 1.0f;
     const float hitRadiusStart = 25.0f;
-    const float hitRadiusEnd   = 250.0f;
+    const float hitRadiusEnd   = 275.0f;
     const float hitHalfHeight  = 5000.0f;
     float hitRadius = hitRadiusStart + (hitRadiusEnd - hitRadiusStart) * t;
     float hitRadiusSq = hitRadius * hitRadius;
