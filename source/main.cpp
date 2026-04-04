@@ -1196,6 +1196,28 @@ xlink2::UserInstanceSLink *startSkill_DeathMarkingHook(Game::Player *player, uns
     return (xlink2::UserInstanceSLink *)v8.mEvent;
 }
 
+static bool isSpecialSkill_RespawnRadar(Game::Player *player) {
+    u8 *skillArray = *(u8**)(((u8*)player) + 0xEE8);
+    if (skillArray == nullptr) return false;
+    return skillArray[0x15F] != 0;
+}
+
+static void informEffectiveSpecialSkill_RespawnRadar(Game::Player *player) {
+    if (*(u32*)(((u8*)player) + 0x350)) return;  // mIsRemote
+    u64 netCtrl = *(u64*)(((u8*)player) + 0xFF8); // mPlayerNetControl
+    if (!netCtrl) return;
+    *(u32*)(netCtrl + 0x84) |= 0x1000;  // bit 12
+}
+
+bool respawnRadarHook() {
+    Game::Player *ctrlPlayer = starlight::Collector::mControlledPlayer;
+    if (ctrlPlayer != nullptr
+        && isSpecialSkill_RespawnRadar(ctrlPlayer)
+        && ctrlPlayer->isInTrouble_RespawnWait()) {
+        informEffectiveSpecialSkill_RespawnRadar(ctrlPlayer);
+    }
+    return Game::Utl::isSpectatorStation();
+}
 
 static xlink2::Event *gLaserIconEvent = NULL;
 static u32 gLaserIconEventId = 0;
@@ -1377,6 +1399,7 @@ void hooks_init(){
 	LobbyRivalGetPlayerTypeHook(NULL);
 	isInSpecialForShotGuideHook(NULL);
 	isSleepingAllHook(NULL);
+	respawnRadarHook();
 	requestPaintImplHook(0, 0, 0, NULL, NULL, NULL, NULL, 0, NULL, 0, 0, NULL, 0, 0, 0, 0);
 	// AutoMatch LAN session init (BL hook inside reqAutoMatch)
 	autoMatchLanInitHook(NULL);

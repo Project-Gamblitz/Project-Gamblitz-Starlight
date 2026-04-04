@@ -107,6 +107,7 @@ int startfrm;
 void handleCreateObj();
 
 void autoMatchTest();
+bool respawnRadarHook();
 bool rivalOctohook(Cmn::Def::PlayerModelType modeltyape);
 
 void autoMatchLanInitHook(void* a1);    // DefaultMatchingSeq state 16 — critical LAN fix

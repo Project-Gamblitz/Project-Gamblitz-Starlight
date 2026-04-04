@@ -118,6 +118,9 @@
 // MiniMap Cursor Effect
 00A136D8 BL updateCursorEffectHook
 
+// RespawnRadar
+00A14AA8 BL respawnRadarHook
+
 // DeathMarking
 0113641C BL startSkill_DeathMarkingHook
 
