@@ -32,7 +32,7 @@ const float tornadoTankZOffset = -3.0f;
 
 // Burst parameters
 const float BSA_BURST_RADIUS_START = 0.0f;   // Initial paint/hitbox radius
-const float BSA_BURST_RADIUS_MAX   = 300.0f;  // Maximum radius - 300 would be actually 15%
+const float BSA_BURST_RADIUS_MAX   = 300.0f;  // Maximum radius 
 const float BSA_BURST_RADIUS_GROW  = 0.5f;    // Radius growth per frame
 const float BSA_BURST_TEX_ROTATION = 30.0f; // texture rotation per paint
 const float BSA_BURST_ROT_FRAMES   = 2.0f; // how many frames per rotation step (can be different)
