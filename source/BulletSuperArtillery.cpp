@@ -34,13 +34,13 @@ const float tornadoTankZOffset = -3.0f;
 const float BSA_BURST_RADIUS_START = 0.0f;   // Initial paint/hitbox radius
 const float BSA_BURST_RADIUS_MAX   = 250.0f;  // Maximum radius
 const float BSA_BURST_RADIUS_GROW  = 0.5f;    // Radius growth per frame
-const float BSA_BURST_TEX_ROTATION = 30.0f; // texture rotation per paint
+const float BSA_BURST_TEX_ROTATION = 60.0f; // texture rotation per paint
 const float BSA_BURST_ROT_FRAMES   = 3.0f; // how many frames per rotation step (can be different)
-const int  	BSA_BURST_FRAMES	   = 3;		// how many frames each time paint is applied
+const int  	BSA_BURST_FRAMES	   = 2;		// how many frames each time paint is applied
 const int   BSA_BURST_DAMAGE       = 25;       // 2.5 HP per frame (internal units: 25 = 2.5% of 1000 max HP)
 const float BSA_BURST_DMG_START	   = 120.0f;  // 12.0 HP at burst start
 const float BSA_BURST_DMG_END      = 30.0f;   // 3.0 HP at burst end
-const int   BSA_BURST_DURATION     = 150;      // Frames before burst ends
+const int   BSA_BURST_DURATION     = 90;      // Frames before burst ends
 const int   BSA_BURST_DMG_DURATION = 180;      // Frames damage duration
 
 namespace Flexlion {
@@ -58,6 +58,7 @@ void initBSAVtable(BulletSuperArtillery *bsa) {
         memcpy(&sBSAVtable, *vtable, sizeof(Cmn::ActorVtable));
         sBSAVtable.getClassName = (u64)((const char *(*)(BulletSuperArtillery *))&BulletSuperArtillery::vtGetClassName);
         sBSAVtable.firstCalc = (u64)((void (*)(BulletSuperArtillery *))&BulletSuperArtillery::vtFirstCalc);
+		sBSAVtable.secondCalc = (u64)((void (*)(BulletSuperArtillery *))&BulletSuperArtillery::vtSecondCalc);
         sBSAVtable.fourthCalc = (u64)((void (*)(BulletSuperArtillery *))&BulletSuperArtillery::vtFourthCalc);
         sBSAVtable.onActivate = (u64)((void (*)(BulletSuperArtillery *, bool))&BulletSuperArtillery::vtOnActivate);
         sBSAVtable.onSleep = (u64)((void (*)(BulletSuperArtillery *))&BulletSuperArtillery::vtOnSleep);
@@ -264,11 +265,80 @@ void BulletSuperArtillery::vtFirstCalc(BulletSuperArtillery *self) {
     self->mStateMachine.executeState();
 }
 
+void BulletSuperArtillery::vtSecondCalc(BulletSuperArtillery *self) {
+    if (!self->mHasBurst || !self->mSender) return;
+
+    float t = (float)self->mBurstFrm / (float)BSA_BURST_DMG_DURATION;
+    if (t > 1.0f) t = 1.0f;
+    const float hitRadiusStart = 25.0f;
+    const float hitRadiusEnd   = 250.0f;
+    const float hitHalfHeight  = 5000.0f;
+    float hitRadius = hitRadiusStart + (hitRadiusEnd - hitRadiusStart) * t;
+    float hitRadiusSq = hitRadius * hitRadius;
+
+    int dmg = (int)(BSA_BURST_DMG_START + (BSA_BURST_DMG_END - BSA_BURST_DMG_START) * t);
+    if (dmg < (int)BSA_BURST_DMG_END) dmg = (int)BSA_BURST_DMG_END;
+
+    Game::PlayerMgr *pmgr = Game::PlayerMgr::sInstance;
+    int senderTeamInt = (int)*(Cmn::Def::Team*)(self->_actorBase + 0x328);
+
+    Game::DamageReason reason;
+    reason.mWeaponId = TORNADO_SPECIAL_ID;
+    reason.mClassType = 2;
+    reason.mHitCountToKill = 0;
+
+    for (int i = 0; i < 10; i++) {
+        Game::Player *p = pmgr->getPerformerAt(i);
+        if (!p || p == self->mSender || (int)p->mTeam == senderTeamInt) continue;
+
+        float dx = p->mPosition.mX - self->mTo.mX;
+        float dz = p->mPosition.mZ - self->mTo.mZ;
+        float horizontalDistSq = dx * dx + dz * dz;
+        float dy = p->mPosition.mY - self->mTo.mY;
+
+        if (horizontalDistSq < hitRadiusSq && dy > -hitHalfHeight && dy < hitHalfHeight) {
+            sead::Vector3<float> hitDir = {0.0f, 0.0f, 0.0f};
+            if (p->isInSuperArmor() || p->isInBarrier()) {
+                float hDist = sqrtf(horizontalDistSq);
+                if (hDist > 0.1f) {
+                    hitDir.mX = (dx / hDist) * 2.0f;
+                    hitDir.mZ = (dz / hDist) * 2.0f;
+                }
+            }
+            p->receiveDamage_Net(self->mSender->mIndex, (Cmn::Def::DMG)dmg, hitDir, reason, true, false, false);
+        }
+    }
+
+    // SighterTargets
+    auto stIterNode = Game::SighterTarget::getClassIterNodeStatic();
+    for (Game::SighterTarget *st = (Game::SighterTarget *)stIterNode->derivedFrontActiveActor();
+         st != NULL;
+         st = (Game::SighterTarget *)stIterNode->derivedNextActiveActor(st))
+    {
+        if ((int)st->mTeam == senderTeamInt) continue;
+        u32 stState = *(u32 *)((u8 *)st + 0x590);
+        if (stState == 3) continue;
+        u64 playerDamage = *(u64 *)((u8 *)st + 0x5E8);
+        if (!playerDamage) continue;
+
+        float *stPos = (float *)((u8 *)st + 0x39C);
+        float sdx = stPos[0] - self->mTo.mX;
+        float sdz = stPos[2] - self->mTo.mZ;
+        float sdy = stPos[1] - self->mTo.mY;
+
+        if (sdx * sdx + sdz * sdz < hitRadiusSq && sdy > -hitHalfHeight && sdy < hitHalfHeight) {
+            Game::PlayerDamage::informDamage((void *)playerDamage, self->mSender->mIndex, (Cmn::Def::DMG)dmg, reason, true);
+            *(u32 *)((u8 *)st + 0x4F8) |= 2;
+        }
+    }
+}
+
 void BulletSuperArtillery::vtFourthCalc(BulletSuperArtillery *self) {
     if (self->mFlightActive) {
         self->updateModelMatrix();
     } else if (self->mHasBurst) {
-        self->calcBurstFollow();
+        // paint/timing handled in stateBurst (firstCalc)
+        // damage handled in vtSecondCalc
     } else {
         // Only render tank bone tornado if InkstrikeMgr state is cAim or cShootPrepare
         InkstrikeMgr *mgr = InkstrikeMgr::sInstance;
@@ -623,92 +693,6 @@ void BulletSuperArtillery::calcBurstFollow() {
             sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
 
 		gSpecialWeaponPaint = false;
-    }
-	// --- Damage (every frame) ---
-    // Cylinder hitbox: horizontal radius expands 50→250, height ±300 from landing Y
-    const float hitRadiusStart = 12.5f;
-    const float hitRadiusEnd   = 125.0f;
-    const float hitHalfHeight  = 5000.0f;
-    float t = (float)mBurstFrm / (float)BSA_BURST_DMG_DURATION;
-    if (t > 1.0f) t = 1.0f;
-    float hitRadius = hitRadiusStart + (hitRadiusEnd - hitRadiusStart) * t;
-    float hitRadiusSq = hitRadius * hitRadius;
-
-    // Linearly decaying damage: 120→30 internal units (12.0→3.0 HP)
-    int dmg = (int)(BSA_BURST_DMG_START + (BSA_BURST_DMG_END - BSA_BURST_DMG_START) * t);
-    if (dmg < (int)BSA_BURST_DMG_END) dmg = (int)BSA_BURST_DMG_END;
-
-    Game::PlayerMgr *pmgr = Game::PlayerMgr::sInstance;
-    if (pmgr && mSender) {
-        int senderTeamInt = (int)*(Cmn::Def::Team*)(_actorBase + 0x328);
-
-        // DamageReason: classType=2 (cSpecial), weaponId=TORNADO_SPECIAL_ID
-        Game::DamageReason reason;
-        reason.mWeaponId = TORNADO_SPECIAL_ID;
-        reason.mClassType = 2; // cSpecial — shows "Splatted by [Special Icon]!"
-
-        for (int i = 0; i < pmgr->mTotalPlayers; i++) {
-            Game::Player *p = pmgr->getPerformerAt(i);
-            if (!p || (int)p->mTeam == senderTeamInt) continue;
-
-            // Cylinder check: XZ distance for radius, Y distance for height
-            float dx = p->mPosition.mX - mTo.mX;
-            float dz = p->mPosition.mZ - mTo.mZ;
-            float horizontalDistSq = dx * dx + dz * dz;
-            float dy = p->mPosition.mY - mTo.mY;
-
-            if (horizontalDistSq < hitRadiusSq && (dy > -hitHalfHeight && dy < hitHalfHeight)) {
-                // No knockback by default; mild knockback only for invincible players
-                sead::Vector3<float> hitDir = {0.0f, 0.0f, 0.0f};
-                if (p->isInSuperArmor() || p->isInBarrier()) {
-                    float hDist = sqrtf(horizontalDistSq);
-                    if (hDist > 0.1f) {
-                        hitDir.mX = (dx / hDist) * 2.0f;
-                        hitDir.mZ = (dz / hDist) * 2.0f;
-                    }
-                }
-
-                p->receiveDamage_Net(
-                    mSender->mIndex,
-                    (Cmn::Def::DMG)dmg,
-                    hitDir,
-                    reason,
-                    true, false, false);
-            }
-        }
-		// Also damage SighterTargets (training dummies)
-        auto stIterNode = Game::SighterTarget::getClassIterNodeStatic();
-        for (Game::SighterTarget *st = (Game::SighterTarget *)stIterNode->derivedFrontActiveActor();
-             st != NULL;
-             st = (Game::SighterTarget *)stIterNode->derivedNextActiveActor(st))
-        {
-            if ((int)st->mTeam == senderTeamInt) continue;
-			
-            // Skip dummies not in a hittable state (0x590 = state DWORD)
-            u32 stState = *(u32 *)((u8 *)st + 0x590);
-            if (stState == 3) continue;
-
-            // PlayerDamage pointer at 0x5E8 — skip if not initialized
-            u64 playerDamage = *(u64 *)((u8 *)st + 0x5E8);
-            if (!playerDamage) continue;
-
-            float *stPos = (float *)((u8 *)st + 0x39C);
-            float sdx = stPos[0] - mTo.mX;
-            float sdz = stPos[2] - mTo.mZ;
-            float sdy = stPos[1] - mTo.mY;
-
-            if (sdx * sdx + sdz * sdz < hitRadiusSq && sdy > -hitHalfHeight && sdy < hitHalfHeight) {
-                Game::PlayerDamage::informDamage(
-                    (void *)playerDamage,
-                    mSender->mIndex,
-                    (Cmn::Def::DMG)dmg,
-                    reason,
-                    true);
-				
-                // Set "was hit by bullet" flag — triggers damage processing
-                *(u32 *)((u8 *)st + 0x4F8) |= 2;
-            }
-        }
     }
 
     if (mBurstFrm >= s_BSA_BURST_DURATION)

@@ -6,5 +6,6 @@ namespace Game {
     struct DamageReason{
         short mWeaponId;
         char mClassType;
+        char mHitCountToKill;
     };
 };

@@ -54,6 +54,7 @@ public:
     // Vtable overrides (static so they're plain function pointers)
     static const char *vtGetClassName(BulletSuperArtillery *self);
     static void vtFirstCalc(BulletSuperArtillery *self);
+	static void vtSecondCalc(BulletSuperArtillery *self);
     static void vtFourthCalc(BulletSuperArtillery *self);
     static void vtOnActivate(BulletSuperArtillery *self, bool);
     static void vtOnSleep(BulletSuperArtillery *self);
