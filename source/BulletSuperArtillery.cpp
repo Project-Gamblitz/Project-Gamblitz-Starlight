@@ -32,15 +32,15 @@ const float tornadoTankZOffset = -3.0f;
 
 // Burst parameters
 const float BSA_BURST_RADIUS_START = 0.0f;   // Initial paint/hitbox radius
-const float BSA_BURST_RADIUS_MAX   = 250.0f;  // Maximum radius
+const float BSA_BURST_RADIUS_MAX   = 280.0f;  // Maximum radius - 300 would be actually 15%
 const float BSA_BURST_RADIUS_GROW  = 0.5f;    // Radius growth per frame
-const float BSA_BURST_TEX_ROTATION = 60.0f; // texture rotation per paint
-const float BSA_BURST_ROT_FRAMES   = 3.0f; // how many frames per rotation step (can be different)
+const float BSA_BURST_TEX_ROTATION = 30.0f; // texture rotation per paint
+const float BSA_BURST_ROT_FRAMES   = 2.0f; // how many frames per rotation step (can be different)
 const int  	BSA_BURST_FRAMES	   = 2;		// how many frames each time paint is applied
 const int   BSA_BURST_DAMAGE       = 25;       // 2.5 HP per frame (internal units: 25 = 2.5% of 1000 max HP)
 const float BSA_BURST_DMG_START	   = 120.0f;  // 12.0 HP at burst start
 const float BSA_BURST_DMG_END      = 30.0f;   // 3.0 HP at burst end
-const int   BSA_BURST_DURATION     = 90;      // Frames before burst ends
+const int   BSA_BURST_DURATION     = 100;      // Frames before paint burst ends
 const int   BSA_BURST_DMG_DURATION = 180;      // Frames damage duration
 
 namespace Flexlion {
