@@ -41,7 +41,7 @@ const int   BSA_BURST_DAMAGE       = 25;       // 2.5 HP per frame (internal uni
 const float BSA_BURST_DMG_START	   = 120.0f;  // 12.0 HP at burst start
 const float BSA_BURST_DMG_END      = 30.0f;   // 3.0 HP at burst end
 const int   BSA_BURST_DURATION     = 100;      // Frames before paint burst ends
-const int   BSA_BURST_DMG_DURATION = 180;      // Frames damage duration
+const int   BSA_BURST_DMG_DURATION = 90;      // Frames damage duration
 
 namespace Flexlion {
 
@@ -360,10 +360,10 @@ void BulletSuperArtillery::vtFirstCalc(BulletSuperArtillery *self) {
 void BulletSuperArtillery::vtSecondCalc(BulletSuperArtillery *self) {
     if (!self->mHasBurst || !self->mSender) return;
 
-    float t = (float)self->mBurstFrm / (float)BSA_BURST_DMG_DURATION;
+    float t = (float)self->mBurstFrm / (float)BSA_BURST_DURATION;
     if (t > 1.0f) t = 1.0f;
-    const float hitRadiusStart = 25.0f;
-    const float hitRadiusEnd   = 260.0f;
+    const float hitRadiusStart = 30.0f;
+    const float hitRadiusEnd   = 140.0f;
     const float hitHalfHeight  = 5000.0f;
     float hitRadius = hitRadiusStart + (hitRadiusEnd - hitRadiusStart) * t;
     float hitRadiusSq = hitRadius * hitRadius;
