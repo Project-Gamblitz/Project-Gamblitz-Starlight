@@ -327,7 +327,6 @@ static void damageGachihokoInCylinder(
         float ody = pos[1] - center.mY;
 
         if (odx*odx + odz*odz < hitRadiusSq && ody > -hitHalfHeight && ody < hitHalfHeight) {
-            // Team-directional: Alpha adds, Bravo subtracts
             int directionalDmg = (senderTeamInt == 1) ? -dmg : dmg;
 
             int *accum = (int *)((u8 *)obj + 0x5DC);
@@ -336,15 +335,77 @@ static void damageGachihokoInCylinder(
             if (newAccum < -99999) newAccum = -99999;
             *accum = newAccum;
 
-            // Store attacker index
+            // Store attacker
             *(int *)((u8 *)obj + 0x5E0) = attackerIdx;
 
-            // Set "was hit" flag for visual feedback
-            *(u32 *)((u8 *)obj + 0x4F8) |= 1;
+            // Hit animation flag
+            *(u32 *)((u8 *)obj + 0x4F8) |= 2;
+
+            // Burst only when HP threshold exceeded
+            int absAccum = newAccum < 0 ? -newAccum : newAccum;
+            if (absAccum >= 5000) {
+                *(u8 *)((u8 *)obj + 0x5E4) = 1;
+                *(int *)((u8 *)obj + 0x5E8) = attackerIdx;
+            }
         }
     }
 }
 
+static void damageBlowoutsInCylinder(
+    Lp::Sys::ActorClassIterNodeBase *iterNode,
+    int senderTeamInt, float hitRadiusSq, float hitHalfHeight,
+    sead::Vector3<float> &center, int dmg, int attackerIdx)
+{
+    for (Cmn::Actor *obj = (Cmn::Actor *)iterNode->derivedFrontActiveActor();
+         obj != NULL;
+         obj = (Cmn::Actor *)iterNode->derivedNextActiveActor(obj))
+    {
+        float *pos = (float *)((u8 *)obj + 0x39C);
+        float odx = pos[0] - center.mX;
+        float odz = pos[2] - center.mZ;
+        float ody = pos[1] - center.mY;
+
+        if (odx*odx + odz*odz < hitRadiusSq && ody > -hitHalfHeight && ody < hitHalfHeight) {
+            float dirDmg = (senderTeamInt == 1) ? -(float)dmg : (float)dmg;
+            // Approximate: assume threshold ~1000, so increment = (dmg/1000)*10
+            float *fill = (float *)((u8 *)obj + 0x588);
+            *fill += (dirDmg / 1000.0f) * 10.0f;
+            *(u8 *)((u8 *)obj + 0x658) = 1;  // hit flag
+            *(int *)((u8 *)obj + 0x950) = attackerIdx;
+        }
+    }
+}
+
+static void damageSpongesInCylinder(
+    Lp::Sys::ActorClassIterNodeBase *iterNode,
+    int senderTeamInt, float hitRadiusSq, float hitHalfHeight,
+    sead::Vector3<float> &center, int dmg)
+{
+    for (Cmn::Actor *obj = (Cmn::Actor *)iterNode->derivedFrontActiveActor();
+         obj != NULL;
+         obj = (Cmn::Actor *)iterNode->derivedNextActiveActor(obj))
+    {
+        // Sponge team at +0x5F0 (1520) — 0=neutral, 1=bravo, etc.
+        int spongeTeam = *(int *)((u8 *)obj + 0x5F0);
+
+        float *pos = (float *)((u8 *)obj + 0x39C);
+        float odx = pos[0] - center.mX;
+        float odz = pos[2] - center.mZ;
+        float ody = pos[1] - center.mY;
+
+        if (odx*odx + odz*odz < hitRadiusSq && ody > -hitHalfHeight && ody < hitHalfHeight) {
+            float *fill = (float *)((u8 *)obj + 0x610);
+            // Same team grows sponge, enemy team shrinks
+            if (spongeTeam == senderTeamInt) {
+                *fill += (float)dmg / 500.0f;  // grow
+            } else {
+                *fill -= (float)dmg / 500.0f;  // shrink
+            }
+            if (*fill < 1.0f) *fill = 1.0f;
+            *(u32 *)((u8 *)obj + 0x4F8) |= 2;  // hit flag
+        }
+    }
+}
 // ============================================================
 // Vtable overrides
 // ============================================================
@@ -435,13 +496,21 @@ void BulletSuperArtillery::vtSecondCalc(BulletSuperArtillery *self) {
 	damageObjects_AddDmg(Game::Shield::getClassIterNodeStatic(),
 		senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg * 2.5, 0x628);
 		
-	// Gachihoko (Rainmaker) — team-directional
+	// Gachihoko (Rainmaker) — team-directional with threshold burst
 	damageGachihokoInCylinder(Game::Gachihoko::getClassIterNodeStatic(),
-		senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg * 1.5, self->mSender->mIndex);
-		
+		senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg, self->mSender->mIndex);
+	
 	// BulletUmbrellaCanopyBase (Brella shield) — add accumulated damage at +0x484
 	damageObjects_AddDmg(Game::BulletUmbrellaCanopyBase::getClassIterNodeStatic(),
 		senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg, 0x484);
+// commented out because it crashes vvvvv - delete me
+	//// Blowouts (rotating targets) — float damage
+	//damageBlowoutsInCylinder(Game::Blowouts::getClassIterNodeStatic(),
+	//	senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg, self->mSender->mIndex);
+	
+	// SpongeVersus — float fill, team-directional
+	damageSpongesInCylinder(Game::SpongeVersus::getClassIterNodeStatic(),
+		senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg);
 }
 
 void BulletSuperArtillery::vtFourthCalc(BulletSuperArtillery *self) {

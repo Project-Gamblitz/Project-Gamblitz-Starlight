@@ -24,6 +24,22 @@ namespace Game {
 	public:
 		static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
 	};
+	class SpongeVersus : public Cmn::Actor {
+	public:
+		static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
+	};
+	class BulletBombTako : public Cmn::Actor {
+	public:
+		static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
+	};
+	class IidaBombOnline : public Cmn::Actor {
+	public:
+		static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
+	};
+	class Blowouts : public Cmn::Actor {
+	public:
+		static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
+	};
 }
 
 namespace Flexlion {
