@@ -4,9 +4,26 @@
 #include "Lp/Utl.h"
 #include "sead/vector.h"
 #include "sead/matrix.h"
+#include "Game/Gachihoko.h"
 
 namespace Game {
     class Player;
+	class Sprinkler : public Cmn::Actor {
+	public:
+		static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
+	};
+	class Shield : public Cmn::Actor {
+	public:
+		static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
+	};
+	class JumpFlag : public Cmn::Actor {
+	public:
+		static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
+	};
+	class BulletUmbrellaCanopyBase : public Cmn::Actor {
+	public:
+		static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
+	};
 }
 
 namespace Flexlion {
@@ -88,6 +105,13 @@ public:
     inline gsys::Model *getActorFullModel() { return *(gsys::Model **)(_actorBase + 0x338); }
     inline void setStateMachineInnerPtr(Lp::Utl::StateMachine *sm) { *(Lp::Utl::StateMachine **)(_actorBase + 0x340) = sm; }
     inline void setTeam(Cmn::Def::Team t) { *(Cmn::Def::Team *)(_actorBase + 0x328) = t; }
+	static inline sead::Vector3<float> getActorModelPos(void *actor) {
+    gsys::Model *model = *(gsys::Model **)((u8 *)actor + 0x338);
+    if (model) {
+        return { model->mtx.matrix[0][3], model->mtx.matrix[1][3], model->mtx.matrix[2][3] };
+    }
+    return sead::Vector3<float>::zero;
+}
 };
 
 void initBSAVtable(BulletSuperArtillery *bsa);

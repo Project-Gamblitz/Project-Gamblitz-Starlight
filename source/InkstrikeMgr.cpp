@@ -159,7 +159,7 @@ namespace Flexlion{
 					autoDest.mY = 3000.0f;
 					autoDest = Utils::calcGroundPos(player, autoDest);
 				}
-				if(isOnline) bulletCloneHandle->sendEvent_Shot(player->mIndex, player->mPosition, autoDest, Game::BulletCloneEvent::Type::BulletTypeInkstrike, 0);
+				if(isOnline) bulletCloneHandle->sendEvent_Shot(player->mIndex, autoDest, player->mPosition, Game::BulletCloneEvent::Type::BulletTypeInkstrike, 0);
 				isAppliedWeapon[id] = 0;
 				mPendingDest[id] = autoDest;
 				mShootPrepareFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
@@ -259,7 +259,7 @@ namespace Flexlion{
 					miniMapAt.mY = 3000.0f;
 					miniMapAt.mZ = camAt.mZ - miniMap->mCursorPos.mY * worldPerCanvas;
 					miniMapAt = Utils::calcGroundPos(player, miniMapAt);
-					if(isOnline) bulletCloneHandle->sendEvent_Shot(player->mIndex, player->mPosition, miniMapAt, Game::BulletCloneEvent::Type::BulletTypeInkstrike, 0);
+					if(isOnline) bulletCloneHandle->sendEvent_Shot(player->mIndex, miniMapAt, player->mPosition, Game::BulletCloneEvent::Type::BulletTypeInkstrike, 0);
 					player->resetPaintGauge(0, 0, 0, 0);
 					isAppliedWeapon[id] = 0;
 					mPendingDest[id] = miniMapAt;

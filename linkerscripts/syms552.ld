@@ -886,6 +886,13 @@ _ZN4Game6Player17receiveDamage_NetEiN3Cmn3Def3DMGERKN4sead7Vector3IfEERKNS_12Dam
 _ZN4Game6Player22informDamage_ForceKillEiRKNS_12DamageReasonE = 0x10103BC - 0x2EBE000;
 _ZN4Game12PlayerDamage12informDamageEPviN3Cmn3Def3DMGERKNS_12DamageReasonEb = 0x1066D50 - 0x2EBE000;
 _ZN4Game16PlayerSilhouette13processDamageEiN3Cmn3Def3DMGERKNS_12DamageReasonE = 0x1119CA8 - 0x2EBE000;
+_ZN4Game8JumpFlag22getClassIterNodeStaticEv = 0xB52D9C - 0x2EBE000;
+_ZN4Game9Sprinkler22getClassIterNodeStaticEv = 0x4F0D8C - 0x2EBE000;
+_ZN4Game6Shield22getClassIterNodeStaticEv = 0x4F0864 - 0x2EBE000;
+_ZN4Game9Gachihoko22getClassIterNodeStaticEv = 0x034718 - 0x2EBE000;
+_ZN4Game24BulletUmbrellaCanopyBase22getClassIterNodeStaticEv = 0x4F0A1C - 0x2EBE000;
+
+
 
 /* Player bullet damage — the real HP damage function used by bullet collision system */
 _PlayerApplyBulletDamage = 0x1028DCC - 0x2EBE000;

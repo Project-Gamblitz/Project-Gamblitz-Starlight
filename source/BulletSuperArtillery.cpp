@@ -206,6 +206,13 @@ void BulletSuperArtillery::prepare(Game::Player *sender) {
     mBurstRadius = 0.0f;
     mBurstFrm = 0;
 
+    // Set xlink matrix to player position so OnActivate sound plays there
+    mXLinkMtx = {{
+        1.0f, 0.0f, 0.0f, sender->mPosition.mX,
+        0.0f, 1.0f, 0.0f, sender->mPosition.mY,
+        0.0f, 0.0f, 1.0f, sender->mPosition.mZ
+    }};
+	
     asLpActor()->reserveActivate(true);
 }
 
@@ -253,6 +260,91 @@ void BulletSuperArtillery::reset() {
 	mMatchEnding = false;
 }
 
+// Subtract-HP objects (Sprinkler, JumpFlag)
+static void damageObjects_SubHP(
+    Lp::Sys::ActorClassIterNodeBase *iterNode,
+    int senderTeamInt, float hitRadiusSq, float hitHalfHeight,
+    sead::Vector3<float> &center, int dmg, int hpOffset)
+{
+    for (Cmn::Actor *obj = (Cmn::Actor *)iterNode->derivedFrontActiveActor();
+         obj != NULL;
+         obj = (Cmn::Actor *)iterNode->derivedNextActiveActor(obj))
+    {
+        if ((int)obj->mTeam == senderTeamInt) continue;
+        float *pos = (float *)((u8 *)obj + 0x39C);
+        float odx = pos[0] - center.mX;
+        float odz = pos[2] - center.mZ;
+        float ody = pos[1] - center.mY;
+        if (odx*odx + odz*odz < hitRadiusSq && ody > -hitHalfHeight && ody < hitHalfHeight) {
+			if(iterNode == Game::Gachihoko::getClassIterNodeStatic()) {
+				int *hp = (int *)((u8 *)obj + hpOffset);
+				int newHp = *hp + dmg;
+				if (newHp < 0) newHp = 0;
+				*hp = newHp;
+			}
+            int *hp = (int *)((u8 *)obj + hpOffset);
+            int newHp = *hp - dmg;
+            if (newHp < 0) newHp = 0;
+            *hp = newHp;
+        }
+    }
+}
+
+// Add-accumulated-damage objects (Shield, Gachihoko, UmbrellaCanopy)
+static void damageObjects_AddDmg(
+    Lp::Sys::ActorClassIterNodeBase *iterNode,
+    int senderTeamInt, float hitRadiusSq, float hitHalfHeight,
+    sead::Vector3<float> &center, int dmg, int dmgOffset)
+{
+    for (Cmn::Actor *obj = (Cmn::Actor *)iterNode->derivedFrontActiveActor();
+         obj != NULL;
+         obj = (Cmn::Actor *)iterNode->derivedNextActiveActor(obj))
+    {
+        if ((int)obj->mTeam == senderTeamInt) continue;
+        float *pos = (float *)((u8 *)obj + 0x39C);
+        float odx = pos[0] - center.mX;
+        float odz = pos[2] - center.mZ;
+        float ody = pos[1] - center.mY;
+        if (odx*odx + odz*odz < hitRadiusSq && ody > -hitHalfHeight && ody < hitHalfHeight) {
+            int *accum = (int *)((u8 *)obj + dmgOffset);
+            *accum += dmg;
+        }
+    }
+}
+// Gachihoko (Rainmaker shield) — team-directional damage
+static void damageGachihokoInCylinder(
+    Lp::Sys::ActorClassIterNodeBase *iterNode,
+    int senderTeamInt, float hitRadiusSq, float hitHalfHeight,
+    sead::Vector3<float> &center, int dmg, int attackerIdx)
+{
+    for (Cmn::Actor *obj = (Cmn::Actor *)iterNode->derivedFrontActiveActor();
+         obj != NULL;
+         obj = (Cmn::Actor *)iterNode->derivedNextActiveActor(obj))
+    {
+        float *pos = (float *)((u8 *)obj + 0x39C);
+        float odx = pos[0] - center.mX;
+        float odz = pos[2] - center.mZ;
+        float ody = pos[1] - center.mY;
+
+        if (odx*odx + odz*odz < hitRadiusSq && ody > -hitHalfHeight && ody < hitHalfHeight) {
+            // Team-directional: Alpha adds, Bravo subtracts
+            int directionalDmg = (senderTeamInt == 1) ? -dmg : dmg;
+
+            int *accum = (int *)((u8 *)obj + 0x5DC);
+            int newAccum = *accum + directionalDmg;
+            if (newAccum > 99999) newAccum = 99999;
+            if (newAccum < -99999) newAccum = -99999;
+            *accum = newAccum;
+
+            // Store attacker index
+            *(int *)((u8 *)obj + 0x5E0) = attackerIdx;
+
+            // Set "was hit" flag for visual feedback
+            *(u32 *)((u8 *)obj + 0x4F8) |= 1;
+        }
+    }
+}
+
 // ============================================================
 // Vtable overrides
 // ============================================================
@@ -271,7 +363,7 @@ void BulletSuperArtillery::vtSecondCalc(BulletSuperArtillery *self) {
     float t = (float)self->mBurstFrm / (float)BSA_BURST_DMG_DURATION;
     if (t > 1.0f) t = 1.0f;
     const float hitRadiusStart = 25.0f;
-    const float hitRadiusEnd   = 275.0f;
+    const float hitRadiusEnd   = 260.0f;
     const float hitHalfHeight  = 5000.0f;
     float hitRadius = hitRadiusStart + (hitRadiusEnd - hitRadiusStart) * t;
     float hitRadiusSq = hitRadius * hitRadius;
@@ -331,6 +423,25 @@ void BulletSuperArtillery::vtSecondCalc(BulletSuperArtillery *self) {
             *(u32 *)((u8 *)st + 0x4F8) |= 2;
         }
     }
+	// Sprinkler — subtract HP at +0x5B4
+	damageObjects_SubHP(Game::Sprinkler::getClassIterNodeStatic(),
+		senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg, 0x5B4);
+	
+	// JumpFlag (Beakon) — subtract HP at +0x5C0
+	damageObjects_SubHP(Game::JumpFlag::getClassIterNodeStatic(),
+		senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg, 0x5C0);
+	
+	// Shield (Splash Wall) — add accumulated damage at +0x628
+	damageObjects_AddDmg(Game::Shield::getClassIterNodeStatic(),
+		senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg * 2.5, 0x628);
+		
+	// Gachihoko (Rainmaker) — team-directional
+	damageGachihokoInCylinder(Game::Gachihoko::getClassIterNodeStatic(),
+		senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg * 1.5, self->mSender->mIndex);
+		
+	// BulletUmbrellaCanopyBase (Brella shield) — add accumulated damage at +0x484
+	damageObjects_AddDmg(Game::BulletUmbrellaCanopyBase::getClassIterNodeStatic(),
+		senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg, 0x484);
 }
 
 void BulletSuperArtillery::vtFourthCalc(BulletSuperArtillery *self) {

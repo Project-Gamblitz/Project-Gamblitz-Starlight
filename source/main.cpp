@@ -209,7 +209,7 @@ void handleBulletCloneEventHook(Game::BulletCloneHandle *cloneHandle, Game::Play
 		// Defer the launch — store pending dest and let cShootPrepare handle the delay
 		int id = player->mIndex;
 		if(id >= 0 && id < 10){
-			tornadoMgr->mPendingDest[id] = event->mVel;
+			tornadoMgr->mPendingDest[id] = event->mPos;
 			tornadoMgr->mRemoteShotPending[id] = true;
 		}
 	}
