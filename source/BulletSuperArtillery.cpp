@@ -343,7 +343,7 @@ static void damageGachihokoInCylinder(
 
             // Burst only when HP threshold exceeded
             int absAccum = newAccum < 0 ? -newAccum : newAccum;
-            if (absAccum >= 5000) {
+            if (absAccum >= 10000) {
                 *(u8 *)((u8 *)obj + 0x5E4) = 1;
                 *(int *)((u8 *)obj + 0x5E8) = attackerIdx;
             }
@@ -498,7 +498,7 @@ void BulletSuperArtillery::vtSecondCalc(BulletSuperArtillery *self) {
 		
 	// Gachihoko (Rainmaker) — team-directional with threshold burst
 	damageGachihokoInCylinder(Game::Gachihoko::getClassIterNodeStatic(),
-		senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg, self->mSender->mIndex);
+		senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg * 2.25, self->mSender->mIndex);
 	
 	// BulletUmbrellaCanopyBase (Brella shield) — add accumulated damage at +0x484
 	damageObjects_AddDmg(Game::BulletUmbrellaCanopyBase::getClassIterNodeStatic(),

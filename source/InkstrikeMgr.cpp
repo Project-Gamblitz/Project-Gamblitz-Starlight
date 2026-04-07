@@ -171,7 +171,6 @@ namespace Flexlion{
 						mapXLink->searchAndPlayWrap("Pronounce", false, &decideHandle);
 					}
 				}
-				player->resetPaintGauge(0, 0, 0, 0);
 				playerState[id] = TornadoState::cShootPrepare;
 				informPerformSpecial(player);
 				mWasAHeld[id] = false;
@@ -260,7 +259,6 @@ namespace Flexlion{
 					miniMapAt.mZ = camAt.mZ - miniMap->mCursorPos.mY * worldPerCanvas;
 					miniMapAt = Utils::calcGroundPos(player, miniMapAt);
 					if(isOnline) bulletCloneHandle->sendEvent_Shot(player->mIndex, miniMapAt, player->mPosition, Game::BulletCloneEvent::Type::BulletTypeInkstrike, 0);
-					player->resetPaintGauge(0, 0, 0, 0);
 					isAppliedWeapon[id] = 0;
 					mPendingDest[id] = miniMapAt;
 					mShootPrepareFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
@@ -278,12 +276,12 @@ namespace Flexlion{
             break;
         case TornadoState::cShootPrepare:
         {
+			Prot::ObfStore(&player->mSpecialLeftFrame, startflightdelay);
+            Prot::ObfStore(&player->mLayoutSpecialState, -1); // negative total → gauge shows 0%
 			if(isCtrlPerformer){
 				Game::MiniMap *mMap = Utils::getMinimap();
 				if(mMap != NULL) mMap->setVisible(true);
 			}
-            Prot::ObfStore(&player->mSpecialLeftFrame, startflightdelay);
-            Prot::ObfStore(&player->mLayoutSpecialState, -1); // negative total → gauge shows 0%
             int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mShootPrepareFrm[id];
             if(elapsed >= startflightdelay || player->isInTrouble_Dying() || mMatchEnding){
                 // Get launch position from ink tank bone
@@ -311,6 +309,7 @@ namespace Flexlion{
 			Prot::ObfStore(&player->mLayoutSpecialState, -1); // negative total → gauge shows 0%
 			int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mShootFrm[id];
 			if(elapsed >= playerdelay){
+				player->resetPaintGauge(0, 0, 0, 0);
 				Prot::ObfStore(&player->mSpecialLeftFrame, 0);
 				playerState[id] = TornadoState::cNone;
 				player->mPlayerMotion->animSeq_3C = -1;
