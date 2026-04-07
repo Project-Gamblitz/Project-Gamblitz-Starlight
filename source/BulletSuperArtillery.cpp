@@ -498,7 +498,7 @@ void BulletSuperArtillery::vtSecondCalc(BulletSuperArtillery *self) {
 		
 	// Gachihoko (Rainmaker) — team-directional with threshold burst
 	damageGachihokoInCylinder(Game::Gachihoko::getClassIterNodeStatic(),
-		senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg * 2.25, self->mSender->mIndex);
+		senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg * 2.5, self->mSender->mIndex);
 	
 	// BulletUmbrellaCanopyBase (Brella shield) — add accumulated damage at +0x484
 	damageObjects_AddDmg(Game::BulletUmbrellaCanopyBase::getClassIterNodeStatic(),
