@@ -30,3 +30,4 @@ Project-Gamblitz-Starlight*.nso
 /.ida-mcp
 /deploy
 *Zone.Identifier
+/ida_dump

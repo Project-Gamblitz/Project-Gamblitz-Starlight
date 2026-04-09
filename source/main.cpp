@@ -8,6 +8,59 @@
 
 using namespace starlight;
 
+// ============================================================
+// searchHappi002Hook: replaces BL to MushGearInfo::searchIdHappiReplica
+// via 552.slpatch. Always compiled. When IS_BETA, substitutes beta
+// gear ID if HAP002 is already owned.
+// ============================================================
+static u32 (*searchHappi002Original)(u64 mushGearInfo, u32 kind) = NULL;
+
+// Fixed GetSaveWrite — the 5.5.2 address (0x202B20) is broken/obfuscated.
+// Returns SaveDataFactory::spData directly.
+u64 getSaveWriteFixed() {
+    return *(u64 *)ProcessMemory::MainAddr(0x2D70A00);
+}
+
+u32 searchHappi002Hook(u64 mushGearInfo, u32 kind) {
+    if (!searchHappi002Original)
+        searchHappi002Original = (u32 (*)(u64, u32))ProcessMemory::MainAddr(0x82380);
+
+    u32 happi002Id = searchHappi002Original(mushGearInfo, kind);
+
+#if IS_BETA
+    // Get caller address for logging
+    register u64 lr asm("x30");
+    u64 callerAddr = lr;
+
+    u64 spData = *(u64 *)ProcessMemory::MainAddr(0x2D70A00);
+    if (spData) {
+        u64 saveDataCmn = *(u64 *)(spData + 24);
+        if (saveDataCmn) {
+            typedef bool (*IsHaveGearFunc)(u64, u32, u32, int *);
+            IsHaveGearFunc isHaveGear = (IsHaveGearFunc)ProcessMemory::MainAddr(0x307150);
+
+            bool hap002Owned = isHaveGear(saveDataCmn, 1, happi002Id, NULL);
+            FsLogger::LogFormatDefaultDirect("[BetaDelivery] searchHappi002Hook called from 0x%lx, HAP002=%d owned=%d\n",
+                callerAddr, happi002Id, hap002Owned);
+
+            if (hap002Owned) {
+                static const struct { int kind; int id; } betaGear[] = { {1, 29020} };
+                for (int i = 0; i < 1; i++) {
+                    bool betaOwned = isHaveGear(saveDataCmn, betaGear[i].kind, betaGear[i].id, NULL);
+                    FsLogger::LogFormatDefaultDirect("[BetaDelivery] beta gear %d owned=%d\n", betaGear[i].id, betaOwned);
+                    if (!betaOwned) {
+                        FsLogger::LogFormatDefaultDirect("[BetaDelivery] SUBSTITUTING %d\n", betaGear[i].id);
+                        return (u32)betaGear[i].id;
+                    }
+                }
+            }
+        }
+    }
+#endif
+
+    return happi002Id;
+}
+
 extern "C" {
     extern void (*__preinit_array_start__[])(void) __attribute__((weak));
     extern void (*__preinit_array_end__[])(void) __attribute__((weak));
@@ -639,16 +692,7 @@ void renderEntrypoint(agl::DrawContext *drawContext, sead::TextWriter *textWrite
 		bigLaserModeMgr->reset();
 	}
 
-#ifdef IS_BETA
-	{
-		static bool sBetaDeliveryDone = false;
-		if (!sBetaDeliveryDone && Utils::isSceneLoaded() && Cmn::StaticMem::sInstance) {
-			Flexlion::pushBetaGearDeliveries();
-			sBetaDeliveryDone = true;
-		}
-		if (!Utils::isSceneLoaded()) sBetaDeliveryDone = false;
-	}
-#endif
+	// Beta gear delivery is handled via DeliveryBox hook (installed in init_starlion)
 
 	// Debug: show collision attribute under Inkstrike cursor
 	if(mTextWriter != NULL){
@@ -950,6 +994,9 @@ void init_starlion(){
 	arg._0 = (u64)(&randomBuf);
 	ctrlChecker = new Cmn::CtrlChecker(arg);
 	FsLogger::LogFormatDefaultDirect("[Gamblitz] Created Cmn::CtrlChecker, 0x%x free RAM.\n", Collector::mHeapMgr->getCurrentHeap()->getFreeSize());
+#if IS_BETA
+	Flexlion::installDeliveryBoxHook();
+#endif
 	ctrlChecker->calc();
 	FsLogger::LogFormatDefaultDirect("[Gamblitz] Initialized, 0x%x free RAM.\n", Collector::mHeapMgr->getCurrentHeap()->getFreeSize());
 
@@ -1373,6 +1420,8 @@ void hooks_init(){
 	setupKingSquidAnimHook(NULL, NULL);
 	kingSquidAnimSetControllerHook(NULL, NULL);
 	actorDbHook(NULL, NULL, NULL);
+	searchHappi002Hook(0, 0);
+	getSaveWriteFixed();
 	Game::PlayerWeaponSuperShot::supershotJumpHook();
 	Flexlion::BigLaserModeMgr::bigLaserJumpHook();
 	custommgrjptHook();

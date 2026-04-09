@@ -1,4 +1,12 @@
 [version=552, target=main]
+// Beta DeliveryBox: redirect ALL searchIdHappiReplica calls to hook
+01157D54 BL searchHappi002Hook
+01157F34 BL searchHappi002Hook
+01157FD8 BL searchHappi002Hook
+01158860 BL searchHappi002Hook
+01158E30 BL searchHappi002Hook
+// Fix broken GetSaveWrite (0x202B20) in delivery box calc
+01158004 BL getSaveWriteFixed
 // Kraken
 010ED040+1AC 05000014
 01002410+1AAC:

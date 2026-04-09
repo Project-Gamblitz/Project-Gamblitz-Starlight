@@ -11,8 +11,11 @@ struct BetaGearEntry {
     int id;
 };
 
-// Push beta-exclusive gear into the DeliveryBox queue.
+// Push beta-exclusive gear into save data.
 // Called during plaza setup. Only delivers gear the player doesn't already own.
 void pushBetaGearDeliveries();
+
+// Hook the plaza delivery box setup to show the box for beta gear.
+void installDeliveryBoxHook();
 
 } // namespace Flexlion
