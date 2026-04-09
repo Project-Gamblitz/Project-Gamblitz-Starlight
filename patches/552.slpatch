@@ -340,3 +340,6 @@
 
 //Inkstrike Paint set as special paint
 00FC3918 BL requestPaintImplHook
+
+// fizzy bomb white ink frames increase to 85 (another prochara balance change)
+010951A0 A80A8052
