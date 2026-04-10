@@ -63,6 +63,10 @@ void PlayerWeaponTornado::playerFirstCalc(Game::Player *player){
 	int id = player->mIndex;
 	bool inTornadoSpecial = player->isInSpecial() && player->mSpecialWeaponId == TORNADO_SPECIAL_ID;
 
+    // Only play sound during cAim state
+    Flexlion::InkstrikeMgr *mgr = Flexlion::InkstrikeMgr::sInstance;
+    bool inAim = mgr && mgr->playerState[id] == Flexlion::TornadoState::cAim;
+	
 	if(!inTornadoSpecial){
 		// Debounce: only reset after 30+ frames out of special (~0.5s at 60fps).
 		// Prevents isInSpecial() flicker (1-2 frames) from resetting mOnActivatePlayed,
@@ -79,6 +83,19 @@ void PlayerWeaponTornado::playerFirstCalc(Game::Player *player){
 
 	Lp::Sys::XLink *xlink = ((Cmn::Actor*)weapon)->mXLink;
 	if(xlink == NULL) return;
+	
+    // Set weapon's model matrix to player position BEFORE emitting
+    // This fixes sound playing at 0,0,0
+    gsys::Model **modelPtr = (gsys::Model **)((u8 *)weapon + 0x338); // Cmn::Actor model ptr
+    if (*modelPtr) {
+        (*modelPtr)->mtx = {{
+            1.0f, 0.0f, 0.0f, player->mPosition.mX,
+            0.0f, 1.0f, 0.0f, player->mPosition.mY,
+            0.0f, 0.0f, 1.0f, player->mPosition.mZ
+        }};
+        (*modelPtr)->mUpdateScale |= 1;
+        (*modelPtr)->updateAnimationWorldMatrix_(3);
+    }
 
 	// Wake slink if sleeping (first use after xlink creation), then emit.
 	if(xlink->isSleep()) xlink->setIsActive(true);

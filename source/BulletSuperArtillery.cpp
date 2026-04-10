@@ -213,6 +213,13 @@ void BulletSuperArtillery::prepare(Game::Player *sender) {
         0.0f, 0.0f, 1.0f, sender->mPosition.mZ
     }};
 	
+    // ALSO set the model's world matrix — XLink reads from this on first frame
+    if (mTornadoModel) {
+        mTornadoModel->mtx = mXLinkMtx;
+        mTornadoModel->mUpdateScale |= 1;
+        mTornadoModel->updateAnimationWorldMatrix_(3);
+    }
+	
     asLpActor()->reserveActivate(true);
 }
 

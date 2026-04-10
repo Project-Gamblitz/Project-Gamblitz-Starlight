@@ -5,6 +5,8 @@ const int playerdelay = 60; // 60 frames Shoot_Tornado waiting for the player to
 const float tornadoTankZOffset = -3.0f;
 
 
+
+
 extern "C" {
     extern u8 _ZTVN4Game27MessagePlayerPerformSpecialE[];
     extern void *_ZN3Cmn18MessageBroadcaster9sInstanceE;
@@ -13,6 +15,7 @@ extern "C" {
 #define MessagePlayerPerformSpecialVtable _ZTVN4Game27MessagePlayerPerformSpecialE
 #define MessageBroadcasterInstance _ZN3Cmn18MessageBroadcaster9sInstanceE
 #define dispatchMessage _ZN3Cmn17MessageDispatcher15dispatchMessageERKNS_7MessageE
+
 
 // Send PerformSpecial network event (type 22) so remote consoles also count the special.
 static void sendPerformSpecialNet(Game::Player *player) {
@@ -29,6 +32,7 @@ static void sendPerformSpecialNet(Game::Player *player) {
     cloneObj->pushPlayerStateEvent(event);
 }
 
+
 static void informPerformSpecial(Game::Player *player) {
     u64 msg[2];
     msg[0] = (u64)(MessagePlayerPerformSpecialVtable + 0x10);
@@ -39,11 +43,6 @@ static void informPerformSpecial(Game::Player *player) {
     player->informStartSpecialToLayout(0x11);
 }
 
-// Helper — reads PlayerInkAction the same way the game does
-static void setNoControl(Game::Player *player, u64 value) {
-    u64 inkAction = *(u64 *)((u8 *)player + 0xF80);
-    *(u64 *)(inkAction + 0x3A0) = value;
-}
 
 namespace Flexlion{
     InkstrikeMgr *InkstrikeMgr::sInstance = NULL;
@@ -94,7 +93,6 @@ namespace Flexlion{
         int id = player->mIndex;
         if(player->isInSpecial() and player->mSpecialWeaponId == TORNADO_SPECIAL_ID and playerState[id] == TornadoState::cNone){
             playerState[id] = TornadoState::cAim;
-			setNoControl(player, 1);
             isAppliedWeapon[id] = 0;
             // Activate BSA so xlink cState_Wait effects play during aiming
             if(bullets[id] != NULL && !bullets[id]->isActive()){
@@ -131,19 +129,13 @@ namespace Flexlion{
         float camdst = float(playerState[id] == TornadoState::cAim);
         if(isCtrlPerformer) cameraanim+=(camdst - cameraanim) * 0.2f;
         if(abs(camdst - cameraanim) < 0.05f) cameraanim = camdst;
-		// Keep NoControl active every frame during the entire inkstrike flow
-		if (playerState[id] != TornadoState::cNone) {
-			u64 inkAction = *(u64 *)((u8 *)player + 0xF80);
-			*(u64 *)(inkAction + 0x3A0) = 1;
-		}
         switch(playerState[id]){
         case TornadoState::cNone:
             break;
         case TornadoState::cAim:
-            if(player->isInTrouble_Dying() || !player->isAlive() || checkMode == Flexlion::cPrincessCannon || (!player->isInSpecial() && player->mSpecialWeaponId != TORNADO_SPECIAL_ID)){
+            if(player->isInTrouble_Dying() || player->isInTrouble_WaterFall() || !player->isAlive() || checkMode == Flexlion::cPrincessCannon || (!player->isInSpecial() && player->mSpecialWeaponId != TORNADO_SPECIAL_ID)){
                 // Player died without choosing a spot or picked up princess cannon or changed weapon in shooting range — cancel special
                 playerState[id] = TornadoState::cNone;
-				setNoControl(player, 0);
 				mWasAHeld[id] = false;
                 if(bullets[id] != NULL && bullets[id]->isActive()){
                     bullets[id]->cancel();
@@ -193,10 +185,11 @@ namespace Flexlion{
 					}
 				}
 				playerState[id] = TornadoState::cShootPrepare;
+				player->mPlayerInkAction->mNoControlPtr = (u64)bullets[id];
 				player->resetPaintGauge(0, 0, 0, 0);
 				informPerformSpecial(player);
 				mWasAHeld[id] = false;
-				// if(bullets[id] != NULL) bullets[id]->mStateMachine.changeState(BSAState::cState_Wait);
+				if(bullets[id] != NULL) bullets[id]->mStateMachine.changeState(BSAState::cState_Wait);
 				if(isCtrlPerformer){
 					Game::MiniMap *mMap = Utils::getMinimap();
 					if(mMap != NULL){
@@ -206,6 +199,7 @@ namespace Flexlion{
 				}
 				break;
 			}
+
 
             // Continuously validate aim position for the controlled player
             if(isCtrlPerformer and Utils::isShowMinimap() and cameraanim > 0.95f){
@@ -244,6 +238,7 @@ namespace Flexlion{
 					mWasAHeld[id] = false; // ensures tornado doesn't shoot if map is closed while holding A
 				}
 			}
+
 
             if(isCtrlPerformer and Utils::isShowMinimap() and cameraanim > 0.95f){
 				bool aHeld = Lp::Utl::getCtrl(0)->isHoldContinue(starlight::Controller::Buttons::A, 1);
@@ -285,9 +280,10 @@ namespace Flexlion{
 					mPendingDest[id] = miniMapAt;
 					mShootPrepareFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
 					playerState[id] = TornadoState::cShootPrepare;
+					player->mPlayerInkAction->mNoControlPtr = (u64)bullets[id];
 					player->resetPaintGauge(0, 0, 0, 0);
 					informPerformSpecial(player);
-					// if(bullets[id] != NULL) bullets[id]->mStateMachine.changeState(BSAState::cState_Wait);
+					if(bullets[id] != NULL) bullets[id]->mStateMachine.changeState(BSAState::cState_Wait);
 					if(mMap != NULL){
 						mMap->setVisible(false);
 						mMap->fadeAllEffect();
@@ -329,7 +325,7 @@ namespace Flexlion{
 			int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mShootFrm[id];
 			if(elapsed >= playerdelay){
 				// Release NoControl restriction
-				setNoControl(player, 0);
+				player->mPlayerInkAction->mNoControlPtr = 0;
 				playerState[id] = TornadoState::cNone;
 				player->mPlayerMotion->animSeq_3C = -1;
 				player->informGetWeapon_Impl_(player->mMainWeaponId, player->mSubWeaponId, player->mSpecialWeaponId, 0);

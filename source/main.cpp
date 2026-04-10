@@ -517,7 +517,51 @@ static void (*playerFirstCalcOg)(Game::Player*);
 static void (*playerThirdCalcOg)(Game::Player*);
 static void (*playerFourthCalcOg)(Game::Player*);
 void playerFirstCalcHook(Game::Player *player){
+    // Block ZL (squid) + R (sub throw) during cShootPrepare/cShoot
+    bool blockInput = false;
+    u32 savedHold = 0, savedTrig = 0;
+    u32 savedCounterZL = 0, savedCounterR = 0;
+    Lp::Sys::Ctrl *ctrl = nullptr;
+    
+    if (tornadoMgr) {
+        bool isCtrlPerformer = Game::PlayerMgr::sInstance->mCurrentPlayerIndex == player->mIndex;
+        int id = player->mIndex;
+        if (isCtrlPerformer && 
+            (tornadoMgr->playerState[id] == Flexlion::TornadoState::cShootPrepare ||
+             tornadoMgr->playerState[id] == Flexlion::TornadoState::cShoot)) {
+            ctrl = Lp::Utl::getCtrl(0);
+            if (ctrl) {
+                blockInput = true;
+                const u32 BLOCK_MASK = (1 << 2) | (1 << 14);  // ZL | R
+                
+                // Save and clear hold mask at ctrl+0x10
+                u32 *holdMask = (u32 *)((u8 *)ctrl + 0x10);
+                savedHold = *holdMask;
+                *holdMask &= ~BLOCK_MASK;
+                
+                // Save and clear trigger mask at ctrl+0x94
+                u32 *trigMask = (u32 *)((u8 *)ctrl + 0x94);
+                savedTrig = *trigMask;
+                *trigMask &= ~BLOCK_MASK;
+                
+                // Clear hold counters: ZL at ctrl+0x1C, R at ctrl+0x4C
+                u32 *zlCounter = (u32 *)((u8 *)ctrl + 0x1C);
+                u32 *rCounter  = (u32 *)((u8 *)ctrl + 0x4C);
+                savedCounterZL = *zlCounter;
+                savedCounterR = *rCounter;
+                *zlCounter = 0;
+                *rCounter = 0;
+            }
+        }
+    }
 	playerFirstCalcOg(player);
+    // Restore buttons after game processed input
+    if (blockInput && ctrl) {
+        *(u32 *)((u8 *)ctrl + 0x10) = savedHold;
+        *(u32 *)((u8 *)ctrl + 0x94) = savedTrig;
+        *(u32 *)((u8 *)ctrl + 0x1C) = savedCounterZL;
+        *(u32 *)((u8 *)ctrl + 0x4C) = savedCounterR;
+    }
 	tornadoMgr->playerFirstCalc(player);
 	Game::PlayerWeaponTornado::sInstance->playerFirstCalc(player);
 	Game::PlayerWeaponSuperShot::sInstance->playerFirstCalc(player);
