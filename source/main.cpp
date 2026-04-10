@@ -528,11 +528,12 @@ void playerFirstCalcHook(Game::Player *player){
         int id = player->mIndex;
         if (isCtrlPerformer && 
             (tornadoMgr->playerState[id] == Flexlion::TornadoState::cShootPrepare ||
-             tornadoMgr->playerState[id] == Flexlion::TornadoState::cShoot)) {
+             tornadoMgr->playerState[id] == Flexlion::TornadoState::cShoot ||
+			 tornadoMgr->playerState[id] == Flexlion::TornadoState::cAim)) {
             ctrl = Lp::Utl::getCtrl(0);
             if (ctrl) {
                 blockInput = true;
-                const u32 BLOCK_MASK = (1 << 2) | (1 << 14);  // ZL | R
+                const u32 BLOCK_MASK = (1 << 2) | (1 << 14) | (1 << 5);  // ZL | R | ZR
                 
                 // Save and clear hold mask at ctrl+0x10
                 u32 *holdMask = (u32 *)((u8 *)ctrl + 0x10);

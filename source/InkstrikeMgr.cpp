@@ -186,7 +186,6 @@ namespace Flexlion{
 				}
 				playerState[id] = TornadoState::cShootPrepare;
 				player->mPlayerInkAction->mNoControlPtr = (u64)bullets[id];
-				player->resetPaintGauge(0, 0, 0, 0);
 				informPerformSpecial(player);
 				mWasAHeld[id] = false;
 				if(bullets[id] != NULL) bullets[id]->mStateMachine.changeState(BSAState::cState_Wait);
@@ -281,7 +280,6 @@ namespace Flexlion{
 					mShootPrepareFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
 					playerState[id] = TornadoState::cShootPrepare;
 					player->mPlayerInkAction->mNoControlPtr = (u64)bullets[id];
-					player->resetPaintGauge(0, 0, 0, 0);
 					informPerformSpecial(player);
 					if(bullets[id] != NULL) bullets[id]->mStateMachine.changeState(BSAState::cState_Wait);
 					if(mMap != NULL){
@@ -295,6 +293,7 @@ namespace Flexlion{
             break;
         case TornadoState::cShootPrepare:
         {
+			player->resetPaintGauge(0, 0, 0, 0);
 			if(isCtrlPerformer){
 				Game::MiniMap *mMap = Utils::getMinimap();
 				if(mMap != NULL) mMap->setVisible(true);
