@@ -1291,7 +1291,7 @@ xlink2::UserInstanceSLink *startSkill_DeathMarkingHook(Game::Player *player, uns
 static bool isSpecialSkill_RespawnRadar(Game::Player *player) {
     u8 *skillArray = *(u8**)(((u8*)player) + 0xEE8);
     if (skillArray == nullptr) return false;
-    return skillArray[0x15F] != 0;
+    return skillArray[0x1DF] != 0;
 }
 
 static void informEffectiveSpecialSkill_RespawnRadar(Game::Player *player) {
