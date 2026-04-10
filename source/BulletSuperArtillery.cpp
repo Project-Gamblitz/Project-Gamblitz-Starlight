@@ -260,6 +260,30 @@ void BulletSuperArtillery::reset() {
 	mMatchEnding = false;
 }
 
+static float readSpongeMaxFill(Cmn::Actor *obj) {
+    u64 paramBlock = *(u64 *)((u8 *)obj + 0x4D0);
+    if (!paramBlock) return 5.0f;
+    
+    // Try cached value first
+    if (*(u8 *)(paramBlock + 39)) {
+        return *(float *)(paramBlock + 40);
+    }
+    
+    // Virtual call fallback: *(*(*(paramBlock+16) + 864) + 216)(*(paramBlock+16) + 864)
+    u64 provider = *(u64 *)(paramBlock + 16);
+    if (!provider) return 5.0f;
+    
+    u64 thisPtr = provider + 864;
+    u64 vtable = *(u64 *)thisPtr;
+    if (!vtable) return 5.0f;
+    
+    typedef float* (*ParamGetFn)(u64);
+    ParamGetFn fn = (ParamGetFn)(*(u64 *)(vtable + 216));
+    float *result = fn(thisPtr);
+    if (result) return *result;
+    return 5.0f;
+}
+
 // Subtract-HP objects (Sprinkler, JumpFlag)
 static void damageObjects_SubHP(
     Lp::Sys::ActorClassIterNodeBase *iterNode,
@@ -276,12 +300,6 @@ static void damageObjects_SubHP(
         float odz = pos[2] - center.mZ;
         float ody = pos[1] - center.mY;
         if (odx*odx + odz*odz < hitRadiusSq && ody > -hitHalfHeight && ody < hitHalfHeight) {
-			if(iterNode == Game::Gachihoko::getClassIterNodeStatic()) {
-				int *hp = (int *)((u8 *)obj + hpOffset);
-				int newHp = *hp + dmg;
-				if (newHp < 0) newHp = 0;
-				*hp = newHp;
-			}
             int *hp = (int *)((u8 *)obj + hpOffset);
             int newHp = *hp - dmg;
             if (newHp < 0) newHp = 0;
@@ -325,10 +343,8 @@ static void damageGachihokoInCylinder(
         float odx = pos[0] - center.mX;
         float odz = pos[2] - center.mZ;
         float ody = pos[1] - center.mY;
-
         if (odx*odx + odz*odz < hitRadiusSq && ody > -hitHalfHeight && ody < hitHalfHeight) {
             int directionalDmg = (senderTeamInt == 1) ? -dmg : dmg;
-
             int *accum = (int *)((u8 *)obj + 0x5DC);
             int newAccum = *accum + directionalDmg;
             if (newAccum > 99999) newAccum = 99999;
@@ -337,9 +353,14 @@ static void damageGachihokoInCylinder(
 
             // Store attacker
             *(int *)((u8 *)obj + 0x5E0) = attackerIdx;
-
-            // Hit animation flag
+			
+			// Hit animation flag
             *(u32 *)((u8 *)obj + 0x4F8) |= 2;
+			
+//            // Per-player hit timer for visual flash
+//            if (attackerIdx >= 0 && attackerIdx < 10) {
+//                *(int *)((u8 *)obj + 0x295C + attackerIdx * 4) = 10;
+//            }
 
             // Burst only when HP threshold exceeded
             int absAccum = newAccum < 0 ? -newAccum : newAccum;
@@ -385,7 +406,6 @@ static void damageSpongesInCylinder(
          obj != NULL;
          obj = (Cmn::Actor *)iterNode->derivedNextActiveActor(obj))
     {
-        // Sponge team at +0x5F0 (1520) — 0=neutral, 1=bravo, etc.
         int spongeTeam = *(int *)((u8 *)obj + 0x5F0);
 
         float *pos = (float *)((u8 *)obj + 0x39C);
@@ -395,14 +415,18 @@ static void damageSpongesInCylinder(
 
         if (odx*odx + odz*odz < hitRadiusSq && ody > -hitHalfHeight && ody < hitHalfHeight) {
             float *fill = (float *)((u8 *)obj + 0x610);
-            // Same team grows sponge, enemy team shrinks
+
+            // Read max fill from params block
+            float maxFill = readSpongeMaxFill(obj);
+
             if (spongeTeam == senderTeamInt) {
-                *fill += (float)dmg / 500.0f;  // grow
+                *fill += (float)dmg / 500.0f;
+                if (*fill > maxFill) *fill = maxFill;
             } else {
-                *fill -= (float)dmg / 500.0f;  // shrink
+                *fill -= (float)dmg / 500.0f;
+                if (*fill < 1.0f) *fill = 1.0f;
             }
-            if (*fill < 1.0f) *fill = 1.0f;
-            *(u32 *)((u8 *)obj + 0x4F8) |= 2;  // hit flag
+            *(u32 *)((u8 *)obj + 0x4F8) |= 2;
         }
     }
 }
@@ -503,14 +527,14 @@ void BulletSuperArtillery::vtSecondCalc(BulletSuperArtillery *self) {
 	// BulletUmbrellaCanopyBase (Brella shield) — add accumulated damage at +0x484
 	damageObjects_AddDmg(Game::BulletUmbrellaCanopyBase::getClassIterNodeStatic(),
 		senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg, 0x484);
-// commented out because it crashes vvvvv - delete me
+// commented out because it crashes vvvvv - delete me when you fix it
 	//// Blowouts (rotating targets) — float damage
 	//damageBlowoutsInCylinder(Game::Blowouts::getClassIterNodeStatic(),
 	//	senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg, self->mSender->mIndex);
 	
 	// SpongeVersus — float fill, team-directional
 	damageSpongesInCylinder(Game::SpongeVersus::getClassIterNodeStatic(),
-		senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg);
+		senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg * 0.25);
 }
 
 void BulletSuperArtillery::vtFourthCalc(BulletSuperArtillery *self) {
@@ -532,6 +556,14 @@ void BulletSuperArtillery::vtFourthCalc(BulletSuperArtillery *self) {
 }
 
 void BulletSuperArtillery::vtOnActivate(BulletSuperArtillery *self, bool) {
+    // Re-set XLink position from sender (in case deferred activation missed the prepare() write)
+    if (self->mSender) {
+        self->mXLinkMtx = {{
+            1.0f, 0.0f, 0.0f, self->mSender->mPosition.mX,
+            0.0f, 1.0f, 0.0f, self->mSender->mPosition.mY,
+            0.0f, 0.0f, 1.0f, self->mSender->mPosition.mZ
+        }};
+    }
     // Set XLink local property values
     Lp::Sys::XLink *xlink = self->getXLink();
     if (xlink) {

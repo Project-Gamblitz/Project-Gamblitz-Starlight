@@ -46,5 +46,7 @@ namespace Game {
 		u32 mSlosherRqLeftFrm;
 		_BYTE _234[0x64];
 		Game::PlayerShotGuide *mPlayerShotGuide;
+//        _BYTE _2A0[0x100];                         // padding
+//        u64 mNoControlPtr;                          // +0x3A0 — tornado NoControl trigger
 	};
 };

@@ -47,5 +47,7 @@ namespace Flexlion{
         float cameraheight;
         float camerafovy;
         bool isBulletDeinit;
+		float mSpawnY;  // stored once at match start, shared for all players
+		bool mSpawnYCaptured;
     };
 }

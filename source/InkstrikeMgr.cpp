@@ -39,6 +39,12 @@ static void informPerformSpecial(Game::Player *player) {
     player->informStartSpecialToLayout(0x11);
 }
 
+// Helper — reads PlayerInkAction the same way the game does
+static void setNoControl(Game::Player *player, u64 value) {
+    u64 inkAction = *(u64 *)((u8 *)player + 0xF80);
+    *(u64 *)(inkAction + 0x3A0) = value;
+}
+
 namespace Flexlion{
     InkstrikeMgr *InkstrikeMgr::sInstance = NULL;
     InkstrikeMgr::InkstrikeMgr(){
@@ -49,6 +55,8 @@ namespace Flexlion{
         cameraheight = 1500.0f;
         cameraanim = 0.0f;
         camerafovy = 60.0f;
+		mSpawnY = 3000.0f;  // safe default
+		mSpawnYCaptured = false;
         for(int i = 0; i < 10; i++){
             bullets[i] = NULL;
             mTankRootBoneIdx[i] = -1;
@@ -75,6 +83,8 @@ namespace Flexlion{
                 resetBSAStatics();
                 isBulletDeinit = 1;
 				mMatchEnding = false;
+				mSpawnYCaptured = false;
+				mSpawnY = 3000.0f;
             }
             return;
         }
@@ -84,6 +94,7 @@ namespace Flexlion{
         int id = player->mIndex;
         if(player->isInSpecial() and player->mSpecialWeaponId == TORNADO_SPECIAL_ID and playerState[id] == TornadoState::cNone){
             playerState[id] = TornadoState::cAim;
+			setNoControl(player, 1);
             isAppliedWeapon[id] = 0;
             // Activate BSA so xlink cState_Wait effects play during aiming
             if(bullets[id] != NULL && !bullets[id]->isActive()){
@@ -105,7 +116,10 @@ namespace Flexlion{
             return;
         }
         Game::BulletMgr *bulletMgr = Game::MainMgr::sInstance->mBulletMgr;
-        Game::PlayerSuperBall *playerSuperBall = player->mPlayerSuperBall;
+        if (!mSpawnYCaptured && player->isAlive() && isCtrlPerformer && player->mPosition.mY > 10.0f) {
+			mSpawnY = player->mPosition.mY + 115.0f;
+			mSpawnYCaptured = true;
+		}
         Game::PlayerInkAction *InkAction = player->mPlayerInkAction;
         Game::MiniMap *miniMap = Utils::getMinimap();
         sead::Vector3<float> miniMapAt = sead::Vector3<float>::zero;
@@ -117,6 +131,11 @@ namespace Flexlion{
         float camdst = float(playerState[id] == TornadoState::cAim);
         if(isCtrlPerformer) cameraanim+=(camdst - cameraanim) * 0.2f;
         if(abs(camdst - cameraanim) < 0.05f) cameraanim = camdst;
+		// Keep NoControl active every frame during the entire inkstrike flow
+		if (playerState[id] != TornadoState::cNone) {
+			u64 inkAction = *(u64 *)((u8 *)player + 0xF80);
+			*(u64 *)(inkAction + 0x3A0) = 1;
+		}
         switch(playerState[id]){
         case TornadoState::cNone:
             break;
@@ -124,6 +143,7 @@ namespace Flexlion{
             if(player->isInTrouble_Dying() || !player->isAlive() || checkMode == Flexlion::cPrincessCannon || (!player->isInSpecial() && player->mSpecialWeaponId != TORNADO_SPECIAL_ID)){
                 // Player died without choosing a spot or picked up princess cannon or changed weapon in shooting range — cancel special
                 playerState[id] = TornadoState::cNone;
+				setNoControl(player, 0);
 				mWasAHeld[id] = false;
                 if(bullets[id] != NULL && bullets[id]->isActive()){
                     bullets[id]->cancel();
@@ -135,11 +155,12 @@ namespace Flexlion{
                 break;
             }
             if(!player->isInSpecial() || mMatchEnding){
+				Prot::ObfStore(&player->mSpecialLeftFrame, startflightdelay);
 				sead::Vector3<float> autoDest;
 					if(mMatchEnding){
 						// Match ended — use player position.
 						autoDest = player->mPosition;
-						autoDest.mY = 3000.0f;
+						autoDest.mY = InkstrikeMgr::sInstance->mSpawnY;
 						autoDest = Utils::calcGroundPos(player, autoDest);
 					} else if(isCtrlPerformer && mAimValid[id] && Lp::Utl::getCtrl(0)->isHoldContinue(starlight::Controller::Buttons::A, 1)){
 					// Special ran out or match ended while aiming at valid position — use cursor position
@@ -149,14 +170,14 @@ namespace Flexlion{
 					float worldPerCanvas = cameraheight * tanHalfFovy / halfCanvas;
 					sead::Vector3<float> camAt = miniMap->mMiniMapCamera->mAt;
 					autoDest.mX = camAt.mX + miniMap->mCursorPos.mX * worldPerCanvas;
-					autoDest.mY = 3000.0f;
+					autoDest.mY = InkstrikeMgr::sInstance->mSpawnY;
 					autoDest.mZ = camAt.mZ - miniMap->mCursorPos.mY * worldPerCanvas;
 					autoDest = Utils::calcGroundPos(player, autoDest);
 				} 
 				else {
 					// No valid aim — fall back to player position
 					autoDest = player->mPosition;
-					autoDest.mY = 3000.0f;
+					autoDest.mY = InkstrikeMgr::sInstance->mSpawnY;
 					autoDest = Utils::calcGroundPos(player, autoDest);
 				}
 				if(isOnline) bulletCloneHandle->sendEvent_Shot(player->mIndex, autoDest, player->mPosition, Game::BulletCloneEvent::Type::BulletTypeInkstrike, 0);
@@ -172,9 +193,10 @@ namespace Flexlion{
 					}
 				}
 				playerState[id] = TornadoState::cShootPrepare;
+				player->resetPaintGauge(0, 0, 0, 0);
 				informPerformSpecial(player);
 				mWasAHeld[id] = false;
-				if(bullets[id] != NULL) bullets[id]->mStateMachine.changeState(BSAState::cState_Wait);
+				// if(bullets[id] != NULL) bullets[id]->mStateMachine.changeState(BSAState::cState_Wait);
 				if(isCtrlPerformer){
 					Game::MiniMap *mMap = Utils::getMinimap();
 					if(mMap != NULL){
@@ -194,7 +216,7 @@ namespace Flexlion{
                 sead::Vector3<float> camAt = miniMap->mMiniMapCamera->mAt;
                 sead::Vector3<float> aimPos;
                 aimPos.mX = camAt.mX + miniMap->mCursorPos.mX * worldPerCanvas;
-                aimPos.mY = 3000.0f;
+                aimPos.mY = InkstrikeMgr::sInstance->mSpawnY;
                 aimPos.mZ = camAt.mZ - miniMap->mCursorPos.mY * worldPerCanvas;
                 bool groundFound = false;
                 Utils::calcGroundPos(player, aimPos, &groundFound);
@@ -255,7 +277,7 @@ namespace Flexlion{
 					float worldPerCanvas = cameraheight * tanHalfFovy / halfCanvas;
 					sead::Vector3<float> camAt = miniMap->mMiniMapCamera->mAt;
 					miniMapAt.mX = camAt.mX + miniMap->mCursorPos.mX * worldPerCanvas;
-					miniMapAt.mY = 3000.0f;
+					miniMapAt.mY = InkstrikeMgr::sInstance->mSpawnY;
 					miniMapAt.mZ = camAt.mZ - miniMap->mCursorPos.mY * worldPerCanvas;
 					miniMapAt = Utils::calcGroundPos(player, miniMapAt);
 					if(isOnline) bulletCloneHandle->sendEvent_Shot(player->mIndex, miniMapAt, player->mPosition, Game::BulletCloneEvent::Type::BulletTypeInkstrike, 0);
@@ -263,8 +285,9 @@ namespace Flexlion{
 					mPendingDest[id] = miniMapAt;
 					mShootPrepareFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
 					playerState[id] = TornadoState::cShootPrepare;
+					player->resetPaintGauge(0, 0, 0, 0);
 					informPerformSpecial(player);
-					if(bullets[id] != NULL) bullets[id]->mStateMachine.changeState(BSAState::cState_Wait);
+					// if(bullets[id] != NULL) bullets[id]->mStateMachine.changeState(BSAState::cState_Wait);
 					if(mMap != NULL){
 						mMap->setVisible(false);
 						mMap->fadeAllEffect();
@@ -276,14 +299,12 @@ namespace Flexlion{
             break;
         case TornadoState::cShootPrepare:
         {
-			Prot::ObfStore(&player->mSpecialLeftFrame, startflightdelay);
-            Prot::ObfStore(&player->mLayoutSpecialState, -1); // negative total → gauge shows 0%
 			if(isCtrlPerformer){
 				Game::MiniMap *mMap = Utils::getMinimap();
 				if(mMap != NULL) mMap->setVisible(true);
 			}
             int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mShootPrepareFrm[id];
-            if(elapsed >= startflightdelay || player->isInTrouble_Dying() || mMatchEnding){
+            if(elapsed >= startflightdelay || player->isInTrouble_Dying() || player->isInTrouble_AirFall() || player->isInTrouble_WaterFall() || mMatchEnding){
                 // Get launch position from ink tank bone
                 sead::Vector3<float> launchPos = player->mPosition;
                 Cmn::PlayerCustomPart *tank = player->getTank();
@@ -304,13 +325,11 @@ namespace Flexlion{
         case TornadoState::cShoot:
 		{
 			isAppliedWeapon[id] = 0;
-			int flightDelay = player->isInTrouble_Dying() ? 10 : startflightdelay;
-			Prot::ObfStore(&player->mSpecialLeftFrame, flightDelay);
-			Prot::ObfStore(&player->mLayoutSpecialState, -1); // negative total → gauge shows 0%
+			int flightDelay = player->isInTrouble_Dying() || player->isInTrouble_WaterFall() ? 10 : startflightdelay;
 			int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mShootFrm[id];
 			if(elapsed >= playerdelay){
-				player->resetPaintGauge(0, 0, 0, 0);
-				Prot::ObfStore(&player->mSpecialLeftFrame, 0);
+				// Release NoControl restriction
+				setNoControl(player, 0);
 				playerState[id] = TornadoState::cNone;
 				player->mPlayerMotion->animSeq_3C = -1;
 				player->informGetWeapon_Impl_(player->mMainWeaponId, player->mSubWeaponId, player->mSpecialWeaponId, 0);
@@ -321,7 +340,7 @@ namespace Flexlion{
     }
     void InkstrikeMgr::playerThirdCalc(Game::Player *player){
         int id = player->mIndex;
-        if(player->isInTrouble_Dying()){
+        if(player->isInTrouble_Dying() || player->isInTrouble_WaterFall()){
             // Clear shoot animations when dying
             if(player->mPlayerMotion->animSeq_3C == 46 || player->mPlayerMotion->animSeq_3C == 47){
                 player->mPlayerMotion->animSeq_3C = -1;
