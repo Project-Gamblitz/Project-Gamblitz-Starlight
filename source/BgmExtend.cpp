@@ -2,7 +2,7 @@
 #include "Cmn/StaticMem.h"
 #include "sead/random.h"
 
-#define BGM_SLOT_COUNT 25
+#define BGM_SLOT_COUNT 29
 
 // ---------------------------------------------------------------------------
 // External game function that fills/shuffles a PtrArray with BGM indices.
