@@ -135,3 +135,4 @@ void handlePlayerControl();
 void dbgInfoSetHook(Cmn::PlayerInfoAry *playerInfoAry, Cmn::Def::Mode mode, sead::SafeStringBase<char> arg3);
 void playDamageVoiceAndRumbleHook(Game::Player *player, Game::DamageReason const &reason, bool isOneTimeDamage);
 void emitAndPlay_StealthDamageHook(Game::Player *player, int attackerIdx, Cmn::Def::DMG dmg, Game::DamageReason const &reason);
+int searchForVersusIdHook(void* mushTankInfo, int weaponId);

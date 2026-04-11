@@ -343,3 +343,6 @@
 
 // fizzy bomb white ink frames increase to 85 (another prochara balance change)
 010951A0 A80A8052
+
+// Ink Tank Override
+000833B0 B searchForVersusIdHook
