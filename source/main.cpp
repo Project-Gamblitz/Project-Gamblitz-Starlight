@@ -517,23 +517,27 @@ static void (*playerFirstCalcOg)(Game::Player*);
 static void (*playerThirdCalcOg)(Game::Player*);
 static void (*playerFourthCalcOg)(Game::Player*);
 void playerFirstCalcHook(Game::Player *player){
-    // Block ZL (squid) + R (sub throw) during cShootPrepare/cShoot
+    // Block buttons during inkstrike states
     bool blockInput = false;
     u32 savedHold = 0, savedTrig = 0;
-    u32 savedCounterZL = 0, savedCounterR = 0;
+    u32 savedCounterZL = 0, savedCounterR = 0, savedCounterZR = 0, savedCounterA = 0, savedCounterL = 0;
     Lp::Sys::Ctrl *ctrl = nullptr;
-    
     if (tornadoMgr) {
         bool isCtrlPerformer = Game::PlayerMgr::sInstance->mCurrentPlayerIndex == player->mIndex;
         int id = player->mIndex;
-        if (isCtrlPerformer && 
-            (tornadoMgr->playerState[id] == Flexlion::TornadoState::cShootPrepare ||
-             tornadoMgr->playerState[id] == Flexlion::TornadoState::cShoot ||
-			 tornadoMgr->playerState[id] == Flexlion::TornadoState::cAim)) {
+        if (isCtrlPerformer && tornadoMgr->playerState[id] != Flexlion::TornadoState::cNone) {
             ctrl = Lp::Utl::getCtrl(0);
             if (ctrl) {
                 blockInput = true;
-                const u32 BLOCK_MASK = (1 << 2) | (1 << 14) | (1 << 5);  // ZL | R | ZR
+                
+                // ZL(bit2) | ZR(bit5) | R(bit14) — blocked in ALL tornado states
+                u32 BLOCK_MASK = (1 << 2) | (1 << 5) | (1 << 14) | (1 << 13);
+                
+                // A(bit0) — blocked only in cShootPrepare/cShoot
+                if (tornadoMgr->playerState[id] == Flexlion::TornadoState::cShootPrepare ||
+                    tornadoMgr->playerState[id] == Flexlion::TornadoState::cShoot) {
+                    BLOCK_MASK |= (1 << 0);  // A
+                }
                 
                 // Save and clear hold mask at ctrl+0x10
                 u32 *holdMask = (u32 *)((u8 *)ctrl + 0x10);
@@ -545,28 +549,48 @@ void playerFirstCalcHook(Game::Player *player){
                 savedTrig = *trigMask;
                 *trigMask &= ~BLOCK_MASK;
                 
-                // Clear hold counters: ZL at ctrl+0x1C, R at ctrl+0x4C
-                u32 *zlCounter = (u32 *)((u8 *)ctrl + 0x1C);
-                u32 *rCounter  = (u32 *)((u8 *)ctrl + 0x4C);
+                // Clear hold counters: offset = 0x14 + bitIndex * 4
+                u32 *zlCounter = (u32 *)((u8 *)ctrl + 0x1C);  // bit 2: 0x14 + 2*4
+                u32 *zrCounter = (u32 *)((u8 *)ctrl + 0x28);  // bit 5: 0x14 + 5*4
+                u32 *rCounter  = (u32 *)((u8 *)ctrl + 0x4C);  // bit 14: 0x14 + 14*4
+                u32 *aCounter  = (u32 *)((u8 *)ctrl + 0x14);  // bit 0: 0x14 + 0*4
+                u32 *lCounter  = (u32 *)((u8 *)ctrl + 0x48);  // bit 13: 0x14 + 13*4
+                
                 savedCounterZL = *zlCounter;
-                savedCounterR = *rCounter;
+                savedCounterZR = *zrCounter;
+                savedCounterR  = *rCounter;
+                savedCounterA  = *aCounter;
+                savedCounterL  = *lCounter;
+                
                 *zlCounter = 0;
-                *rCounter = 0;
+                *zrCounter = 0;
+                *rCounter  = 0;
+                *lCounter  = 0;
+                
+                if (tornadoMgr->playerState[id] == Flexlion::TornadoState::cShootPrepare ||
+                    tornadoMgr->playerState[id] == Flexlion::TornadoState::cShoot) {
+                    *aCounter = 0;
+                }
             }
         }
     }
-	playerFirstCalcOg(player);
+    
+    playerFirstCalcOg(player);
+	
     // Restore buttons after game processed input
     if (blockInput && ctrl) {
         *(u32 *)((u8 *)ctrl + 0x10) = savedHold;
         *(u32 *)((u8 *)ctrl + 0x94) = savedTrig;
         *(u32 *)((u8 *)ctrl + 0x1C) = savedCounterZL;
+        *(u32 *)((u8 *)ctrl + 0x28) = savedCounterZR;
         *(u32 *)((u8 *)ctrl + 0x4C) = savedCounterR;
+        *(u32 *)((u8 *)ctrl + 0x14) = savedCounterA;
+        *(u32 *)((u8 *)ctrl + 0x48) = savedCounterL;
     }
-	tornadoMgr->playerFirstCalc(player);
-	Game::PlayerWeaponTornado::sInstance->playerFirstCalc(player);
-	Game::PlayerWeaponSuperShot::sInstance->playerFirstCalc(player);
-
+    
+    tornadoMgr->playerFirstCalc(player);
+    Game::PlayerWeaponTornado::sInstance->playerFirstCalc(player);
+    Game::PlayerWeaponSuperShot::sInstance->playerFirstCalc(player);
 }
 
 // Hook for the isInSpecial() call inside PlayerInkAction::getFlagDrawShooterGuide.
