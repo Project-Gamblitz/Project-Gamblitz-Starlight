@@ -115,7 +115,7 @@ namespace Flexlion{
         }
         Game::BulletMgr *bulletMgr = Game::MainMgr::sInstance->mBulletMgr;
         if (!mSpawnYCaptured && player->isAlive() && isCtrlPerformer && player->mPosition.mY > 10.0f) {
-			mSpawnY = player->mPosition.mY + 115.0f;
+			mSpawnY = player->mPosition.mY + 110.0f;
 			mSpawnYCaptured = true;
 		}
         Game::PlayerInkAction *InkAction = player->mPlayerInkAction;
@@ -147,7 +147,6 @@ namespace Flexlion{
                 break;
             }
             if(!player->isInSpecial() || mMatchEnding){
-				Prot::ObfStore(&player->mSpecialLeftFrame, startflightdelay);
 				sead::Vector3<float> autoDest;
 					if(mMatchEnding){
 						// Match ended — use player position.
@@ -186,6 +185,8 @@ namespace Flexlion{
 				}
 				playerState[id] = TornadoState::cShootPrepare;
 				player->mPlayerInkAction->mNoControlPtr = (u64)bullets[id];
+				player->resetPaintGauge(0, 0, 0, 0);
+				Prot::ObfStore(&player->mSpecialLeftFrame, 0);
 				informPerformSpecial(player);
 				mWasAHeld[id] = false;
 				if(bullets[id] != NULL) bullets[id]->mStateMachine.changeState(BSAState::cState_Wait);
@@ -280,6 +281,8 @@ namespace Flexlion{
 					mShootPrepareFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
 					playerState[id] = TornadoState::cShootPrepare;
 					player->mPlayerInkAction->mNoControlPtr = (u64)bullets[id];
+					player->resetPaintGauge(0, 0, 0, 0);
+					Prot::ObfStore(&player->mSpecialLeftFrame, 0);
 					informPerformSpecial(player);
 					if(bullets[id] != NULL) bullets[id]->mStateMachine.changeState(BSAState::cState_Wait);
 					if(mMap != NULL){
@@ -293,7 +296,6 @@ namespace Flexlion{
             break;
         case TornadoState::cShootPrepare:
         {
-			player->resetPaintGauge(0, 0, 0, 0);
 			if(isCtrlPerformer){
 				Game::MiniMap *mMap = Utils::getMinimap();
 				if(mMap != NULL) mMap->setVisible(true);

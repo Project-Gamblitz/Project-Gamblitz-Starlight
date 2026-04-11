@@ -60,33 +60,23 @@ PlayerWeaponTornado::PlayerWeaponTornado(){
 }
 
 void PlayerWeaponTornado::playerFirstCalc(Game::Player *player){
-	int id = player->mIndex;
-	bool inTornadoSpecial = player->isInSpecial() && player->mSpecialWeaponId == TORNADO_SPECIAL_ID;
+    int id = player->mIndex;
+    bool inTornadoSpecial = player->isInSpecial() && player->mSpecialWeaponId == TORNADO_SPECIAL_ID;
 
-    // Only play sound during cAim state
-    Flexlion::InkstrikeMgr *mgr = Flexlion::InkstrikeMgr::sInstance;
-    bool inAim = mgr && mgr->playerState[id] == Flexlion::TornadoState::cAim;
-	
-	if(!inTornadoSpecial){
-		// Debounce: only reset after 30+ frames out of special (~0.5s at 60fps).
-		// Prevents isInSpecial() flicker (1-2 frames) from resetting mOnActivatePlayed,
-		// while still allowing reset between special uses (many seconds of recharge).
-		if(mNotInSpecialCount[id] < 30) mNotInSpecialCount[id]++;
-		if(mNotInSpecialCount[id] >= 30) mOnActivatePlayed[id] = false;
-		return;
-	}
-	mNotInSpecialCount[id] = 0;
-	if(mOnActivatePlayed[id]) return;
+    if(!inTornadoSpecial){
+        mOnActivatePlayed[id] = false;
+        return;
+    }
+    if(mOnActivatePlayed[id]) return;
 
-	Cmn::PlayerWeapon *weapon = player->mPlayerCustomMgr->getWeapon(Cmn::PlayerCustom::Kind_Wpn_Special, TORNADO_SPECIAL_ID);
-	if(weapon == NULL) return;
+    Cmn::PlayerWeapon *weapon = player->mPlayerCustomMgr->getWeapon(Cmn::PlayerCustom::Kind_Wpn_Special, TORNADO_SPECIAL_ID);
+    if(weapon == NULL) return;
 
-	Lp::Sys::XLink *xlink = ((Cmn::Actor*)weapon)->mXLink;
-	if(xlink == NULL) return;
-	
-    // Set weapon's model matrix to player position BEFORE emitting
-    // This fixes sound playing at 0,0,0
-    gsys::Model **modelPtr = (gsys::Model **)((u8 *)weapon + 0x338); // Cmn::Actor model ptr
+    Lp::Sys::XLink *xlink = ((Cmn::Actor*)weapon)->mXLink;
+    if(xlink == NULL) return;
+
+    // Set weapon model to player position so sound plays here, not at origin
+    gsys::Model **modelPtr = (gsys::Model **)((u8 *)weapon + 0x338);
     if (*modelPtr) {
         (*modelPtr)->mtx = {{
             1.0f, 0.0f, 0.0f, player->mPosition.mX,
@@ -97,10 +87,10 @@ void PlayerWeaponTornado::playerFirstCalc(Game::Player *player){
         (*modelPtr)->updateAnimationWorldMatrix_(3);
     }
 
-	// Wake slink if sleeping (first use after xlink creation), then emit.
-	if(xlink->isSleep()) xlink->setIsActive(true);
-	xlink->onActivateEmitAndPlay();
-	mOnActivatePlayed[id] = true;
+    if(xlink->isSleep()) xlink->setIsActive(true);
+    xlink2::Handle activateHandle;
+    xlink->searchAndPlayWrap("OnActivation", false, &activateHandle);
+    mOnActivatePlayed[id] = true;
 }
 
 void PlayerWeaponTornado::tornadoJumpHook(){
