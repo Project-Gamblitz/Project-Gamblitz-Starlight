@@ -895,6 +895,9 @@ _ZN4Game12SpongeVersus22getClassIterNodeStaticEv = 0xC70778 - 0x2EBE000;
 _ZN4Game14BulletBombTako22getClassIterNodeStaticEv = 0x4BA758 - 0x2EBE000;
 _ZN4Game14IidaBombOnline22getClassIterNodeStaticEv = 0x034B64 - 0x2EBE000;
 _ZN4Game8Blowouts22getClassIterNodeStaticEv = 0xBB55A0 - 0x2EBE000;
+_ZN4Game18BulletSpSuperStamp22getClassIterNodeStaticEv = 0x4F0BD4 - 0x2EBE000;
+_ZN4Game15BulletBombChase22getClassIterNodeStaticEv = 0x47BD68 - 0x2EBE000;
+_ZN4Game12BulletShield22getClassIterNodeStaticEv = 0x4F1250 - 0x2EBE000;
 
 
 

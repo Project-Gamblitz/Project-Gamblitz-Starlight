@@ -1,5 +1,6 @@
 #include "flexlion/BulletSuperArtillery.hpp"
 #include "flexlion/InkstrikeMgr.hpp"
+#include "Game/BulletBombBase.h"
 #include "Game/Player/Player.h"
 #include "Game/Player/PlayerDamage.h"
 #include "Game/MainMgr.h"
@@ -265,6 +266,81 @@ void BulletSuperArtillery::reset() {
     mBurstRadius = 0.0f;
     mBurstFrm = 0;
 	mMatchEnding = false;
+}
+
+void BulletSuperArtillery::eatBombs(float radiusSq) {
+    if (!mHasBurst) return;
+
+    sead::Vector3<float> tornadoPos = mTo;
+    int tornadoTeam = (int)*(Cmn::Def::Team*)(this->_actorBase + 0x328);
+
+    auto iterNode = Game::BulletBombBase::getClassIterNodeStatic();
+    for (Lp::Sys::Actor *actor = iterNode->derivedFrontActiveActor();
+         actor != NULL; )
+    {
+        Lp::Sys::Actor *next = iterNode->derivedNextActiveActor(actor);
+        Cmn::Actor *bomb = (Cmn::Actor *)actor;
+        if ((int)bomb->mTeam != tornadoTeam) {
+            u64 vtable = *(u64 *)bomb;
+            typedef float* (*GetPosFunc)(void*);
+            float *pos = ((GetPosFunc)(*(u64 *)(vtable + 760)))(bomb);
+            if (pos) {
+                float dx = pos[0] - tornadoPos.mX;
+                float dy = pos[1] - tornadoPos.mY;
+                float dz = pos[2] - tornadoPos.mZ;
+                if (dx*dx + dy*dy + dz*dz < radiusSq) {
+                    typedef void (*InformFunc)(void*, int, int*, sead::Vector3<float>*, int, int, int, int, int);
+                    int outResult = 0;
+                    ((InformFunc)(*(u64 *)(vtable + 744)))(bomb, 0, &outResult, &tornadoPos, 1, tornadoTeam, 0, 0, 0);
+                }
+            }
+        }
+        actor = next;
+    }
+}
+
+void BulletSuperArtillery::eatActorClass(Lp::Sys::ActorClassIterNodeBase *iterNode, float radiusSq, int reactionType) {
+    if (!mHasBurst) return;
+
+    sead::Vector3<float> tornadoPos = mTo;
+    int tornadoTeam = (int)*(Cmn::Def::Team*)(this->_actorBase + 0x328);
+
+    for (Lp::Sys::Actor *actor = iterNode->derivedFrontActiveActor();
+         actor != NULL; )
+    {
+        Lp::Sys::Actor *next = iterNode->derivedNextActiveActor(actor);
+        Cmn::Actor *obj = (Cmn::Actor *)actor;
+
+        if ((int)obj->mTeam != tornadoTeam) {
+            u64 vtable = *(u64 *)obj;
+
+            typedef float* (*GetPosFunc)(void*);
+            float *pos = ((GetPosFunc)(*(u64 *)(vtable + 760)))(obj);
+
+            if (pos) {
+                float dx = pos[0] - tornadoPos.mX;
+                float dy = pos[1] - tornadoPos.mY;
+                float dz = pos[2] - tornadoPos.mZ;
+
+                if (dx*dx + dy*dy + dz*dz < radiusSq) {
+                    typedef void (*InformFunc)(void*, int, int*, sead::Vector3<float>*, int, int, int, int, int);
+                    int outResult = 0;
+
+                    ((InformFunc)(*(u64 *)(vtable + 744)))(
+						obj,
+						0,              // a2: attacker actor (NULL)
+						&outResult,     // a3: DMG result
+						&tornadoPos,    // a4: hit position  
+						reactionType,   // a5: armorType (6=burst, 11=sleepBarrier)
+						tornadoTeam,    // a6: team
+						0, 0, 0
+                    );
+                }
+            }
+        }
+
+        actor = next;
+    }
 }
 
 static float readSpongeMaxFill(Cmn::Actor *obj) {
@@ -542,6 +618,18 @@ void BulletSuperArtillery::vtSecondCalc(BulletSuperArtillery *self) {
 	// SpongeVersus — float fill, team-directional
 	damageSpongesInCylinder(Game::SpongeVersus::getClassIterNodeStatic(),
 		senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg * 0.25);
+	
+	// Bomb projectiles
+    self->eatBombs(hitRadiusSq);
+	
+	// Seeker
+	self->eatActorClass(Game::BulletBombChase::getClassIterNodeStatic(), hitRadiusSq, 6);
+	
+	// Thrown Splash Wall
+	self->eatActorClass(Game::BulletShield::getClassIterNodeStatic(), hitRadiusSq, 11);
+	
+	// Ultra Stamp projectile
+	self->eatActorClass(Game::BulletSpSuperStamp::getClassIterNodeStatic(), hitRadiusSq, 6);
 }
 
 void BulletSuperArtillery::vtFourthCalc(BulletSuperArtillery *self) {
