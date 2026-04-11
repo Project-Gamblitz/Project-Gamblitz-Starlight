@@ -676,8 +676,8 @@ void BulletSuperArtillery::vtSecondCalc(BulletSuperArtillery *self) {
 	// Ultra Stamp — use informHit (vtable offset 736) not informHitWoodenBoxType (744)
 	self->eatActorClass(Game::BulletSpSuperStamp::getClassIterNodeStatic(), hitRadiusSq, -1);
 	
-	//// Catch-all: sleep ALL remaining enemy bullets (main weapons, charger, etc.)
-	//self->eatActorClass(Game::Bullet::getClassIterNodeStatic(), hitRadiusSq, -1);
+	// Catch-all: sleep ALL remaining enemy bullets (main weapons, charger, etc.)
+	self->eatActorClass(Game::Bullet::getClassIterNodeStatic(), hitRadiusSq, -1);
 }
 
 void BulletSuperArtillery::vtFourthCalc(BulletSuperArtillery *self) {
