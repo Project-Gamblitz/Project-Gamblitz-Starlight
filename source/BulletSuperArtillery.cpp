@@ -291,7 +291,7 @@ void BulletSuperArtillery::eatBombs(float radiusSq) {
                 if (dx*dx + dy*dy + dz*dz < radiusSq) {
                     typedef void (*InformFunc)(void*, int, int*, sead::Vector3<float>*, int, int, int, int, int);
                     int outResult = 0;
-                    ((InformFunc)(*(u64 *)(vtable + 744)))(bomb, 0, &outResult, &tornadoPos, 1, tornadoTeam, 0, 0, 0);
+                    ((InformFunc)(*(u64 *)(vtable + 744)))(bomb, 0, &outResult, &tornadoPos, 6, tornadoTeam, 0, 0, 0);
                 }
             }
         }
@@ -299,7 +299,7 @@ void BulletSuperArtillery::eatBombs(float radiusSq) {
     }
 }
 
-void BulletSuperArtillery::eatActorClass(Lp::Sys::ActorClassIterNodeBase *iterNode, float radiusSq, int reactionType) {
+void BulletSuperArtillery::eatActorClass(Lp::Sys::ActorClassIterNodeBase *iterNode, float radiusSq, int reactionType, int vtableOffset) {
     if (!mHasBurst) return;
 
     sead::Vector3<float> tornadoPos = mTo;
@@ -313,7 +313,6 @@ void BulletSuperArtillery::eatActorClass(Lp::Sys::ActorClassIterNodeBase *iterNo
 
         if ((int)obj->mTeam != tornadoTeam) {
             u64 vtable = *(u64 *)obj;
-
             typedef float* (*GetPosFunc)(void*);
             float *pos = ((GetPosFunc)(*(u64 *)(vtable + 760)))(obj);
 
@@ -323,22 +322,22 @@ void BulletSuperArtillery::eatActorClass(Lp::Sys::ActorClassIterNodeBase *iterNo
                 float dz = pos[2] - tornadoPos.mZ;
 
                 if (dx*dx + dy*dy + dz*dz < radiusSq) {
-                    typedef void (*InformFunc)(void*, int, int*, sead::Vector3<float>*, int, int, int, int, int);
-                    int outResult = 0;
-
-                    ((InformFunc)(*(u64 *)(vtable + 744)))(
-						obj,
-						0,              // a2: attacker actor (NULL)
-						&outResult,     // a3: DMG result
-						&tornadoPos,    // a4: hit position  
-						reactionType,   // a5: armorType (6=burst, 11=sleepBarrier)
-						tornadoTeam,    // a6: team
-						0, 0, 0
-                    );
+                    if (reactionType < 0) {
+						u64 vt = *(u64 *)obj;
+						const char *className = ((const char *(*)(void*))( *(u64 *)(vt + 0xD8)))(obj);
+						if (className && strcmp(className, "BulletSpSuperBubble") != 0) {
+							((Lp::Sys::Actor *)obj)->reserveSleepAll_(Lp::Sys::Actor::ListNodeKind::None);
+						}
+                    } else {
+                        typedef void (*InformFunc)(void*, int, int*, sead::Vector3<float>*, int, int, int, int, int);
+                        int outResult = 0;
+                        ((InformFunc)(*(u64 *)(vtable + vtableOffset)))(
+                            obj, 0, &outResult, &tornadoPos,
+                            reactionType, tornadoTeam, 0, 0, 0);
+                    }
                 }
             }
         }
-
         actor = next;
     }
 }
@@ -455,6 +454,45 @@ static void damageGachihokoInCylinder(
     }
 }
 
+static void damageBubblesInCylinder(
+    Lp::Sys::ActorClassIterNodeBase *iterNode,
+    int senderTeamInt, float hitRadiusSq, float hitHalfHeight,
+    sead::Vector3<float> &center, int dmg, int attackerIdx, int gameFrame)
+{
+    for (Cmn::Actor *obj = (Cmn::Actor *)iterNode->derivedFrontActiveActor();
+         obj != NULL;
+         obj = (Cmn::Actor *)iterNode->derivedNextActiveActor(obj))
+    {
+        int bubbleTeam = (int)obj->mTeam;
+
+        // Use vtable getPos (offset 760) — bubble stores pos at +0x404, not +0x39C
+        u64 vtable = *(u64 *)obj;
+        typedef float* (*GetPosFunc)(void*);
+        float *pos = ((GetPosFunc)(*(u64 *)(vtable + 760)))(obj);
+        if (!pos) continue;
+
+        float odx = pos[0] - center.mX;
+        float odz = pos[2] - center.mZ;
+        float ody = pos[1] - center.mY;
+
+        if (odx*odx + odz*odz < hitRadiusSq && ody > -hitHalfHeight && ody < hitHalfHeight) {
+            // Write to reserve damage table at +0xBF0
+            // Format: [gameFrame(4), damage(4)] per slot, 80 slots
+            u8 *base = (u8 *)obj;
+            for (int slot = 0; slot < 80; slot++) {
+                int *slotFrame = (int *)(base + 0xBF0 + slot * 8);
+                int *slotDmg   = (int *)(base + 0xBF4 + slot * 8);
+                if (*slotDmg == 0) {
+                    // Empty slot — write current frame + damage
+                    *slotFrame = gameFrame;
+                    *slotDmg = (bubbleTeam == senderTeamInt) ? dmg : -dmg;
+                    break;
+                }
+            }
+        }
+    }
+}
+
 static void damageBlowoutsInCylinder(
     Lp::Sys::ActorClassIterNodeBase *iterNode,
     int senderTeamInt, float hitRadiusSq, float hitHalfHeight,
@@ -483,8 +521,10 @@ static void damageBlowoutsInCylinder(
 static void damageSpongesInCylinder(
     Lp::Sys::ActorClassIterNodeBase *iterNode,
     int senderTeamInt, float hitRadiusSq, float hitHalfHeight,
-    sead::Vector3<float> &center, int dmg)
+    sead::Vector3<float> &center, int dmg, int burstFrm)
 {
+    if (burstFrm % 20 != 0) return;
+    
     for (Cmn::Actor *obj = (Cmn::Actor *)iterNode->derivedFrontActiveActor();
          obj != NULL;
          obj = (Cmn::Actor *)iterNode->derivedNextActiveActor(obj))
@@ -607,9 +647,14 @@ void BulletSuperArtillery::vtSecondCalc(BulletSuperArtillery *self) {
 	damageGachihokoInCylinder(Game::Gachihoko::getClassIterNodeStatic(),
 		senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg * 2.5, self->mSender->mIndex);
 	
-	// BulletUmbrellaCanopyBase (Brella shield) — add accumulated damage at +0x484
-	damageObjects_AddDmg(Game::BulletUmbrellaCanopyBase::getClassIterNodeStatic(),
-		senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg, 0x484);
+	// SuperBubble (Bubble Blower) - team-directional
+	damageBubblesInCylinder(Game::BulletSpSuperBubble::getClassIterNodeStatic(),
+		senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg,
+		self->mSender->mIndex, Game::MainMgr::sInstance->mPaintGameFrame);
+	
+	// Brella canopy — hitBarrier (reaction 11), game handles damage internally
+	self->eatActorClass(Game::BulletUmbrellaCanopyBase::getClassIterNodeStatic(), hitRadiusSq, 11);
+	
 // commented out because it crashes vvvvv - delete me when you fix it
 	//// Blowouts (rotating targets) — float damage
 	//damageBlowoutsInCylinder(Game::Blowouts::getClassIterNodeStatic(),
@@ -617,7 +662,7 @@ void BulletSuperArtillery::vtSecondCalc(BulletSuperArtillery *self) {
 	
 	// SpongeVersus — float fill, team-directional
 	damageSpongesInCylinder(Game::SpongeVersus::getClassIterNodeStatic(),
-		senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg * 0.25);
+		senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg * 5, self->mBurstFrm);
 	
 	// Bomb projectiles
     self->eatBombs(hitRadiusSq);
@@ -628,8 +673,11 @@ void BulletSuperArtillery::vtSecondCalc(BulletSuperArtillery *self) {
 	// Thrown Splash Wall
 	self->eatActorClass(Game::BulletShield::getClassIterNodeStatic(), hitRadiusSq, 11);
 	
-	// Ultra Stamp projectile
-	self->eatActorClass(Game::BulletSpSuperStamp::getClassIterNodeStatic(), hitRadiusSq, 6);
+	// Ultra Stamp — use informHit (vtable offset 736) not informHitWoodenBoxType (744)
+	self->eatActorClass(Game::BulletSpSuperStamp::getClassIterNodeStatic(), hitRadiusSq, -1);
+	
+	//// Catch-all: sleep ALL remaining enemy bullets (main weapons, charger, etc.)
+	//self->eatActorClass(Game::Bullet::getClassIterNodeStatic(), hitRadiusSq, -1);
 }
 
 void BulletSuperArtillery::vtFourthCalc(BulletSuperArtillery *self) {

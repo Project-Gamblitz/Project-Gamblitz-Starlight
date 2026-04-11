@@ -17,6 +17,7 @@ namespace Game {
     class Bullet: public Cmn::Actor{
         public:
         static void *sRTTI;
+		static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
         struct InitializeArg{
             Cmn::Def::Team mTeam;
             int _4;

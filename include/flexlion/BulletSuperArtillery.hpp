@@ -52,6 +52,10 @@ namespace Game {
 	public:
 		static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
 	};
+	class BulletSpSuperBubble : public Cmn::Actor {
+	public:
+		static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
+	};
 }
 
 namespace Flexlion {
@@ -95,8 +99,7 @@ public:
     void cancel();
     bool isActive() const;
     void reset();
-	void eatBombs(float radiusSq);
-	void eatActorClass(Lp::Sys::ActorClassIterNodeBase *iterNode, float radiusSq, int reactionType);
+	void eatBombs(float radiusSq);void eatActorClass(Lp::Sys::ActorClassIterNodeBase *iterNode, float radiusSq, int reactionType, int vtableOffset = 744);
 
     // Vtable overrides (static so they're plain function pointers)
     static const char *vtGetClassName(BulletSuperArtillery *self);

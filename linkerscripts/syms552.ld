@@ -898,7 +898,8 @@ _ZN4Game8Blowouts22getClassIterNodeStaticEv = 0xBB55A0 - 0x2EBE000;
 _ZN4Game18BulletSpSuperStamp22getClassIterNodeStaticEv = 0x4F0BD4 - 0x2EBE000;
 _ZN4Game15BulletBombChase22getClassIterNodeStaticEv = 0x47BD68 - 0x2EBE000;
 _ZN4Game12BulletShield22getClassIterNodeStaticEv = 0x4F1250 - 0x2EBE000;
-
+_ZN4Game6Bullet22getClassIterNodeStaticEv = 0x461A84 - 0x2EBE000;
+_ZN4Game19BulletSpSuperBubble22getClassIterNodeStaticEv = 0x4E802C - 0x2EBE000;
 
 
 /* Player bullet damage — the real HP damage function used by bullet collision system */
