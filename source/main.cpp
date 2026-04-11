@@ -1523,6 +1523,8 @@ void hooks_init(){
 	requestPaintImplHook(0, 0, 0, NULL, NULL, NULL, NULL, 0, NULL, 0, 0, NULL, 0, 0, 0, 0);
 	// AutoMatch LAN session init (BL hook inside reqAutoMatch)
 	autoMatchLanInitHook(NULL);
+	// Ink Tank Override
+	searchForVersusIdHook(nullptr, -1);
 }
 
 int LobbyRivalGetPlayerTypeHook(Cmn::SaveDataCmn *saveDataCmn){
