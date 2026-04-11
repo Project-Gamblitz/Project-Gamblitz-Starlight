@@ -1303,10 +1303,12 @@ static void informEffectiveSpecialSkill_RespawnRadar(Game::Player *player) {
 
 bool respawnRadarHook() {
     Game::Player *ctrlPlayer = starlight::Collector::mControlledPlayer;
-    if (ctrlPlayer != nullptr
-        && isSpecialSkill_RespawnRadar(ctrlPlayer)
-        && ctrlPlayer->isInTrouble_RespawnWait()) {
-        informEffectiveSpecialSkill_RespawnRadar(ctrlPlayer);
+    if (ctrlPlayer != nullptr && isSpecialSkill_RespawnRadar(ctrlPlayer)) {
+        bool inSpawn = ctrlPlayer->isInTrouble_RespawnWait() || (*(u32*)(((u8*)ctrlPlayer) + 0xBE0) >= 1); // informInsideRespawnBarrier
+        if (inSpawn) {
+            informEffectiveSpecialSkill_RespawnRadar(ctrlPlayer);
+            return true;
+        }
     }
     return Game::Utl::isSpectatorStation();
 }
