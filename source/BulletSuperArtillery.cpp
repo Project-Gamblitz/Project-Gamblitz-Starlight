@@ -509,7 +509,7 @@ void BulletSuperArtillery::eatStampThrow(Lp::Sys::ActorClassIterNodeBase *iterNo
         int currentState = *(int *)((u8 *)obj + 0x9E8);
         
         // FsLogger::LogFormatDefaultDirect("[BSA] Stamp: team=%d tornadoTeam=%d state=%d\n", 
-            stampTeam, tornadoTeam, currentState);
+        //    stampTeam, tornadoTeam, currentState);
 
         if (stampTeam == tornadoTeam) continue;
         if (currentState != 6) continue;
@@ -701,7 +701,7 @@ void BulletSuperArtillery::vtSecondCalc(BulletSuperArtillery *self) {
 		self->mSender->mIndex, Game::MainMgr::sInstance->mPaintGameFrame);
 	
 	// Brella canopy — hitBarrier (reaction 11), game handles damage internally
-	self->eatActorClass(Game::BulletUmbrellaCanopyBase::getClassIterNodeStatic(), hitRadiusSq, 11);
+	self->eatActorClass(Game::BulletUmbrellaCanopyBase::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, 11);
 	
 // commented out because it crashes vvvvv - delete me when you fix it
 	//// Blowouts (rotating targets) — float damage
