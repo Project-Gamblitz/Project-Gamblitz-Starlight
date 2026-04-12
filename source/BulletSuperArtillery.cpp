@@ -494,52 +494,52 @@ static void damageBubblesInCylinder(
         }
     }
 }
-
-void BulletSuperArtillery::eatStampThrow(Lp::Sys::ActorClassIterNodeBase *iterNode, float radiusSq, float hitHalfHeight) {
-    if (!mHasBurst) return;
-
-    sead::Vector3<float> tornadoPos = mTo;
-    int tornadoTeam = (int)*(Cmn::Def::Team*)(this->_actorBase + 0x328);
-
-    for (Lp::Sys::Actor *actor = iterNode->derivedFrontActiveActor();
-         actor != NULL; actor = iterNode->derivedNextActiveActor(actor))
-    {
-        Cmn::Actor *obj = (Cmn::Actor *)actor;
-        int stampTeam = (int)obj->mTeam;
-        int currentState = *(int *)((u8 *)obj + 0x9E8);
-        
-        // FsLogger::LogFormatDefaultDirect("[BSA] Stamp: team=%d tornadoTeam=%d state=%d\n", 
-        //    stampTeam, tornadoTeam, currentState);
-
-        if (stampTeam == tornadoTeam) continue;
-        if (currentState != 6) continue;
-
-        u64 vtable = *(u64 *)obj;
-        typedef float* (*GetPosFunc)(void*);
-        float *pos = ((GetPosFunc)(*(u64 *)(vtable + 760)))(obj);
-        if (!pos) continue;
-
-        float dx = pos[0] - tornadoPos.mX;
-		float dz = pos[2] - tornadoPos.mZ;
-		float dy = pos[1] - tornadoPos.mY;
-
-        // FsLogger::LogFormatDefaultDirect("[BSA] Stamp pos=(%.1f,%.1f,%.1f) dist=%.1f radius=%.1f\n", pos[0], pos[1], pos[2], sqrtf(dx*dx + dz*dz), sqrtf(radiusSq));
-
-        if (dx*dx + dz*dz < radiusSq && dy > -hitHalfHeight && dy < hitHalfHeight) {
-			if (currentState == 6) {
-            // FsLogger::LogFormatDefaultDirect("[BSA] Stamp HIT! Setting flag\n");
-			
-			// // Set mode to non-flying (prevents stateThrow from doing wall collision) - crashes if uncommented
-			// *(u16 *)((u8 *)obj + 0xA2E) = 0;  // mode = 0 (not flying)
-			
-			// Set hit flag  
-			u8 *flags = (u8 *)obj + 0xA2D;
-            *flags |= 0x10;
-			}
-            
-        }
-    }
-}
+// Commented as we decided to leave Stamp being able to go through
+//void BulletSuperArtillery::eatStampThrow(Lp::Sys::ActorClassIterNodeBase *iterNode, float radiusSq, float hitHalfHeight) {
+//    if (!mHasBurst) return;
+//
+//    sead::Vector3<float> tornadoPos = mTo;
+//    int tornadoTeam = (int)*(Cmn::Def::Team*)(this->_actorBase + 0x328);
+//
+//    for (Lp::Sys::Actor *actor = iterNode->derivedFrontActiveActor();
+//         actor != NULL; actor = iterNode->derivedNextActiveActor(actor))
+//    {
+//        Cmn::Actor *obj = (Cmn::Actor *)actor;
+//        int stampTeam = (int)obj->mTeam;
+//        int currentState = *(int *)((u8 *)obj + 0x9E8);
+//        
+//        // FsLogger::LogFormatDefaultDirect("[BSA] Stamp: team=%d tornadoTeam=%d state=%d\n", 
+//        //    stampTeam, tornadoTeam, currentState);
+//
+//        if (stampTeam == tornadoTeam) continue;
+//        if (currentState != 6) continue;
+//
+//        u64 vtable = *(u64 *)obj;
+//        typedef float* (*GetPosFunc)(void*);
+//        float *pos = ((GetPosFunc)(*(u64 *)(vtable + 760)))(obj);
+//        if (!pos) continue;
+//
+//        float dx = pos[0] - tornadoPos.mX;
+//		float dz = pos[2] - tornadoPos.mZ;
+//		float dy = pos[1] - tornadoPos.mY;
+//
+//        // FsLogger::LogFormatDefaultDirect("[BSA] Stamp pos=(%.1f,%.1f,%.1f) dist=%.1f radius=%.1f\n", pos[0], pos[1], pos[2], sqrtf(dx*dx + dz*dz), sqrtf(radiusSq));
+//
+//        if (dx*dx + dz*dz < radiusSq && dy > -hitHalfHeight && dy < hitHalfHeight) {
+//			if (currentState == 6) {
+//            // FsLogger::LogFormatDefaultDirect("[BSA] Stamp HIT! Setting flag\n");
+//			
+//			// // Set mode to non-flying (prevents stateThrow from doing wall collision) - crashes if uncommented
+//			// *(u16 *)((u8 *)obj + 0xA2E) = 0;  // mode = 0 (not flying)
+//			
+//			// Set hit flag  
+//			u8 *flags = (u8 *)obj + 0xA2D;
+//            *flags |= 0x10;
+//			}
+//            
+//        }
+//    }
+//}
 
 static void damageBlowoutsInCylinder(
     Lp::Sys::ActorClassIterNodeBase *iterNode,
