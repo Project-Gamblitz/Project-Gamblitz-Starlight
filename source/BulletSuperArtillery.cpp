@@ -269,7 +269,7 @@ void BulletSuperArtillery::reset() {
 	mMatchEnding = false;
 }
 
-void BulletSuperArtillery::eatBombs(float radiusSq) {
+void BulletSuperArtillery::eatBombs(float radiusSq, float hitHalfHeight) {
     if (!mHasBurst) return;
 
     sead::Vector3<float> tornadoPos = mTo;
@@ -287,9 +287,10 @@ void BulletSuperArtillery::eatBombs(float radiusSq) {
             float *pos = ((GetPosFunc)(*(u64 *)(vtable + 760)))(bomb);
             if (pos) {
                 float dx = pos[0] - tornadoPos.mX;
-                float dy = pos[1] - tornadoPos.mY;
-                float dz = pos[2] - tornadoPos.mZ;
-                if (dx*dx + dy*dy + dz*dz < radiusSq) {
+				float dz = pos[2] - tornadoPos.mZ;
+				float dy = pos[1] - tornadoPos.mY;
+				
+				if (dx*dx + dz*dz < radiusSq && dy > -hitHalfHeight && dy < hitHalfHeight) {
                     typedef void (*InformFunc)(void*, int, int*, sead::Vector3<float>*, int, int, int, int, int);
                     int outResult = 0;
                     ((InformFunc)(*(u64 *)(vtable + 744)))(bomb, 0, &outResult, &tornadoPos, 6, tornadoTeam, 0, 0, 0);
@@ -300,7 +301,7 @@ void BulletSuperArtillery::eatBombs(float radiusSq) {
     }
 }
 
-void BulletSuperArtillery::eatActorClass(Lp::Sys::ActorClassIterNodeBase *iterNode, float radiusSq, int reactionType, int vtableOffset) {
+void BulletSuperArtillery::eatActorClass(Lp::Sys::ActorClassIterNodeBase *iterNode, float radiusSq, float hitHalfHeight, int reactionType, int vtableOffset) {
     if (!mHasBurst) return;
 
     sead::Vector3<float> tornadoPos = mTo;
@@ -319,10 +320,10 @@ void BulletSuperArtillery::eatActorClass(Lp::Sys::ActorClassIterNodeBase *iterNo
 
             if (pos) {
                 float dx = pos[0] - tornadoPos.mX;
-                float dy = pos[1] - tornadoPos.mY;
-                float dz = pos[2] - tornadoPos.mZ;
-
-                if (dx*dx + dy*dy + dz*dz < radiusSq) {
+				float dz = pos[2] - tornadoPos.mZ;
+				float dy = pos[1] - tornadoPos.mY;
+				
+				if (dx*dx + dz*dz < radiusSq && dy > -hitHalfHeight && dy < hitHalfHeight) {
                     if (reactionType < 0) {
 						u64 vt = *(u64 *)obj;
 						const char *className = ((const char *(*)(void*))( *(u64 *)(vt + 0xD8)))(obj);
@@ -494,7 +495,7 @@ static void damageBubblesInCylinder(
     }
 }
 
-void BulletSuperArtillery::eatStampThrow(Lp::Sys::ActorClassIterNodeBase *iterNode, float radiusSq) {
+void BulletSuperArtillery::eatStampThrow(Lp::Sys::ActorClassIterNodeBase *iterNode, float radiusSq, float hitHalfHeight) {
     if (!mHasBurst) return;
 
     sead::Vector3<float> tornadoPos = mTo;
@@ -519,14 +520,12 @@ void BulletSuperArtillery::eatStampThrow(Lp::Sys::ActorClassIterNodeBase *iterNo
         if (!pos) continue;
 
         float dx = pos[0] - tornadoPos.mX;
-        float dy = pos[1] - tornadoPos.mY;
-        float dz = pos[2] - tornadoPos.mZ;
-        float distSq = dx*dx + dy*dy + dz*dz;
+		float dz = pos[2] - tornadoPos.mZ;
+		float dy = pos[1] - tornadoPos.mY;
 
-        // FsLogger::LogFormatDefaultDirect("[BSA] Stamp pos=(%.1f,%.1f,%.1f) dist=%.1f radius=%.1f\n",
-            pos[0], pos[1], pos[2], sqrtf(distSq), sqrtf(radiusSq));
+        // FsLogger::LogFormatDefaultDirect("[BSA] Stamp pos=(%.1f,%.1f,%.1f) dist=%.1f radius=%.1f\n", pos[0], pos[1], pos[2], sqrtf(dx*dx + dz*dz), sqrtf(radiusSq));
 
-        if (distSq < radiusSq) {
+        if (dx*dx + dz*dz < radiusSq && dy > -hitHalfHeight && dy < hitHalfHeight) {
 			if (currentState == 6) {
             // FsLogger::LogFormatDefaultDirect("[BSA] Stamp HIT! Setting flag\n");
 			
@@ -714,19 +713,19 @@ void BulletSuperArtillery::vtSecondCalc(BulletSuperArtillery *self) {
 		senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg * 5, self->mBurstFrm);
 	
 	// Bomb projectiles
-    self->eatBombs(hitRadiusSq);
+    self->eatBombs(hitRadiusSq, hitHalfHeight);
 	
 	// Seeker
-	self->eatActorClass(Game::BulletBombChase::getClassIterNodeStatic(), hitRadiusSq, 6);
+	self->eatActorClass(Game::BulletBombChase::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, 6, hitHalfHeight);
 	
 	// Thrown Splash Wall
-	self->eatActorClass(Game::BulletShield::getClassIterNodeStatic(), hitRadiusSq, 11);
+	self->eatActorClass(Game::BulletShield::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, 11, hitHalfHeight);
 	
 //	// Ultra Stamp — set "hit wall" flag, game handles burst on next firstCalc - crashes / ignores ultrastamp
-//	self->eatStampThrow(Game::BulletSpSuperStamp::getClassIterNodeStatic(), hitRadiusSq);
+//	self->eatStampThrow(Game::BulletSpSuperStamp::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight);
 	
 	// Catch-all: sleep ALL remaining enemy bullets (main weapons, charger, etc.)
-	self->eatActorClass(Game::Bullet::getClassIterNodeStatic(), hitRadiusSq, -1);
+	self->eatActorClass(Game::Bullet::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, -1, hitHalfHeight);
 }
 
 void BulletSuperArtillery::vtFourthCalc(BulletSuperArtillery *self) {
