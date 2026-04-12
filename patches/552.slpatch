@@ -302,7 +302,7 @@
 00410CC4 1F2003D5
 
 // ---- Extend BGM slots from 16 to 25 ----
-// 1. getVersusBgmNum: change MOV W8, #16 -> MOV W8, #25 (default versus path)
+// 1. getVersusBgmNum: change MOV W8, #16 -> MOV W8, #25 (default versus path) - done via code now
 // 000E86B8 28038052
 
 // 2. Replace choiceBgm entirely with our hook that uses static storage sized for 25 BGMs.
