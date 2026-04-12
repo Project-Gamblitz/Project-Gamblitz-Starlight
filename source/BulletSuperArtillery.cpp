@@ -8,6 +8,7 @@
 #include "Game/DamageReason.h"
 #include "Game/SighterTarget.h"
 #include "nn/fs.h"
+#include "flexlion/FsLogger.hpp"
 
 extern "C" {
     void _ZN3Cmn5ActorC2Ev(void *);
@@ -493,6 +494,54 @@ static void damageBubblesInCylinder(
     }
 }
 
+void BulletSuperArtillery::eatStampThrow(Lp::Sys::ActorClassIterNodeBase *iterNode, float radiusSq) {
+    if (!mHasBurst) return;
+
+    sead::Vector3<float> tornadoPos = mTo;
+    int tornadoTeam = (int)*(Cmn::Def::Team*)(this->_actorBase + 0x328);
+
+    for (Lp::Sys::Actor *actor = iterNode->derivedFrontActiveActor();
+         actor != NULL; actor = iterNode->derivedNextActiveActor(actor))
+    {
+        Cmn::Actor *obj = (Cmn::Actor *)actor;
+        int stampTeam = (int)obj->mTeam;
+        int currentState = *(int *)((u8 *)obj + 0x9E8);
+        
+        // FsLogger::LogFormatDefaultDirect("[BSA] Stamp: team=%d tornadoTeam=%d state=%d\n", 
+            stampTeam, tornadoTeam, currentState);
+
+        if (stampTeam == tornadoTeam) continue;
+        if (currentState != 6) continue;
+
+        u64 vtable = *(u64 *)obj;
+        typedef float* (*GetPosFunc)(void*);
+        float *pos = ((GetPosFunc)(*(u64 *)(vtable + 760)))(obj);
+        if (!pos) continue;
+
+        float dx = pos[0] - tornadoPos.mX;
+        float dy = pos[1] - tornadoPos.mY;
+        float dz = pos[2] - tornadoPos.mZ;
+        float distSq = dx*dx + dy*dy + dz*dz;
+
+        // FsLogger::LogFormatDefaultDirect("[BSA] Stamp pos=(%.1f,%.1f,%.1f) dist=%.1f radius=%.1f\n",
+            pos[0], pos[1], pos[2], sqrtf(distSq), sqrtf(radiusSq));
+
+        if (distSq < radiusSq) {
+			if (currentState == 6) {
+            // FsLogger::LogFormatDefaultDirect("[BSA] Stamp HIT! Setting flag\n");
+			
+			// // Set mode to non-flying (prevents stateThrow from doing wall collision) - crashes if uncommented
+			// *(u16 *)((u8 *)obj + 0xA2E) = 0;  // mode = 0 (not flying)
+			
+			// Set hit flag  
+			u8 *flags = (u8 *)obj + 0xA2D;
+            *flags |= 0x10;
+			}
+            
+        }
+    }
+}
+
 static void damageBlowoutsInCylinder(
     Lp::Sys::ActorClassIterNodeBase *iterNode,
     int senderTeamInt, float hitRadiusSq, float hitHalfHeight,
@@ -673,8 +722,8 @@ void BulletSuperArtillery::vtSecondCalc(BulletSuperArtillery *self) {
 	// Thrown Splash Wall
 	self->eatActorClass(Game::BulletShield::getClassIterNodeStatic(), hitRadiusSq, 11);
 	
-	// Ultra Stamp — use informHit (vtable offset 736) not informHitWoodenBoxType (744)
-	self->eatActorClass(Game::BulletSpSuperStamp::getClassIterNodeStatic(), hitRadiusSq, -1);
+//	// Ultra Stamp — set "hit wall" flag, game handles burst on next firstCalc - crashes / ignores ultrastamp
+//	self->eatStampThrow(Game::BulletSpSuperStamp::getClassIterNodeStatic(), hitRadiusSq);
 	
 	// Catch-all: sleep ALL remaining enemy bullets (main weapons, charger, etc.)
 	self->eatActorClass(Game::Bullet::getClassIterNodeStatic(), hitRadiusSq, -1);

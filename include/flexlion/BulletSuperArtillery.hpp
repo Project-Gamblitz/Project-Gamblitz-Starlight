@@ -99,7 +99,9 @@ public:
     void cancel();
     bool isActive() const;
     void reset();
-	void eatBombs(float radiusSq);void eatActorClass(Lp::Sys::ActorClassIterNodeBase *iterNode, float radiusSq, int reactionType, int vtableOffset = 744);
+	void eatBombs(float radiusSq);
+	void eatActorClass(Lp::Sys::ActorClassIterNodeBase *iterNode, float radiusSq, int reactionType, int vtableOffset = 744);
+	void eatStampThrow(Lp::Sys::ActorClassIterNodeBase *iterNode, float radiusSq);
 
     // Vtable overrides (static so they're plain function pointers)
     static const char *vtGetClassName(BulletSuperArtillery *self);
