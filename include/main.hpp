@@ -70,6 +70,7 @@ int msnArmorHook(Cmn::MushGearInfo *gearInfo, Cmn::Def::GearKind kind, int armor
 void CustomizeSeqBaseLoadHook(Cmn::CustomizeSeqBase *seqBase, sead::Heap *heap);
 void LobbyRivalFixHook(Lobby::MainMgr *mainMgr);
 int LobbyRivalGetPlayerTypeHook(Cmn::SaveDataCmn *saveDataCmn);
+bool xlinkVoiceCheckIsRivalHook(Game::Player *player);
 void CustomizeAmiiboCbHelperFunc();
 void startAllMarking_ImplHook(Game::Player *player, int a1);
 void sendEvent_AllMarking(Game::PlayerNetControl *netCtrl, int gameFrame);

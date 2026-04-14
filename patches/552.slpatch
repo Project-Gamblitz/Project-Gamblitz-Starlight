@@ -206,6 +206,9 @@
 010EF2A8 0D000014
 010EF30C E0031FAA
 
+// Rival XLink voices/effects fix
+0106FA54 BL xlinkVoiceCheckIsRivalHook
+
 // Rival Customize Fix 
 008F8052 008F8052 // size + 8
 014CA104 008F8052 // size + 8

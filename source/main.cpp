@@ -493,6 +493,15 @@ static void emitBarrierHitSfx(Game::Player *player){
 	player->emitAndPlay_BarrierHit(player->mPosition, false);
 }
 
+// Hook for PlayerEffect::reset — replaces checkIsRival BL to also treat mModelType==Rival(6) as rival
+// for XLink voice line property (property idx 2: 0=inkgirl,1=inkboy,2=rival,3=rivalOcta/strong)
+bool xlinkVoiceCheckIsRivalHook(Game::Player *player) {
+    if (player->mModelType == (u32)Cmn::Def::PlayerModelType::Rival) {
+        return true;
+    }
+    return Game::Utl::isRivalOrRivalOcta(*player);
+}
+
 // Hook for playDamageVoiceAndRumble — plays barrier hit effect+SFX when player is in Bubbler
 void playDamageVoiceAndRumbleHook(Game::Player *player, Game::DamageReason const &reason, bool isOneTimeDamage){
 	dbgDmgVoiceHookCount++;
@@ -1517,6 +1526,7 @@ void hooks_init(){
 	CustomizeAmiiboCbHelperFunc();
 	LobbyRivalFixHook(NULL);
 	LobbyRivalGetPlayerTypeHook(NULL);
+	xlinkVoiceCheckIsRivalHook(NULL);
 	isInSpecialForShotGuideHook(NULL);
 	isSleepingAllHook(NULL);
 	respawnRadarHook();
