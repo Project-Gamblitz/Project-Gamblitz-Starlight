@@ -5,6 +5,18 @@
 01157FD8 BL searchHappi002Hook
 01158860 BL searchHappi002Hook
 01158E30 BL searchHappi002Hook
+// OctaTypeAnimHandle::set (5.5.2: sub_7100442428)
+// Original: (type & ~1) == 2 → only types 2,3 get octo icon
+// New: type >= 2 → types 2,3,4,5,6,7 all get octo icon
+00442428:
+	LDR X0, [X0]
+	FMOV S0, WZR
+	CMP W1, #2
+	B.LT #0x8
+	FMOV S0, #1.0
+	NOP
+	NOP
+00442444 05575514
 // Fix broken GetSaveWrite (0x202B20) in delivery box calc
 01158004 BL getSaveWriteFixed
 // Kraken
