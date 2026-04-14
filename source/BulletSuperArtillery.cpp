@@ -238,11 +238,11 @@ void BulletSuperArtillery::launch(sead::Vector3<float> src, sead::Vector3<float>
     mMatchEnding = forcedByMatchEnd;
 
     // Update xlink root matrix to target position
-    mXLinkMtx = {{
-        1.0f, 0.0f, 0.0f, mTo.mX,
-        0.0f, 1.0f, 0.0f, mTo.mY,
-        0.0f, 0.0f, 1.0f, mTo.mZ
-    }};
+//    mXLinkMtx = {{
+//        1.0f, 0.0f, 0.0f, mTo.mX,
+//        0.0f, 1.0f, 0.0f, mTo.mY,
+//        0.0f, 0.0f, 1.0f, mTo.mZ
+//    }};
 
     mStateMachine.changeState(cState_Pronounce);
 }
@@ -807,7 +807,15 @@ void BulletSuperArtillery::stateEnterPronounce() {
 void BulletSuperArtillery::statePronounce() {
     calcFlight();
     int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mStartFrm;
-    int flightTime = (mMatchEnding || (mSender != NULL && mSender->isInTrouble_Dying())) ? 150 : BSA_FLIGHT_TIME;
+    int flightTime = BSA_FLIGHT_TIME;
+	if (elapsed >= 5) {
+		// Update xlink root matrix to target position
+		mXLinkMtx = {{
+			1.0f, 0.0f, 0.0f, mTo.mX,
+			0.0f, 1.0f, 0.0f, mTo.mY,
+			0.0f, 0.0f, 1.0f, mTo.mZ
+		}};
+	}
     if (elapsed >= flightTime) {
         mStateMachine.changeState(cState_Burst);
     }
@@ -819,6 +827,12 @@ void BulletSuperArtillery::stateEnterWait() {
 void BulletSuperArtillery::stateWait() {
     // During cState_Wait, model is rendered at tank bone via calcTankBone in fourthCalc
     // State transitions to cState_Pronounce when launch() is called
+	// Update xlink root matrix to player position for rumble
+	mXLinkMtx = {{
+		1.0f, 0.0f, 0.0f, mSender->mPosition.mX,
+		0.0f, 1.0f, 0.0f, mSender->mPosition.mY,
+		0.0f, 0.0f, 1.0f, mSender->mPosition.mZ
+	}};
 }
 
 void BulletSuperArtillery::stateEnterBurst() {
