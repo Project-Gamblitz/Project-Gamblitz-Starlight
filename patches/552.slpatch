@@ -364,6 +364,13 @@
 // Ink Tank Override
 000833B0 B searchForVersusIdHook
 
+// UIVersusPrivateOptionPage constructor patch for more buttons
+014D7418 00058052
+014D742C AB008052
+
+// UIVersusPrivateOptionPage init patch to actually go up to optionbtn_04
+014D76A8 9F1600F1
+
 // UIVersusPrivateOptionPage::onExeCallbackBtnEvent
 014D7780 B onExeCallbackBtnEventHook
 
@@ -373,10 +380,10 @@
 // UIVersusPrivateOptionPage::onExeFadeInInit
 014D78C8 B onExeFadeInInitHook
 
-// calcDraw: BL isSpecialSkill_SuperJumpSign_Hide pb thing
+// calcDraw: BL a isSpecialSkill_SuperJumpSign_Hide FIXME
 1075080 BL isSpecialSkill_SuperJumpSign_Hide_AlwaysHook
 
-// calcValue_RespawnTime_Save pb thing
+// calcValue_RespawnTime_Save
 01029FE0 BL calcValue_RespawnTime_Save_AlwaysHook
 0102A014 BL calcValue_RespawnTime_Save_AlwaysHook
 0102B7B0 BL calcValue_RespawnTime_Save_AlwaysHook

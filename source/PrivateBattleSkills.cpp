@@ -1,4 +1,3 @@
-
 #include "types.h"
 #include "Cmn/StaticMem.h"
 #include "sead/random.h"
@@ -22,7 +21,7 @@ typedef void (*SetNextFn) (uintptr_t target, u64 dir, uintptr_t next);
 
 void onExeCallbackBtnEventHook(uintptr_t _this, uintptr_t arg1) {
     if (!_this || !arg1) return;
-    if (*(u32*)arg1 != 5) return;  // solo evento tipo toggle
+    if (*(u32*)arg1 != 5) return;
 
     uintptr_t* btnArr = *(uintptr_t**)(_this + 0x4E8);
     uintptr_t  ctrl   = *(uintptr_t*) (arg1  + 0x18);
@@ -50,7 +49,7 @@ void onExeCallbackBtnEventHook(uintptr_t _this, uintptr_t arg1) {
         ctrl = *(uintptr_t*)(arg1 + 0x18);
     }
 
-    if (count > 4 && ctrl == btnArr[4]) {
+    if (btnArr[4] && ctrl == btnArr[4]) {
         *(u16*)(_this + 0x500) ^= 0x10u;
     }
 }
@@ -71,7 +70,7 @@ void onExePostWakeHook(uintptr_t _this) {
     initFlag(btnArr[count > 2 ? 2 : 0], (flag >> 2) & 1u);
     initFlag(btnArr[count > 3 ? 3 : 0], (flag >> 3) & 1u);
 
-    if (count > 4)
+    if (count > 4 && btnArr[4])
         initFlag(btnArr[4], (flag >> 4) & 1u);
 }
 
@@ -104,16 +103,15 @@ void onExeFadeInInitHook(uintptr_t _this) {
 
     if (setInput) setInput(btnArr[0], 0, true);
     if (resetBtn) resetBtn(btnArr[0], true, false);
-	
-	// lan optons
+
     for (int i = 1; i <= 3; i++) {
         uintptr_t b = btnArr[count > (u32)i ? i : 0];
         if (setInput) setInput(b, 0, isLAN);
         if (resetBtn) resetBtn(b, true, false);
     }
 
-    if (count > 4 && setInput && resetBtn) {
-        setInput(btnArr[4], 0, true);
+    if (count > 4 && btnArr[4] && setInput && resetBtn) {
+        setInput(btnArr[4], 0, isLAN);
         resetBtn(btnArr[4], true, false);
     }
 
@@ -129,6 +127,7 @@ void onExeFadeInInitHook(uintptr_t _this) {
         uintptr_t t2 = *(uintptr_t*)(btnArr[count > 2 ? 2 : 0]      + 0x1F0);
         uintptr_t t3 = *(uintptr_t*)(btnArr[count > 3 ? 3 : 0]      + 0x1F0);
 
+        // up/down btn[0]-btn[3]
         setNext(t0, 1, t1); setNext(t1, 0, t0);  // btn[0] ↕ btn[1]
         setNext(t1, 1, t2); setNext(t2, 0, t1);  // btn[1] ↕ btn[2]
         setNext(t2, 1, t3); setNext(t3, 0, t2);  // btn[2] ↕ btn[3]
@@ -138,10 +137,12 @@ void onExeFadeInInitHook(uintptr_t _this) {
         setNext(t2, 2, tConf);
         setNext(tConf, 0, t2);  // confirm → dir0 → btn[2]
 
-        if (count > 4) {
+        if (count > 4 && btnArr[4]) {
             uintptr_t t4 = *(uintptr_t*)(btnArr[4] + 0x1F0);
             setNext(t3, 1, t4); setNext(t4, 0, t3);  // btn[3] ↕ btn[4]
-            setNext(t4, 2, tConf);
+            setNext(t3, 2, tConf);  // btn[3] RIGHT → confirm 
+            setNext(t4, 2, tConf);  // btn[4] RIGHT → confirm
+            setNext(tConf, 0, t4);  // confirm UP → btn[4] (override t2)
         } else {
             setNext(t3, 2, tConf);
         }
@@ -149,21 +150,23 @@ void onExeFadeInInitHook(uintptr_t _this) {
 
     uintptr_t tLast;
     if (isLAN) {
-        if (count > 4) tLast = *(uintptr_t*)(btnArr[4] + 0x1F0);
-        else           tLast = *(uintptr_t*)(btnArr[count > 3 ? 3 : 0] + 0x1F0);
+        if (count > 4 && btnArr[4]) tLast = *(uintptr_t*)(btnArr[4] + 0x1F0);
+        else                        tLast = *(uintptr_t*)(btnArr[count > 3 ? 3 : 0] + 0x1F0);
     } else {
         tLast = *(uintptr_t*)(btnArr[0] + 0x1F0);  // inet: btn[0]
     }
-    setNext(tLast, 2, tConf);  
-    setNext(tConf, 3, tLast);  
+    setNext(tLast, 2, tConf);
+    setNext(tConf, 3, tLast);
 
 }
 
+// TODO: actually make it not show the effect, this doesnt do anything now that i see it
+// we would need to hook on calcDraw instead and check for isPrivateOptionActive THEN make it not show
 static bool (*isSpecialSkillOriginal)(uintptr_t player) = NULL;
 
 bool isSpecialSkill_SuperJumpSign_Hide_AlwaysHook(uintptr_t player) {
     if (!isSpecialSkillOriginal)
-        isSpecialSkillOriginal = (bool(*)(uintptr_t))ProcessMemory::MainAddr(0x1001123C);
+        isSpecialSkillOriginal = (bool(*)(uintptr_t))ProcessMemory::MainAddr(0x101123C);
 
     if (isPrivateOptionActive(0x10))
         return true;
@@ -171,6 +174,7 @@ bool isSpecialSkill_SuperJumpSign_Hide_AlwaysHook(uintptr_t player) {
     return isSpecialSkillOriginal(player);
 }
 
+// works? needs a bit more testing
 static float (*calcValueRespawnOriginal)(uintptr_t a1, int paramId, unsigned int a3, int a4) = NULL;
 
 float calcValue_RespawnTime_Save_AlwaysHook(uintptr_t a1, int paramId, unsigned int a3, int a4) {
