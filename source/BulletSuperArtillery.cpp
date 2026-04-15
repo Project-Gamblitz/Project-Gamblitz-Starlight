@@ -307,6 +307,15 @@ void BulletSuperArtillery::eatActorClass(Lp::Sys::ActorClassIterNodeBase *iterNo
     sead::Vector3<float> tornadoPos = mTo;
     int tornadoTeam = (int)*(Cmn::Def::Team*)(this->_actorBase + 0x328);
 
+    // === EDITABLE LIST: Add names to ignore here ===
+    const char* ignoreList[] = {
+        "BulletSpSuperBubble",
+        "BulletSpSuperBall",
+        "BulletSprinkler",
+        "BulletBombBase",
+        nullptr  // Keep this null terminator at the end
+    };
+
     for (Lp::Sys::Actor *actor = iterNode->derivedFrontActiveActor();
          actor != NULL; )
     {
@@ -320,23 +329,34 @@ void BulletSuperArtillery::eatActorClass(Lp::Sys::ActorClassIterNodeBase *iterNo
 
             if (pos) {
                 float dx = pos[0] - tornadoPos.mX;
-				float dz = pos[2] - tornadoPos.mZ;
-				float dy = pos[1] - tornadoPos.mY;
-				
-				if (dx*dx + dz*dz < radiusSq && dy > -hitHalfHeight && dy < hitHalfHeight) {
-                    if (reactionType < 0) {
-						u64 vt = *(u64 *)obj;
-						const char *className = ((const char *(*)(void*))( *(u64 *)(vt + 0xD8)))(obj);
-						if (className && strcmp(className, "BulletSpSuperBubble") != 0) {
-							((Lp::Sys::Actor *)obj)->reserveSleepAll_(Lp::Sys::Actor::ListNodeKind::None);
-						}
-                    } else {
-                        typedef void (*InformFunc)(void*, int, int*, sead::Vector3<float>*, int, int, int, int, int);
-                        int outResult = 0;
-                        ((InformFunc)(*(u64 *)(vtable + vtableOffset)))(
-                            obj, 0, &outResult, &tornadoPos,
-                            reactionType, tornadoTeam, 0, 0, 0);
+                float dz = pos[2] - tornadoPos.mZ;
+                float dy = pos[1] - tornadoPos.mY;
+                
+                if (dx*dx + dz*dz < radiusSq && dy > -hitHalfHeight && dy < hitHalfHeight) {
+                    u64 vt = *(u64 *)obj;
+                    const char *className = ((const char *(*)(void*))( *(u64 *)(vt + 0xD8)))(obj);
+                    
+                    // Check if actor is in ignore list
+                    bool shouldIgnore = false;
+                    if (className) {
+                        for (int i = 0; ignoreList[i] != nullptr; i++) {
+                            if (strcmp(className, ignoreList[i]) == 0) {
+                                shouldIgnore = true;
+                                break;
+                            }
+                        }
                     }
+                    
+                    if (shouldIgnore) {
+                        actor = next;
+                        continue;
+                    }
+
+                    typedef void (*InformFunc)(void*, int, int*, sead::Vector3<float>*, int, int, int, int, int);
+                    int outResult = 0;
+                    ((InformFunc)(*(u64 *)(vtable + vtableOffset)))(
+                        obj, 0, &outResult, &tornadoPos,
+                        reactionType, tornadoTeam, 0, 0, 0);
                 }
             }
         }
@@ -716,16 +736,16 @@ void BulletSuperArtillery::vtSecondCalc(BulletSuperArtillery *self) {
     self->eatBombs(hitRadiusSq, hitHalfHeight);
 	
 	// Seeker
-	self->eatActorClass(Game::BulletBombChase::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, 6, hitHalfHeight);
+	self->eatActorClass(Game::BulletBombChase::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, 6);
 	
 	// Thrown Splash Wall
-	self->eatActorClass(Game::BulletShield::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, 11, hitHalfHeight);
+	self->eatActorClass(Game::BulletShield::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, 11);
 	
 //	// Ultra Stamp — set "hit wall" flag, game handles burst on next firstCalc - crashes / ignores ultrastamp
 //	self->eatStampThrow(Game::BulletSpSuperStamp::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight);
 	
-	// Catch-all: sleep ALL remaining enemy bullets (main weapons, charger, etc.)
-	self->eatActorClass(Game::Bullet::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, -1, hitHalfHeight);
+//	// Catch-all: sleep ALL remaining enemy bullets (main weapons, charger, etc.) crashes if detects stuff even mentioned in the ignore list
+//	self->eatActorClass(Game::Bullet::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, 1);
 }
 
 void BulletSuperArtillery::vtFourthCalc(BulletSuperArtillery *self) {
