@@ -363,3 +363,21 @@
 
 // Ink Tank Override
 000833B0 B searchForVersusIdHook
+
+// UIVersusPrivateOptionPage::onExeCallbackBtnEvent
+014D7780 B onExeCallbackBtnEventHook
+
+// UIVersusPrivateOptionPage::onExePostWake
+014D782C B onExePostWakeHook
+
+// UIVersusPrivateOptionPage::onExeFadeInInit
+014D78C8 B onExeFadeInInitHook
+
+// calcDraw: BL isSpecialSkill_SuperJumpSign_Hide pb thing
+1075080 BL isSpecialSkill_SuperJumpSign_Hide_AlwaysHook
+
+// calcValue_RespawnTime_Save pb thing
+01029FE0 BL calcValue_RespawnTime_Save_AlwaysHook
+0102A014 BL calcValue_RespawnTime_Save_AlwaysHook
+0102B7B0 BL calcValue_RespawnTime_Save_AlwaysHook
+0102B7C8 BL calcValue_RespawnTime_Save_AlwaysHook

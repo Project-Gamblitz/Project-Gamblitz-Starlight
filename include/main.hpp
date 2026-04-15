@@ -112,6 +112,13 @@ bool respawnRadarHook();
 bool rivalOctohook(Cmn::Def::PlayerModelType modeltyape);
 
 void autoMatchLanInitHook(void* a1);    // DefaultMatchingSeq state 16 — critical LAN fix
+
+void onExeCallbackBtnEventHook(uintptr_t _this, uintptr_t arg1);
+void onExePostWakeHook(uintptr_t _this);
+void onExeFadeInInitHook(uintptr_t _this);
+bool isSpecialSkill_SuperJumpSign_Hide_AlwaysHook(uintptr_t player);
+float calcValue_RespawnTime_Save_AlwaysHook(uintptr_t a1, int paramId, unsigned int a3, int a4);
+
 // Main
 void renderEntrypoint(agl::DrawContext *drawContext, sead::TextWriter *textWriter);
 void hooks_init();

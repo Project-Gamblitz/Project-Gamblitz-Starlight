@@ -1535,6 +1535,12 @@ void hooks_init(){
 	autoMatchLanInitHook(NULL);
 	// Ink Tank Override
 	searchForVersusIdHook(nullptr, -1);
+	// PrivateBattleSkills
+	onExeCallbackBtnEventHook(0, 0);
+	onExePostWakeHook(0);
+	onExeFadeInInitHook(0);
+	isSpecialSkill_SuperJumpSign_Hide_AlwaysHook(0);
+	calcValue_RespawnTime_Save_AlwaysHook(0, 0, 0, 0);
 }
 
 int LobbyRivalGetPlayerTypeHook(Cmn::SaveDataCmn *saveDataCmn){
