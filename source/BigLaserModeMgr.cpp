@@ -68,8 +68,13 @@ void *BigLaserModeMgr::sPCSLink = NULL;
 
 // Cached BigLaser trie entry for bullet model swapping (declared before resetBulletPools)
 static u64 sBigLaserTrieEntry = 0;
-static const char *sOrigTrieV6 = NULL;   // original string at trieEntry+0x68
-static const char *sOrigTrieV10 = NULL;  // original string at trieEntry+0xC0
+// trie+0x60 and trie+0xB8 are inline sead::BufferedSafeString (vtable, buffer ptr, capacity=0x40).
+// We keep the original buffer pointers intact and swap only the *contents* of those writable
+// buffers — overwriting the pointer with a rodata literal caused the
+// assureTerminationImpl_ null-terminator write to fault on real hardware.
+static char sOrigTrieV6Contents[64];     // saved contents of buffer at trie+0x68
+static char sOrigTrieV10Contents[64];    // saved contents of buffer at trie+0xC0
+static bool sTrieContentsSwapped = false;
 static bool sOldBigLaserModelRegistered = false;
 static bool sParamPtrsCached = false;
 
@@ -89,9 +94,10 @@ void BigLaserModeMgr::resetBulletPools() {
 	sPCELink = NULL;
 	sPCSLink = NULL;
 	sBigLaserTrieEntry = 0;
-	sOrigTrieV6 = NULL;
+	sTrieContentsSwapped = false;
+	sOrigTrieV6Contents[0] = 0;
 	sParamPtrsCached = false; // re-cache param pointers per stage (sKWValues persist)
-	sOrigTrieV10 = NULL;
+	sOrigTrieV10Contents[0] = 0;
 	sOldBigLaserModelRegistered = false;
 	resetAnimCache();
 }
@@ -254,22 +260,59 @@ static void resolveBigLaserTrieEntry() {
 	s16 index = (s16)(*(u16 *)result);
 
 	sBigLaserTrieEntry = sTrieGetByIndex(trie, 2, (u32)index);
-
-	// Cache original archive name strings
-	sOrigTrieV6 = *(const char **)(sBigLaserTrieEntry + 0x68);
-	sOrigTrieV10 = *(const char **)(sBigLaserTrieEntry + 0xC0);
 }
 
+// Swap the ARCHIVE NAME contents inside the two inline sead::BufferedSafeString
+// fields of the BigLaser trie entry (at trie+0x60 and trie+0xB8). The buffer
+// pointers themselves (trie+0x68 and trie+0xC0) point at writable char arrays
+// allocated with the trie; we never change those pointers. Overwriting them
+// with a rodata literal caused assureTerminationImpl_'s buf[capacity-1]=0 to
+// fault on real hardware (rodata is strictly RO on Horizon; emulators are
+// lenient which is why the old code "worked" in Ryujinx/Yuzu).
 void BigLaserModeMgr::swapBulletModelArchive(bool useOldBigLaser) {
 	resolveBigLaserTrieEntry();
 	if (!sBigLaserTrieEntry) return;
 
+	char *v6Buf = *(char **)(sBigLaserTrieEntry + 0x68);
+	char *v10Buf = *(char **)(sBigLaserTrieEntry + 0xC0);
+
 	if (useOldBigLaser) {
-		*(const char **)(sBigLaserTrieEntry + 0x68) = "Wsp_OldBigLaser";
-		*(const char **)(sBigLaserTrieEntry + 0xC0) = "Wsp_OldBigLaser";
+		if (sTrieContentsSwapped) return;  // idempotent — avoid double-snapshot
+
+		const char *src = "Wsp_OldBigLaser";
+
+		if (v6Buf) {
+			// Snapshot original contents (capacity 0x40; leave room for NUL)
+			int si = 0;
+			while (si < 63 && v6Buf[si] != 0) { sOrigTrieV6Contents[si] = v6Buf[si]; si++; }
+			sOrigTrieV6Contents[si] = 0;
+			// Overwrite with "Wsp_OldBigLaser"
+			int di = 0;
+			while (src[di] != 0) { v6Buf[di] = src[di]; di++; }
+			v6Buf[di] = 0;
+		}
+		if (v10Buf) {
+			int si = 0;
+			while (si < 63 && v10Buf[si] != 0) { sOrigTrieV10Contents[si] = v10Buf[si]; si++; }
+			sOrigTrieV10Contents[si] = 0;
+			int di = 0;
+			while (src[di] != 0) { v10Buf[di] = src[di]; di++; }
+			v10Buf[di] = 0;
+		}
+		sTrieContentsSwapped = true;
 	} else {
-		*(const char **)(sBigLaserTrieEntry + 0x68) = sOrigTrieV6;
-		*(const char **)(sBigLaserTrieEntry + 0xC0) = sOrigTrieV10;
+		if (!sTrieContentsSwapped) return;
+		if (v6Buf) {
+			int ri = 0;
+			while (sOrigTrieV6Contents[ri] != 0) { v6Buf[ri] = sOrigTrieV6Contents[ri]; ri++; }
+			v6Buf[ri] = 0;
+		}
+		if (v10Buf) {
+			int ri = 0;
+			while (sOrigTrieV10Contents[ri] != 0) { v10Buf[ri] = sOrigTrieV10Contents[ri]; ri++; }
+			v10Buf[ri] = 0;
+		}
+		sTrieContentsSwapped = false;
 	}
 }
 
@@ -778,22 +821,46 @@ void bigLaserSetupWithModelHook(Cmn::PlayerWeapon *weapon) {
 
 	if (isBigLaser) {
 		u64 origArchive = *(u64 *)((char *)weapon + 0x500);
-		char *origName = *(char **)((char *)weapon + 0x568);
+		// weapon+0x560 is an INLINE sead::BufferedSafeString (vtable at +0x560,
+		// buffer ptr at +0x568, capacity at +0x570). The buffer ptr normally
+		// points at a writable char array embedded in the weapon object.
+		// setupModel() calls assureTerminationImpl_() → buf[capacity-1] = 0.
+		// If we swap the buffer ptr to a string literal in .rodata, that write
+		// faults on real hardware (emulators don't enforce RO mappings strictly,
+		// which is why the old code "worked" in emulator). Instead, overwrite
+		// the *contents* of the existing writable buffer and restore them after.
+		char *archiveNameBuf = *(char **)((char *)weapon + 0x568);
+		char origContents[64];
+		origContents[0] = 0;
 
 		// --- Step 1: Create PC model (BigLaser) with the original archive ---
 		Flexlion::sBaseSetupWithModel(weapon);
 		void *pcModel = *(void **)((char *)weapon + 0x338);
 
 		// --- Step 2: Create KW model (OldBigLaser) ---
+		if (archiveNameBuf) {
+			// Snapshot current string contents (capacity is 64, leave 1 for null)
+			int si = 0;
+			while (si < 63 && archiveNameBuf[si] != 0) { origContents[si] = archiveNameBuf[si]; si++; }
+			origContents[si] = 0;
+			// Write "Wsp_OldBigLaser" into the writable inline buffer
+			const char *src = "Wsp_OldBigLaser";
+			int di = 0;
+			while (src[di] != 0) { archiveNameBuf[di] = src[di]; di++; }
+			archiveNameBuf[di] = 0;
+		}
 		*(u64 *)((char *)weapon + 0x500) = (u64)Flexlion::sOldBigLaserArc;
-		*(const char **)((char *)weapon + 0x568) = "Wsp_OldBigLaser";
 		*(u64 *)((char *)weapon + 0x4F8) = 0; // force re-creation
 		Flexlion::sBaseSetupWithModel(weapon);
 		void *kwModel = *(void **)((char *)weapon + 0x338);
 
-		// --- Step 3: Restore archive/name ---
+		// --- Step 3: Restore archive + original string contents (not pointer) ---
 		*(u64 *)((char *)weapon + 0x500) = origArchive;
-		*(char **)((char *)weapon + 0x568) = origName;
+		if (archiveNameBuf) {
+			int ri = 0;
+			while (origContents[ri] != 0) { archiveNameBuf[ri] = origContents[ri]; ri++; }
+			archiveNameBuf[ri] = 0;
+		}
 
 		// --- Step 4: Set initial active model based on mode ---
 		void *activeModel;
