@@ -37,7 +37,7 @@ static const WeaponTankEntry sTankOverrides[] = {
     {44,  2},  // Shooter_Normal_04  -> Tnk_SimpleG
     {45,  2},  // Shooter_Normal_05  -> Tnk_SimpleG
     {48,  2},  // Shooter_Normal_H_01  -> Tnk_SimpleG
-    {49,  2},  // Shooter_Normal_Oct_01  -> Tnk_SimpleG
+    {49,  3},  // Shooter_Normal_Oct_01  -> Tnk_Rvl00
     {53,  2},  // Shooter_Gravity_03  -> Tnk_SimpleG
     {54,  2},  // Shooter_Gravity_04  -> Tnk_SimpleG
     {63,  2},  // Shooter_QuickMiddle_03  -> Tnk_SimpleG
