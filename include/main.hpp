@@ -116,7 +116,7 @@ void autoMatchLanInitHook(void* a1);    // DefaultMatchingSeq state 16 — criti
 void onExeCallbackBtnEventHook(uintptr_t _this, uintptr_t arg1);
 void onExePostWakeHook(uintptr_t _this);
 void onExeFadeInInitHook(uintptr_t _this);
-bool isSpecialSkill_SuperJumpSign_Hide_AlwaysHook(uintptr_t player);
+float calcDraw_SuperJumpSign_Hide_AlwaysHook(float weight, float ratio);
 float calcValue_RespawnTime_Save_AlwaysHook(uintptr_t a1, int paramId, unsigned int a3, int a4);
 
 // Main

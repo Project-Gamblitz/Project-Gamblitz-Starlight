@@ -1539,7 +1539,7 @@ void hooks_init(){
 	onExeCallbackBtnEventHook(0, 0);
 	onExePostWakeHook(0);
 	onExeFadeInInitHook(0);
-	isSpecialSkill_SuperJumpSign_Hide_AlwaysHook(0);
+	calcDraw_SuperJumpSign_Hide_AlwaysHook(0.0f, 0.0f);
 	calcValue_RespawnTime_Save_AlwaysHook(0, 0, 0, 0);
 }
 

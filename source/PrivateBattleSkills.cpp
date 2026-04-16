@@ -121,13 +121,13 @@ void onExeFadeInInitHook(uintptr_t _this) {
 
     uintptr_t tConf = *(uintptr_t*)(confirmBtn + 0x1F0);
 
+    // lan
     if (isLAN) {
         uintptr_t t0 = *(uintptr_t*)(btnArr[0]                      + 0x1F0);
         uintptr_t t1 = *(uintptr_t*)(btnArr[count > 1 ? 1 : 0]      + 0x1F0);
         uintptr_t t2 = *(uintptr_t*)(btnArr[count > 2 ? 2 : 0]      + 0x1F0);
         uintptr_t t3 = *(uintptr_t*)(btnArr[count > 3 ? 3 : 0]      + 0x1F0);
 
-        // up/down btn[0]-btn[3]
         setNext(t0, 1, t1); setNext(t1, 0, t0);  // btn[0] ↕ btn[1]
         setNext(t1, 1, t2); setNext(t2, 0, t1);  // btn[1] ↕ btn[2]
         setNext(t2, 1, t3); setNext(t3, 0, t2);  // btn[2] ↕ btn[3]
@@ -140,9 +140,9 @@ void onExeFadeInInitHook(uintptr_t _this) {
         if (count > 4 && btnArr[4]) {
             uintptr_t t4 = *(uintptr_t*)(btnArr[4] + 0x1F0);
             setNext(t3, 1, t4); setNext(t4, 0, t3);  // btn[3] ↕ btn[4]
-            setNext(t3, 2, tConf);  // btn[3] RIGHT → confirm 
+            setNext(t3, 2, tConf);  // btn[3] RIGHT → confirm
             setNext(t4, 2, tConf);  // btn[4] RIGHT → confirm
-            setNext(tConf, 0, t4);  // confirm UP → btn[4] (override t2)
+            setNext(tConf, 0, t4);  // confirm UP → btn[4]
         } else {
             setNext(t3, 2, tConf);
         }
@@ -160,21 +160,19 @@ void onExeFadeInInitHook(uintptr_t _this) {
 
 }
 
-// TODO: actually make it not show the effect, this doesnt do anything now that i see it
-// we would need to hook on calcDraw instead and check for isPrivateOptionActive THEN make it not show
-static bool (*isSpecialSkillOriginal)(uintptr_t player) = NULL;
+static float (*lerpNOriginal)(float, float) = NULL;
 
-bool isSpecialSkill_SuperJumpSign_Hide_AlwaysHook(uintptr_t player) {
-    if (!isSpecialSkillOriginal)
-        isSpecialSkillOriginal = (bool(*)(uintptr_t))ProcessMemory::MainAddr(0x101123C);
+float calcDraw_SuperJumpSign_Hide_AlwaysHook(float weight, float ratio) {
+    if (!lerpNOriginal)
+        lerpNOriginal = (float(*)(float, float))ProcessMemory::MainAddr(0x159C90);
 
     if (isPrivateOptionActive(0x10))
-        return true;
+        return 1.0f;  // 1.0 - 1.0 = 0.0 → alpha = 0
 
-    return isSpecialSkillOriginal(player);
+    return lerpNOriginal(weight, ratio);
 }
 
-// works? needs a bit more testing
+// would be better if we just do this via eligibility instead of kill count
 static float (*calcValueRespawnOriginal)(uintptr_t a1, int paramId, unsigned int a3, int a4) = NULL;
 
 float calcValue_RespawnTime_Save_AlwaysHook(uintptr_t a1, int paramId, unsigned int a3, int a4) {
