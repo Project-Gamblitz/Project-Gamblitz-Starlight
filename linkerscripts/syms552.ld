@@ -901,6 +901,17 @@ _ZN4Game12BulletShield22getClassIterNodeStaticEv = 0x4F1250 - 0x2EBE000;
 _ZN4Game6Bullet22getClassIterNodeStaticEv = 0x461A84 - 0x2EBE000;
 _ZN4Game19BulletSpSuperBubble22getClassIterNodeStaticEv = 0x4E802C - 0x2EBE000;
 _ZN4Game17BulletSpSuperBall22getClassIterNodeStaticEv = 0x4FD518 - 0x2EBE000;
+_ZN4Game17BulletShooterBase22getClassIterNodeStaticEv = 0x4663E0 - 0x2EBE000;
+_ZN4Game17BulletBlasterBase22getClassIterNodeStaticEv = 0x466304 - 0x2EBE000;
+_ZN4Game16BulletSplashBase22getClassIterNodeStaticEv = 0x46A45C - 0x2EBE000;
+_ZN4Game17BulletChargerBase22getClassIterNodeStaticEv = 0x4C9894 - 0x2EBE000;
+_ZN4Game16BulletRollerCore22getClassIterNodeStaticEv = 0x4E8380 - 0x2EBE000;
+_ZN4Game17BulletSpinnerBase22getClassIterNodeStaticEv = 0x4F8C20 - 0x2EBE000;
+_ZN4Game15BulletTwinsBase22getClassIterNodeStaticEv = 0x4F8E64 - 0x2EBE000;
+_ZN4Game17BulletSlosherBase22getClassIterNodeStaticEv = 0x4F93C8 - 0x2EBE000;
+_ZN4Game19BulletSlosherSplash22getClassIterNodeStaticEv = 0x4FA5E8 - 0x2EBE000;
+_ZN4Game22BulletUmbrellaShotBase22getClassIterNodeStaticEv = 0x4F9878 - 0x2EBE000;
+_ZN4Game18BulletRollerSplash22getClassIterNodeStaticEv = 0x4FA82C - 0x2EBE000;
 
 /* Player bullet damage — the real HP damage function used by bullet collision system */
 _PlayerApplyBulletDamage = 0x1028DCC - 0x2EBE000;

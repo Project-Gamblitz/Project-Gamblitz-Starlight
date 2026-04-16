@@ -3,18 +3,18 @@
 
 namespace Game{
     class BulletRollerCore{
-        public:
+        public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
     };
     class BulletRollerSplash{
-        public:
+        public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
     };
     class BulletRollerSplashAroundType{
-        public:
+        public: 
     };
     class BulletRollerSplashNearest{
         public:
     };
     class BulletSpJetpackJet{
-        public:
+        public: 
     };
 };

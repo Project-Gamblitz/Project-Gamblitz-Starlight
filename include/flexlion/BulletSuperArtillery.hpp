@@ -8,54 +8,25 @@
 
 namespace Game {
     class Player;
-	class Sprinkler : public Cmn::Actor {
-	public:
-		static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
-	};
-	class Shield : public Cmn::Actor {
-	public:
-		static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
-	};
-	class JumpFlag : public Cmn::Actor {
-	public:
-		static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
-	};
-	class BulletUmbrellaCanopyBase : public Cmn::Actor {
-	public:
-		static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
-	};
-	class SpongeVersus : public Cmn::Actor {
-	public:
-		static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
-	};
-	class BulletBombTako : public Cmn::Actor {
-	public:
-		static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
-	};
-	class IidaBombOnline : public Cmn::Actor {
-	public:
-		static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
-	};
-	class Blowouts : public Cmn::Actor {
-	public:
-		static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
-	};
-	class BulletShield : public Cmn::Actor {
-	public:
-		static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
-	};
-	class BulletBombChase : public Cmn::Actor {
-	public:
-		static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
-	};
-	class BulletSpSuperStamp : public Cmn::Actor {
-	public:
-		static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
-	};
-	class BulletSpSuperBubble : public Cmn::Actor {
-	public:
-		static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
-	};
+	class Sprinkler : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
+	class Shield : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
+	class JumpFlag : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
+	class SpongeVersus : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
+	class BulletBombTako : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
+	class IidaBombOnline : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
+	class Blowouts : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
+	class BulletShield : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
+	class BulletBombChase : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
+	class BulletSpSuperStamp : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
+	class BulletSpSuperBubble : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
+	class BulletShooterBase : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
+	class BulletBlasterBase : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
+	class BulletSplashBase : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
+	class BulletChargerBase : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
+	class BulletSpinnerBase : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
+	class BulletTwinsBase : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
+	class BulletUmbrellaShotBase : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
+	class BulletUmbrellaCanopyBase : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
 }
 
 namespace Flexlion {

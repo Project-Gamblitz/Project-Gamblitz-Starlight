@@ -57,10 +57,10 @@ namespace Game {
         public:
     };
     class BulletSlosherBase{
-        public:
+        public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
     };
     class BulletSlosherSplash{
-        public:
+        public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
     };
 	class BulletMgr {
 		public :

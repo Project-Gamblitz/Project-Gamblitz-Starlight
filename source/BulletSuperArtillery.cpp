@@ -307,59 +307,42 @@ void BulletSuperArtillery::eatActorClass(Lp::Sys::ActorClassIterNodeBase *iterNo
     sead::Vector3<float> tornadoPos = mTo;
     int tornadoTeam = (int)*(Cmn::Def::Team*)(this->_actorBase + 0x328);
 
-    // === EDITABLE LIST: Add names to ignore here ===
-    const char* ignoreList[] = {
-        "BulletSpSuperBubble",
-        "BulletSpSuperBall",
-        "BulletSprinkler",
-        "BulletBombBase",
-        nullptr  // Keep this null terminator at the end
-    };
-
     for (Lp::Sys::Actor *actor = iterNode->derivedFrontActiveActor();
          actor != NULL; )
     {
         Lp::Sys::Actor *next = iterNode->derivedNextActiveActor(actor);
         Cmn::Actor *obj = (Cmn::Actor *)actor;
 
-        if ((int)obj->mTeam != tornadoTeam) {
-            u64 vtable = *(u64 *)obj;
-            typedef float* (*GetPosFunc)(void*);
-            float *pos = ((GetPosFunc)(*(u64 *)(vtable + 760)))(obj);
-
-            if (pos) {
-                float dx = pos[0] - tornadoPos.mX;
-                float dz = pos[2] - tornadoPos.mZ;
-                float dy = pos[1] - tornadoPos.mY;
-                
-                if (dx*dx + dz*dz < radiusSq && dy > -hitHalfHeight && dy < hitHalfHeight) {
-                    u64 vt = *(u64 *)obj;
-                    const char *className = ((const char *(*)(void*))( *(u64 *)(vt + 0xD8)))(obj);
-                    
-                    // Check if actor is in ignore list
-                    bool shouldIgnore = false;
-                    if (className) {
-                        for (int i = 0; ignoreList[i] != nullptr; i++) {
-                            if (strcmp(className, ignoreList[i]) == 0) {
-                                shouldIgnore = true;
-                                break;
-                            }
-                        }
-                    }
-                    
-                    if (shouldIgnore) {
-                        actor = next;
-                        continue;
-                    }
-
-                    typedef void (*InformFunc)(void*, int, int*, sead::Vector3<float>*, int, int, int, int, int);
-                    int outResult = 0;
-                    ((InformFunc)(*(u64 *)(vtable + vtableOffset)))(
-                        obj, 0, &outResult, &tornadoPos,
-                        reactionType, tornadoTeam, 0, 0, 0);
-                }
-            }
+        if ((int)obj->mTeam == tornadoTeam) {
+            actor = next;
+            continue;
         }
+
+        u64 vtable = *(u64 *)obj;
+        if (!vtable) { actor = next; continue; }
+		
+        // call getPos
+        typedef float* (*GetPosFunc)(void*);
+        u64 getPosPtr = *(u64 *)(vtable + 760);
+        if (!getPosPtr) { actor = next; continue; }
+        float *pos = ((GetPosFunc)getPosPtr)(obj);
+        if (!pos) { actor = next; continue; }
+
+        float dx = pos[0] - tornadoPos.mX;
+        float dz = pos[2] - tornadoPos.mZ;
+        float dy = pos[1] - tornadoPos.mY;
+
+        if (dx*dx + dz*dz < radiusSq && dy > -hitHalfHeight && dy < hitHalfHeight) {
+            u64 informPtr = *(u64 *)(vtable + vtableOffset);
+            if (!informPtr) { actor = next; continue; }
+            
+            typedef void (*InformFunc)(void*, int, int*, sead::Vector3<float>*, int, int, int, int, int);
+            int outResult = 0;
+            ((InformFunc)informPtr)(
+                obj, 0, &outResult, &tornadoPos,
+                reactionType, tornadoTeam, 0, 0, 0);
+        }
+
         actor = next;
     }
 }
@@ -744,8 +727,18 @@ void BulletSuperArtillery::vtSecondCalc(BulletSuperArtillery *self) {
 //	// Ultra Stamp — set "hit wall" flag, game handles burst on next firstCalc - crashes / ignores ultrastamp
 //	self->eatStampThrow(Game::BulletSpSuperStamp::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight);
 	
-//	// Catch-all: sleep ALL remaining enemy bullets (main weapons, charger, etc.) crashes if detects stuff even mentioned in the ignore list
-//	self->eatActorClass(Game::Bullet::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, 1);
+	// deletes all weapon bullets acting as a wall
+	self->eatActorClass(Game::BulletShooterBase::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, -1);
+	self->eatActorClass(Game::BulletBlasterBase::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, -1);
+	self->eatActorClass(Game::BulletSplashBase::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, -1);
+	self->eatActorClass(Game::BulletChargerBase::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, -1);
+	self->eatActorClass(Game::BulletRollerCore::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, -1);
+	self->eatActorClass(Game::BulletRollerSplash::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, -1);
+	self->eatActorClass(Game::BulletSpinnerBase::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, -1);
+	self->eatActorClass(Game::BulletTwinsBase::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, -1);
+	self->eatActorClass(Game::BulletSlosherBase::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, -1);
+	self->eatActorClass(Game::BulletSlosherSplash::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, -1);
+	self->eatActorClass(Game::BulletUmbrellaShotBase::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, -1);
 }
 
 void BulletSuperArtillery::vtFourthCalc(BulletSuperArtillery *self) {
