@@ -19,6 +19,7 @@ namespace Game {
 	class BulletBombChase : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
 	class BulletSpSuperStamp : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
 	class BulletSpSuperBubble : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
+	class BulletSpJetpackLauncher : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
 	class BulletShooterBase : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
 	class BulletBlasterBase : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
 	class BulletSplashBase : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
@@ -73,6 +74,7 @@ public:
 	void eatBombs(float radiusSq, float hitHalfHeight);
 	void eatActorClass(Lp::Sys::ActorClassIterNodeBase *iterNode, float radiusSq, float hitHalfHeight, int reactionType, int vtableOffset = 744);
 	void eatStampThrow(Lp::Sys::ActorClassIterNodeBase *iterNode, float radiusSq, float hitHalfHeight);
+	void eatMissiles(float tornadoRadiusSq, float hitHalfHeight, float playerRadiusSq, float playerHalfHeight);
 
     // Vtable overrides (static so they're plain function pointers)
     static const char *vtGetClassName(BulletSuperArtillery *self);

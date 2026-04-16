@@ -271,10 +271,8 @@ void BulletSuperArtillery::reset() {
 
 void BulletSuperArtillery::eatBombs(float radiusSq, float hitHalfHeight) {
     if (!mHasBurst) return;
-
     sead::Vector3<float> tornadoPos = mTo;
     int tornadoTeam = (int)*(Cmn::Def::Team*)(this->_actorBase + 0x328);
-
     auto iterNode = Game::BulletBombBase::getClassIterNodeStatic();
     for (Lp::Sys::Actor *actor = iterNode->derivedFrontActiveActor();
          actor != NULL; )
@@ -283,14 +281,23 @@ void BulletSuperArtillery::eatBombs(float radiusSq, float hitHalfHeight) {
         Cmn::Actor *bomb = (Cmn::Actor *)actor;
         if ((int)bomb->mTeam != tornadoTeam) {
             u64 vtable = *(u64 *)bomb;
+            
+            // Skip Booyah Bomb (BulletSpSuperBall) — should phase through
+            typedef const char* (*GetClassNameFunc)(void*);
+            const char *className = ((GetClassNameFunc)(*(u64 *)(vtable + 0xD8)))(bomb);
+            if (className && strcmp(className, "BulletSpSuperBall") == 0) {
+                actor = next;
+                continue;
+            }
+            
             typedef float* (*GetPosFunc)(void*);
             float *pos = ((GetPosFunc)(*(u64 *)(vtable + 760)))(bomb);
             if (pos) {
                 float dx = pos[0] - tornadoPos.mX;
-				float dz = pos[2] - tornadoPos.mZ;
-				float dy = pos[1] - tornadoPos.mY;
-				
-				if (dx*dx + dz*dz < radiusSq && dy > -hitHalfHeight && dy < hitHalfHeight) {
+                float dz = pos[2] - tornadoPos.mZ;
+                float dy = pos[1] - tornadoPos.mY;
+                
+                if (dx*dx + dz*dz < radiusSq && dy > -hitHalfHeight && dy < hitHalfHeight) {
                     typedef void (*InformFunc)(void*, int, int*, sead::Vector3<float>*, int, int, int, int, int);
                     int outResult = 0;
                     ((InformFunc)(*(u64 *)(vtable + 744)))(bomb, 0, &outResult, &tornadoPos, 6, tornadoTeam, 0, 0, 0);
@@ -369,6 +376,65 @@ static float readSpongeMaxFill(Cmn::Actor *obj) {
     float *result = fn(thisPtr);
     if (result) return *result;
     return 5.0f;
+}
+
+void BulletSuperArtillery::eatMissiles(float tornadoRadiusSq, float hitHalfHeight, float playerRadiusSq, float playerHalfHeight) {
+    if (!mHasBurst) return;
+    sead::Vector3<float> tornadoPos = mTo;
+    int tornadoTeam = (int)*(Cmn::Def::Team*)(this->_actorBase + 0x328);
+
+    Game::PlayerMgr *pmgr = Game::PlayerMgr::sInstance;
+
+    auto iterNode = Game::BulletSpSuperMissile::getClassIterNodeStatic();
+    for (Lp::Sys::Actor *actor = iterNode->derivedFrontActiveActor();
+         actor != NULL; )
+    {
+        Lp::Sys::Actor *next = iterNode->derivedNextActiveActor(actor);
+        Cmn::Actor *missile = (Cmn::Actor *)actor;
+
+        if ((int)missile->mTeam == tornadoTeam) { actor = next; continue; }
+
+        u64 vtable = *(u64 *)missile;
+        if (!vtable) { actor = next; continue; }
+
+        typedef float* (*GetPosFunc)(void*);
+        u64 getPosPtr = *(u64 *)(vtable + 760);
+        if (!getPosPtr) { actor = next; continue; }
+        float *pos = ((GetPosFunc)getPosPtr)(missile);
+        if (!pos) { actor = next; continue; }
+
+        // Must be inside tornado cylinder
+        float dx = pos[0] - tornadoPos.mX;
+        float dz = pos[2] - tornadoPos.mZ;
+        float dy = pos[1] - tornadoPos.mY;
+        if (dx*dx + dz*dz >= tornadoRadiusSq) { actor = next; continue; }
+        if (dy <= -hitHalfHeight || dy >= hitHalfHeight) { actor = next; continue; }
+
+        // AND must be inside cylinder around any enemy player
+        bool nearPlayer = false;
+        for (int i = 0; i < 10; i++) {
+            Game::Player *p = pmgr->getPerformerAt(i);
+            if (!p) continue;
+            if ((int)p->mTeam == tornadoTeam) continue;
+            float pdx = pos[0] - p->mPosition.mX;
+            float pdz = pos[2] - p->mPosition.mZ;
+            float pdy = pos[1] - p->mPosition.mY;
+            if (pdx*pdx + pdz*pdz < playerRadiusSq && pdy > -playerHalfHeight && pdy < playerHalfHeight) {
+                nearPlayer = true;
+                break;
+            }
+        }
+        if (!nearPlayer) { actor = next; continue; }
+
+        u64 informPtr = *(u64 *)(vtable + 744);
+        if (informPtr) {
+            typedef void (*InformFunc)(void*, int, int*, sead::Vector3<float>*, int, int, int, int, int);
+            int outResult = 0;
+            ((InformFunc)informPtr)(missile, 0, &outResult, &tornadoPos, 1, tornadoTeam, 0, 0, 0);
+        }
+
+        actor = next;
+    }
 }
 
 // Subtract-HP objects (Sprinkler, JumpFlag)
@@ -724,6 +790,9 @@ void BulletSuperArtillery::vtSecondCalc(BulletSuperArtillery *self) {
 	// Thrown Splash Wall
 	self->eatActorClass(Game::BulletShield::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, 11);
 	
+	// Missiles — destroy only when in tornado AND in cylinder around enemy player
+	self->eatMissiles(hitRadiusSq, hitHalfHeight, 50.0f * 50.0f, 5000.0f);
+	
 //	// Ultra Stamp — set "hit wall" flag, game handles burst on next firstCalc - crashes / ignores ultrastamp
 //	self->eatStampThrow(Game::BulletSpSuperStamp::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight);
 	
@@ -739,6 +808,7 @@ void BulletSuperArtillery::vtSecondCalc(BulletSuperArtillery *self) {
 	self->eatActorClass(Game::BulletSlosherBase::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, -1);
 	self->eatActorClass(Game::BulletSlosherSplash::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, -1);
 	self->eatActorClass(Game::BulletUmbrellaShotBase::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, -1);
+	self->eatActorClass(Game::BulletSpJetpackLauncher::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, -1);
 }
 
 void BulletSuperArtillery::vtFourthCalc(BulletSuperArtillery *self) {
