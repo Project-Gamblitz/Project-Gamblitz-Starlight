@@ -914,6 +914,12 @@ _ZN4Game22BulletUmbrellaShotBase22getClassIterNodeStaticEv = 0x4F9878 - 0x2EBE00
 _ZN4Game18BulletRollerSplash22getClassIterNodeStaticEv = 0x4FA82C - 0x2EBE000;
 _ZN4Game23BulletSpJetpackLauncher22getClassIterNodeStaticEv = 0x4E96E8 - 0x2EBE000;
 _ZN4Game20BulletSpSuperMissile22getClassIterNodeStaticEv = 0x4EB0A8 - 0x2EBE000;
+_ZN4Game13InkRailVersus22getClassIterNodeStaticEv = 0xE4FE40 - 0x2EBE000;
+_ZN4Game15GrindRailVersus22getClassIterNodeStaticEv = 0x730CD8 - 0x2EBE000;
+_ZN4Game13InkRailVersus5emit_EN3Cmn3Def4TeamEib = 0xE47A54 - 0x2EBE000;
+_ZN4Game13InkRailVersus12changeColor_EN3Cmn3Def4TeamE = 0xE4A178 - 0x2EBE000;
+_ZN4Game13InkRailVersus16emitAndPlayRail_Ev = 0xE4D44C - 0x2EBE000;
+_ZN4Game15GrindRailDrawer10changeTeamEN3Cmn3Def4TeamE = 0xB1F6EC - 0x2EBE000;
 
 /* Player bullet damage — the real HP damage function used by bullet collision system */
 _PlayerApplyBulletDamage = 0x1028DCC - 0x2EBE000;

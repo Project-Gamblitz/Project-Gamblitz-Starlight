@@ -20,12 +20,18 @@ extern "C" {
     extern u8 _ZTVN6xlink221F32PropertyDefinitionE[];
     extern u8 _ZTVN4sead22BufferedSafeStringBaseIcEE[];
 	extern bool gSpecialWeaponPaint;
+    void _ZN4Game13InkRailVersus12changeColor_EN3Cmn3Def4TeamE(void *self, int team);
+    void _ZN4Game13InkRailVersus16emitAndPlayRail_Ev(void *self);
+    void _ZN4Game15GrindRailDrawer10changeTeamEN3Cmn3Def4TeamE(void *drawer, int team);
 }
 #define CmnActorCtor _ZN3Cmn5ActorC2Ev
 #define EnumPropDefCtor _ZN6xlink222EnumPropertyDefinitionC2EPKcb
 #define EnumPropDefSetEntryBuf _ZN6xlink222EnumPropertyDefinition12setEntryBuf_EiPNS0_5EntryE
 #define EnumPropDefEntry _ZN6xlink222EnumPropertyDefinition5entryEiPKc
 #define XLinkKillAllSound _ZN2Lp3Sys5XLink12killAllSoundEv
+#define InkRailChangeColor _ZN4Game13InkRailVersus12changeColor_EN3Cmn3Def4TeamE
+#define InkRailEmitAndPlayRail _ZN4Game13InkRailVersus16emitAndPlayRail_Ev
+#define GrindRailChangeTeam _ZN4Game15GrindRailDrawer10changeTeamEN3Cmn3Def4TeamE
 
 // Flight parameters
 const int BSA_FLIGHT_TIME = 120;
@@ -423,6 +429,139 @@ static void damageObjects_AddDmg(
         }
     }
 }
+// Track rails we activated this burst (max ~8 rails)
+static const int MAX_ACTIVATED_RAILS = 8;
+static u64 sActivatedRails[MAX_ACTIVATED_RAILS];
+static int sActivatedRailsCount = 0;
+// Track which rails we've already color-fixed
+static u64 sColorFixedRails[MAX_ACTIVATED_RAILS];
+static int sColorFixedRailsCount = 0;
+
+static void resetActivatedRails() {
+    sActivatedRailsCount = 0;
+	sColorFixedRailsCount = 0;
+    for (int i = 0; i < MAX_ACTIVATED_RAILS; i++) sActivatedRails[i] = 0;
+}
+
+static bool isRailWeActivated(u64 obj) {
+    for (int i = 0; i < sActivatedRailsCount; i++) {
+        if (sActivatedRails[i] == obj) return true;
+    }
+    return false;
+}
+
+static void markRailActivated(u64 obj) {
+    if (sActivatedRailsCount < MAX_ACTIVATED_RAILS) {
+        sActivatedRails[sActivatedRailsCount++] = obj;
+    }
+}
+
+// PRE pass: activate inactive rails
+static void preRailsInCylinder(
+    Lp::Sys::ActorClassIterNodeBase *iterNode,
+    int senderTeamInt, int senderIdx,
+    float hitRadiusSq, float hitHalfHeight,
+    sead::Vector3<float> &center, int dmg,
+    int damagableOffset)
+{
+    for (Cmn::Actor *obj = (Cmn::Actor *)iterNode->derivedFrontActiveActor();
+         obj != NULL;
+         obj = (Cmn::Actor *)iterNode->derivedNextActiveActor(obj))
+    {
+        float *pos = (float *)((u8 *)obj + 0x39C);
+        float odx = pos[0] - center.mX;
+        float odz = pos[2] - center.mZ;
+        float ody = pos[1] - center.mY;
+        if (odx*odx + odz*odz >= hitRadiusSq) continue;
+        if (ody <= -hitHalfHeight || ody >= hitHalfHeight) continue;
+
+        u64 damagable = *(u64 *)((u8 *)obj + damagableOffset);
+        if (!damagable) continue;
+
+        int smState = *(int *)((u8 *)obj + 0x598);
+
+        if (smState == 0) {
+			int frame = Game::MainMgr::sInstance->mPaintGameFrame;
+			*(int *)((u8 *)obj + 0x328) = senderTeamInt;
+           // *(int *)(damagable + 0x38) = senderTeamInt;
+            *(int *)(damagable + 0x54) = senderTeamInt;
+            *(int *)(damagable + 0x50) = senderIdx;
+            *(int *)(damagable + 0x4C) = dmg;
+            *(int *)(damagable + 0x48) = 0;
+            
+            // Mark this rail so the post-pass knows it's ours
+            markRailActivated((u64)obj);
+        }
+    }
+}
+
+// POST pass: enforce team and apply heal/drain
+static void postRailsInCylinder(
+    Lp::Sys::ActorClassIterNodeBase *iterNode,
+    int senderTeamInt, int senderIdx,
+    float hitRadiusSq, float hitHalfHeight,
+    sead::Vector3<float> &center, int dmg,
+    int damagableOffset)
+{
+    for (Cmn::Actor *obj = (Cmn::Actor *)iterNode->derivedFrontActiveActor();
+         obj != NULL;
+         obj = (Cmn::Actor *)iterNode->derivedNextActiveActor(obj))
+    {
+        float *pos = (float *)((u8 *)obj + 0x39C);
+        float odx = pos[0] - center.mX;
+        float odz = pos[2] - center.mZ;
+        float ody = pos[1] - center.mY;
+        if (odx*odx + odz*odz >= hitRadiusSq) continue;
+        if (ody <= -hitHalfHeight || ody >= hitHalfHeight) continue;
+
+        u64 damagable = *(u64 *)((u8 *)obj + damagableOffset);
+        if (!damagable) continue;
+
+        int smState = *(int *)((u8 *)obj + 0x598);
+        if (smState != 1) continue;
+
+        bool weActivated = isRailWeActivated((u64)obj);
+        int frame = Game::MainMgr::sInstance->mPaintGameFrame;
+        int before_808 = *(int *)((u8 *)obj + 0x328);
+
+		if (weActivated) {
+			bool alreadyFixed = false;
+			for (int i = 0; i < sColorFixedRailsCount; i++) {
+				if (sColorFixedRails[i] == (u64)obj) { alreadyFixed = true; break; }
+			}
+			
+			*(int *)((u8 *)obj + 0x328) = senderTeamInt;
+			
+			if (!alreadyFixed && sColorFixedRailsCount < MAX_ACTIVATED_RAILS) {
+				InkRailChangeColor(obj, senderTeamInt);
+				InkRailEmitAndPlayRail(obj);  // re-emit trail effects with our team
+				sColorFixedRails[sColorFixedRailsCount++] = (u64)obj;
+			}
+		}
+
+        int ownerTeam = *(int *)((u8 *)obj + 0x328);
+        int *curHP = (int *)(damagable + 0x48);
+        int maxHP = *(int *)(damagable + 0x30);
+        int before_hp = *curHP;
+
+        const char *action;
+        if (ownerTeam == senderTeamInt) {
+            int newHP = *curHP + dmg;
+            if (newHP > maxHP) newHP = maxHP;
+            *curHP = newHP;
+            action = "HEAL";
+        } else {
+            int newHP = *curHP - dmg;
+            if (newHP < 0) newHP = 0;
+            *curHP = newHP;
+            *(int *)(damagable + 0x4C) = dmg;
+            *(int *)(damagable + 0x50) = senderIdx;
+            *(int *)(damagable + 0x54) = senderTeamInt;
+            action = "DRAIN";
+        }
+    }
+}
+
 // Gachihoko (Rainmaker shield) — team-directional damage
 static void damageGachihokoInCylinder(
     Lp::Sys::ActorClassIterNodeBase *iterNode,
@@ -620,6 +759,27 @@ const char *BulletSuperArtillery::vtGetClassName(BulletSuperArtillery *self) {
 }
 
 void BulletSuperArtillery::vtFirstCalc(BulletSuperArtillery *self) {
+    // Rail activation runs FIRST, before InkRailVersus::firstCalc_ executes this frame
+    // This ensures our team writes are picked up by calcStateChange_
+    if (self->mHasBurst && self->mSender) {
+        float t = (float)self->mBurstFrm / (float)BSA_BURST_DURATION;
+        if (t > 1.0f) t = 1.0f;
+        const float hitRadiusStart = 30.0f;
+        const float hitRadiusEnd   = 140.0f;
+        const float hitHalfHeight  = 5000.0f;
+        float hitRadius = hitRadiusStart + (hitRadiusEnd - hitRadiusStart) * t;
+        float hitRadiusSq = hitRadius * hitRadius;
+
+        int dmg = (int)(BSA_BURST_DMG_START + (BSA_BURST_DMG_END - BSA_BURST_DMG_START) * t);
+        if (dmg < (int)BSA_BURST_DMG_END) dmg = (int)BSA_BURST_DMG_END;
+
+        int senderTeamInt = (int)*(Cmn::Def::Team*)(self->_actorBase + 0x328);
+
+        preRailsInCylinder(Game::InkRailVersus::getClassIterNodeStatic(),
+            senderTeamInt, self->mSender->mIndex,
+            hitRadiusSq, hitHalfHeight, self->mTo, dmg, 0x768);
+    }
+
     self->mStateMachine.executeState();
 }
 
@@ -721,6 +881,19 @@ void BulletSuperArtillery::vtSecondCalc(BulletSuperArtillery *self) {
 	// SpongeVersus — float fill, team-directional
 	damageSpongesInCylinder(Game::SpongeVersus::getClassIterNodeStatic(),
 		senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg * 5, self->mBurstFrm);
+		
+	// InkRailVersus — activate if inactive, heal friendly / drain enemy if active
+	postRailsInCylinder(Game::InkRailVersus::getClassIterNodeStatic(),
+		senderTeamInt, self->mSender->mIndex,
+		hitRadiusSq, hitHalfHeight, self->mTo, dmg,
+		0x768);
+	
+	// GrindRailVersus — heal/drain only (no activation, canActivate=false)
+	// If you want activation too, we'd need the 5.5.2 emit_ address
+//	damageRailsInCylinder(Game::GrindRailVersus::getClassIterNodeStatic(),
+//		senderTeamInt, self->mSender->mIndex,
+//		hitRadiusSq, hitHalfHeight, self->mTo, dmg,
+//		0x6D8, false, Game::MainMgr::sInstance->mPaintGameFrame);
 	
 	// Bomb projectiles
     self->eatBombs(hitRadiusSq, hitHalfHeight);
@@ -947,7 +1120,7 @@ void BulletSuperArtillery::calcFlight() {
 
 void BulletSuperArtillery::doBurst() {
     if (mSender == NULL) return;
-
+	resetActivatedRails();
     // Set BulletDistance = distance from controlled player (listener proxy) to burst pos, capped at 128
     Lp::Sys::XLink *xlink = getXLink();
     if (xlink) {

@@ -28,6 +28,8 @@ namespace Game {
 	class BulletTwinsBase : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
 	class BulletUmbrellaShotBase : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
 	class BulletUmbrellaCanopyBase : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
+	class InkRailVersus : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); void emit_(Cmn::Def::Team team, int paintGameFrame, bool skipSound); };
+	class GrindRailVersus : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
 }
 
 namespace Flexlion {
