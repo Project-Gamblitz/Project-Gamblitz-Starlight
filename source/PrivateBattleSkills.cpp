@@ -77,15 +77,12 @@ void onExePostWakeHook(uintptr_t _this) {
 void onExeFadeInInitHook(uintptr_t _this) {
     if (!_this) return;
 
-    typedef bool (*IsInetModeFn)(uintptr_t);
-    typedef void (*StopAnimFn)  (uintptr_t);
+    typedef void (*StopAnimFn)(uintptr_t);
 
-    IsInetModeFn isInetModeFn = (IsInetModeFn)ProcessMemory::MainAddr(0x19F29E4);
-    StopAnimFn   stopAtMax    = (StopAnimFn)  ProcessMemory::MainAddr(0x1998188);
-    StopAnimFn   stopAtMin    = (StopAnimFn)  ProcessMemory::MainAddr(0x1998150);
-    SetInputFn   setInput     = (SetInputFn)  ProcessMemory::MainAddr(0x19C90B8);
-    ResetFn      resetBtn     = (ResetFn)     ProcessMemory::MainAddr(0x19DE190);
-    SetNextFn    setNext      = (SetNextFn)   ProcessMemory::MainAddr(0x19BB6A4);
+    StopAnimFn stopAtMin = (StopAnimFn)ProcessMemory::MainAddr(0x1998150);
+    SetInputFn setInput  = (SetInputFn)ProcessMemory::MainAddr(0x19C90B8);
+    ResetFn    resetBtn  = (ResetFn)   ProcessMemory::MainAddr(0x19DE190);
+    SetNextFn  setNext   = (SetNextFn) ProcessMemory::MainAddr(0x19BB6A4);
 
     u32        count      = *(u32*)       (_this + 0x4E0);
     uintptr_t* btnArr     = *(uintptr_t**)(_this + 0x4E8);
@@ -94,24 +91,19 @@ void onExeFadeInInitHook(uintptr_t _this) {
 
     if (!btnArr) return;
 
-    bool inet  = isInetModeFn ? isInetModeFn(_this) : false;
-    bool isLAN = !inet;
-    if (animHandle) {
-        if (inet) { if (stopAtMax) stopAtMax(animHandle); }
-        else       { if (stopAtMin) stopAtMin(animHandle); }
-    }
+    if (animHandle && stopAtMin) stopAtMin(animHandle);
 
     if (setInput) setInput(btnArr[0], 0, true);
     if (resetBtn) resetBtn(btnArr[0], true, false);
 
     for (int i = 1; i <= 3; i++) {
         uintptr_t b = btnArr[count > (u32)i ? i : 0];
-        if (setInput) setInput(b, 0, isLAN);
+        if (setInput) setInput(b, 0, true);
         if (resetBtn) resetBtn(b, true, false);
     }
 
     if (count > 4 && btnArr[4] && setInput && resetBtn) {
-        setInput(btnArr[4], 0, isLAN);
+        setInput(btnArr[4], 0, true);
         resetBtn(btnArr[4], true, false);
     }
 
@@ -121,43 +113,36 @@ void onExeFadeInInitHook(uintptr_t _this) {
 
     uintptr_t tConf = *(uintptr_t*)(confirmBtn + 0x1F0);
 
-    // lan
-    if (isLAN) {
-        uintptr_t t0 = *(uintptr_t*)(btnArr[0]                      + 0x1F0);
-        uintptr_t t1 = *(uintptr_t*)(btnArr[count > 1 ? 1 : 0]      + 0x1F0);
-        uintptr_t t2 = *(uintptr_t*)(btnArr[count > 2 ? 2 : 0]      + 0x1F0);
-        uintptr_t t3 = *(uintptr_t*)(btnArr[count > 3 ? 3 : 0]      + 0x1F0);
+    uintptr_t t0 = *(uintptr_t*)(btnArr[0]                 + 0x1F0);
+    uintptr_t t1 = *(uintptr_t*)(btnArr[count > 1 ? 1 : 0] + 0x1F0);
+    uintptr_t t2 = *(uintptr_t*)(btnArr[count > 2 ? 2 : 0] + 0x1F0);
+    uintptr_t t3 = *(uintptr_t*)(btnArr[count > 3 ? 3 : 0] + 0x1F0);
 
-        setNext(t0, 1, t1); setNext(t1, 0, t0);  // btn[0] ↕ btn[1]
-        setNext(t1, 1, t2); setNext(t2, 0, t1);  // btn[1] ↕ btn[2]
-        setNext(t2, 1, t3); setNext(t3, 0, t2);  // btn[2] ↕ btn[3]
+    setNext(t0, 1, t1); setNext(t1, 0, t0);
+    setNext(t1, 1, t2); setNext(t2, 0, t1);
+    setNext(t2, 1, t3); setNext(t3, 0, t2);
 
-        setNext(t0, 2, tConf);
-        setNext(t1, 2, tConf);
-        setNext(t2, 2, tConf);
-        setNext(tConf, 0, t2);  // confirm → dir0 → btn[2]
+    setNext(t0, 2, tConf);
+    setNext(t1, 2, tConf);
+    setNext(t2, 2, tConf);
+    setNext(tConf, 0, t2);
 
-        if (count > 4 && btnArr[4]) {
-            uintptr_t t4 = *(uintptr_t*)(btnArr[4] + 0x1F0);
-            setNext(t3, 1, t4); setNext(t4, 0, t3);  // btn[3] ↕ btn[4]
-            setNext(t3, 2, tConf);  // btn[3] RIGHT → confirm
-            setNext(t4, 2, tConf);  // btn[4] RIGHT → confirm
-            setNext(tConf, 0, t4);  // confirm UP → btn[4]
-        } else {
-            setNext(t3, 2, tConf);
-        }
+    if (count > 4 && btnArr[4]) {
+        uintptr_t t4 = *(uintptr_t*)(btnArr[4] + 0x1F0);
+        setNext(t3, 1, t4); setNext(t4, 0, t3);
+        setNext(t3, 2, tConf);
+        setNext(t4, 2, tConf);
+        setNext(tConf, 0, t4);
+    } else {
+        setNext(t3, 2, tConf);
     }
 
     uintptr_t tLast;
-    if (isLAN) {
-        if (count > 4 && btnArr[4]) tLast = *(uintptr_t*)(btnArr[4] + 0x1F0);
-        else                        tLast = *(uintptr_t*)(btnArr[count > 3 ? 3 : 0] + 0x1F0);
-    } else {
-        tLast = *(uintptr_t*)(btnArr[0] + 0x1F0);  // inet: btn[0]
-    }
+    if (count > 4 && btnArr[4]) tLast = *(uintptr_t*)(btnArr[4] + 0x1F0);
+    else                        tLast = *(uintptr_t*)(btnArr[count > 3 ? 3 : 0] + 0x1F0);
+
     setNext(tLast, 2, tConf);
     setNext(tConf, 3, tLast);
-
 }
 
 static float (*lerpNOriginal)(float, float) = NULL;
