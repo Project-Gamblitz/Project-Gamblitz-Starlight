@@ -23,6 +23,8 @@ extern "C" {
     void _ZN4Game13InkRailVersus12changeColor_EN3Cmn3Def4TeamE(void *self, int team);
     void _ZN4Game13InkRailVersus16emitAndPlayRail_Ev(void *self);
     void _ZN4Game15GrindRailDrawer10changeTeamEN3Cmn3Def4TeamE(void *drawer, int team);
+	void _ZN4Game15GrindRailVersus5emit_EN3Cmn3Def4TeamEj(void *self, int team, unsigned int gameFrame);
+    void _ZN2Lp3Utl12StateMachine11changeStateEj(void *stateMachine, unsigned int newState);
 }
 #define CmnActorCtor _ZN3Cmn5ActorC2Ev
 #define EnumPropDefCtor _ZN6xlink222EnumPropertyDefinitionC2EPKcb
@@ -32,6 +34,8 @@ extern "C" {
 #define InkRailChangeColor _ZN4Game13InkRailVersus12changeColor_EN3Cmn3Def4TeamE
 #define InkRailEmitAndPlayRail _ZN4Game13InkRailVersus16emitAndPlayRail_Ev
 #define GrindRailChangeTeam _ZN4Game15GrindRailDrawer10changeTeamEN3Cmn3Def4TeamE
+#define GrindRailEmit _ZN4Game15GrindRailVersus5emit_EN3Cmn3Def4TeamEj
+#define StateMachineChangeState _ZN2Lp3Utl12StateMachine11changeStateEj
 
 // Flight parameters
 const int BSA_FLIGHT_TIME = 120;
@@ -433,14 +437,24 @@ static void damageObjects_AddDmg(
 static const int MAX_ACTIVATED_RAILS = 8;
 static u64 sActivatedRails[MAX_ACTIVATED_RAILS];
 static int sActivatedRailsCount = 0;
+// Same tracking for GrindRails
+static u64 sActivatedGrindRails[MAX_ACTIVATED_RAILS];
+static int sActivatedGrindRailsCount = 0;
 // Track which rails we've already color-fixed
 static u64 sColorFixedRails[MAX_ACTIVATED_RAILS];
 static int sColorFixedRailsCount = 0;
+static u64 sColorFixedGrindRails[MAX_ACTIVATED_RAILS];
+static int sColorFixedGrindRailsCount = 0;
 
 static void resetActivatedRails() {
     sActivatedRailsCount = 0;
-	sColorFixedRailsCount = 0;
-    for (int i = 0; i < MAX_ACTIVATED_RAILS; i++) sActivatedRails[i] = 0;
+    sColorFixedRailsCount = 0;
+    sActivatedGrindRailsCount = 0;
+    sColorFixedGrindRailsCount = 0;
+    for (int i = 0; i < MAX_ACTIVATED_RAILS; i++) {
+        sActivatedRails[i] = 0;
+        sActivatedGrindRails[i] = 0;
+    }
 }
 
 static bool isRailWeActivated(u64 obj) {
@@ -453,6 +467,19 @@ static bool isRailWeActivated(u64 obj) {
 static void markRailActivated(u64 obj) {
     if (sActivatedRailsCount < MAX_ACTIVATED_RAILS) {
         sActivatedRails[sActivatedRailsCount++] = obj;
+    }
+}
+
+static bool isGrindRailWeActivated(u64 obj) {
+    for (int i = 0; i < sActivatedGrindRailsCount; i++) {
+        if (sActivatedGrindRails[i] == obj) return true;
+    }
+    return false;
+}
+
+static void markGrindRailActivated(u64 obj) {
+    if (sActivatedGrindRailsCount < MAX_ACTIVATED_RAILS) {
+        sActivatedGrindRails[sActivatedGrindRailsCount++] = obj;
     }
 }
 
@@ -558,6 +585,105 @@ static void postRailsInCylinder(
             *(int *)(damagable + 0x50) = senderIdx;
             *(int *)(damagable + 0x54) = senderTeamInt;
             action = "DRAIN";
+        }
+    }
+}
+
+// PRE pass: activate inactive grind rails using game's own emit_ + changeState
+static void preGrindRailsInCylinder(
+    Lp::Sys::ActorClassIterNodeBase *iterNode,
+    int senderTeamInt, int senderIdx,
+    float hitRadiusSq, float hitHalfHeight,
+    sead::Vector3<float> &center, int dmg,
+    int damagableOffset)
+{
+    (void)senderIdx;
+    (void)dmg;
+    (void)damagableOffset;
+
+    for (Cmn::Actor *obj = (Cmn::Actor *)iterNode->derivedFrontActiveActor();
+         obj != NULL;
+         obj = (Cmn::Actor *)iterNode->derivedNextActiveActor(obj))
+    {
+        float *pos = (float *)((u8 *)obj + 0x39C);
+        float odx = pos[0] - center.mX;
+        float odz = pos[2] - center.mZ;
+        float ody = pos[1] - center.mY;
+        if (odx*odx + odz*odz >= hitRadiusSq) continue;
+        if (ody <= -hitHalfHeight || ody >= hitHalfHeight) continue;
+
+        int smState = *(int *)((u8 *)obj + 0x598);
+
+        if (smState == 0) {
+            // Use the game's own activation path:
+            //   emit_(team, currentGameFrame) sets team, color, HP, drawer state, emit rate
+            //   changeState(1) triggers stateEnterConnect for collision + visuals
+            u32 gameFrame = (u32)Game::MainMgr::sInstance->mPaintGameFrame;
+            GrindRailEmit((void *)obj, senderTeamInt, gameFrame);
+            StateMachineChangeState((void *)((u8 *)obj + 0x588), 1u);
+
+            markGrindRailActivated((u64)obj);
+        }
+    }
+}
+
+// POST pass: enforce team and apply heal/drain for grind rails
+static void postGrindRailsInCylinder(
+    Lp::Sys::ActorClassIterNodeBase *iterNode,
+    int senderTeamInt, int senderIdx,
+    float hitRadiusSq, float hitHalfHeight,
+    sead::Vector3<float> &center, int dmg,
+    int damagableOffset)
+{
+    for (Cmn::Actor *obj = (Cmn::Actor *)iterNode->derivedFrontActiveActor();
+         obj != NULL;
+         obj = (Cmn::Actor *)iterNode->derivedNextActiveActor(obj))
+    {
+        float *pos = (float *)((u8 *)obj + 0x39C);
+        float odx = pos[0] - center.mX;
+        float odz = pos[2] - center.mZ;
+        float ody = pos[1] - center.mY;
+        if (odx*odx + odz*odz >= hitRadiusSq) continue;
+        if (ody <= -hitHalfHeight || ody >= hitHalfHeight) continue;
+
+        u64 damagable = *(u64 *)((u8 *)obj + damagableOffset);
+        if (!damagable) continue;
+
+        int smState = *(int *)((u8 *)obj + 0x598);
+        if (smState != 1) continue;
+
+        bool weActivated = isGrindRailWeActivated((u64)obj);
+
+        if (weActivated) {
+            // Enforce our team (in case enemy damage overwrote it between frames)
+            *(int *)((u8 *)obj + 0x328) = senderTeamInt;
+
+            // Re-apply drawer color once (safety — emit_ already did it but enemy may have drained)
+            bool alreadyFixed = false;
+            for (int i = 0; i < sColorFixedGrindRailsCount; i++) {
+                if (sColorFixedGrindRails[i] == (u64)obj) { alreadyFixed = true; break; }
+            }
+            if (!alreadyFixed && sColorFixedGrindRailsCount < MAX_ACTIVATED_RAILS) {
+                GrindRailChangeTeam((void *)((u8 *)obj + 0x5E0), senderTeamInt);
+                sColorFixedGrindRails[sColorFixedGrindRailsCount++] = (u64)obj;
+            }
+        }
+
+        int ownerTeam = *(int *)((u8 *)obj + 0x328);
+        int *curHP = (int *)(damagable + 0x48);
+        int maxHP = *(int *)(damagable + 0x30);
+
+        if (ownerTeam == senderTeamInt) {
+            int newHP = *curHP + dmg;
+            if (newHP > maxHP) newHP = maxHP;
+            *curHP = newHP;
+        } else {
+            int newHP = *curHP - dmg;
+            if (newHP < 0) newHP = 0;
+            *curHP = newHP;
+            *(int *)(damagable + 0x4C) = dmg;
+            *(int *)(damagable + 0x50) = senderIdx;
+            *(int *)(damagable + 0x54) = senderTeamInt;
         }
     }
 }
@@ -778,6 +904,10 @@ void BulletSuperArtillery::vtFirstCalc(BulletSuperArtillery *self) {
         preRailsInCylinder(Game::InkRailVersus::getClassIterNodeStatic(),
             senderTeamInt, self->mSender->mIndex,
             hitRadiusSq, hitHalfHeight, self->mTo, dmg, 0x768);
+			
+		preGrindRailsInCylinder(Game::GrindRailVersus::getClassIterNodeStatic(),
+            senderTeamInt, self->mSender->mIndex,
+            hitRadiusSq, hitHalfHeight, self->mTo, dmg, 0x6F0);
     }
 
     self->mStateMachine.executeState();
@@ -888,12 +1018,11 @@ void BulletSuperArtillery::vtSecondCalc(BulletSuperArtillery *self) {
 		hitRadiusSq, hitHalfHeight, self->mTo, dmg,
 		0x768);
 	
-	// GrindRailVersus — heal/drain only (no activation, canActivate=false)
-	// If you want activation too, we'd need the 5.5.2 emit_ address
-//	damageRailsInCylinder(Game::GrindRailVersus::getClassIterNodeStatic(),
-//		senderTeamInt, self->mSender->mIndex,
-//		hitRadiusSq, hitHalfHeight, self->mTo, dmg,
-//		0x6D8, false, Game::MainMgr::sInstance->mPaintGameFrame);
+	// GrindRailVersus — activate if inactive, heal friendly / drain enemy if active
+	postGrindRailsInCylinder(Game::GrindRailVersus::getClassIterNodeStatic(),
+		senderTeamInt, self->mSender->mIndex,
+		hitRadiusSq, hitHalfHeight, self->mTo, dmg,
+		0x6F0);
 	
 	// Bomb projectiles
     self->eatBombs(hitRadiusSq, hitHalfHeight);

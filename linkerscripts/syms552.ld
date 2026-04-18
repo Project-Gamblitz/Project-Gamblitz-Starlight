@@ -920,6 +920,8 @@ _ZN4Game13InkRailVersus5emit_EN3Cmn3Def4TeamEib = 0xE47A54 - 0x2EBE000;
 _ZN4Game13InkRailVersus12changeColor_EN3Cmn3Def4TeamE = 0xE4A178 - 0x2EBE000;
 _ZN4Game13InkRailVersus16emitAndPlayRail_Ev = 0xE4D44C - 0x2EBE000;
 _ZN4Game15GrindRailDrawer10changeTeamEN3Cmn3Def4TeamE = 0xB1F6EC - 0x2EBE000;
+_ZN4Game15GrindRailVersus5emit_EN3Cmn3Def4TeamEj = 0xE43798 - 0x2EBE000;
+_ZN2Lp3Utl12StateMachine11changeStateEj = 0x19F8578 - 0x2EBE000;
 
 /* Player bullet damage — the real HP damage function used by bullet collision system */
 _PlayerApplyBulletDamage = 0x1028DCC - 0x2EBE000;
