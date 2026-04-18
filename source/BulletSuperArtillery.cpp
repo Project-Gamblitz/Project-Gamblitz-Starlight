@@ -25,7 +25,6 @@ extern "C" {
     void _ZN4Game15GrindRailDrawer10changeTeamEN3Cmn3Def4TeamE(void *drawer, int team);
 	void _ZN4Game15GrindRailVersus5emit_EN3Cmn3Def4TeamEj(void *self, int team, unsigned int gameFrame);
     void _ZN2Lp3Utl12StateMachine11changeStateEj(void *stateMachine, unsigned int newState);
-	void _ZN2Lp3Sys5XLink15fadeIfLoopSoundEv(void *xlink);
 }
 #define CmnActorCtor _ZN3Cmn5ActorC2Ev
 #define EnumPropDefCtor _ZN6xlink222EnumPropertyDefinitionC2EPKcb
@@ -37,7 +36,6 @@ extern "C" {
 #define GrindRailChangeTeam _ZN4Game15GrindRailDrawer10changeTeamEN3Cmn3Def4TeamE
 #define GrindRailEmit _ZN4Game15GrindRailVersus5emit_EN3Cmn3Def4TeamEj
 #define StateMachineChangeState _ZN2Lp3Utl12StateMachine11changeStateEj
-#define XLinkFadeIfLoopSound _ZN2Lp3Sys5XLink15fadeIfLoopSoundEv
 
 // Flight parameters
 const int BSA_FLIGHT_TIME = 120;
@@ -1440,10 +1438,6 @@ void BulletSuperArtillery::calcBurstFollow() {
     }
 
     if (mBurstFrm >= s_BSA_BURST_DURATION) {
-		Lp::Sys::XLink *xlink = getXLink();
-		if(xlink){
-			XLinkFadeIfLoopSound(xlink);
-		}
         doSleep();
 	}
 }
