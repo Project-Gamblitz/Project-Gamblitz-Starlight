@@ -61,6 +61,7 @@ public:
     sead::Matrix34<float> mXLinkMtx;
     float mBurstRadius;
     int mBurstFrm;
+	int mFlightTime;
 
     Lp::Utl::StateMachine mStateMachine;
 

@@ -57,28 +57,52 @@ namespace Flexlion{
 		mSpawnY = 3000.0f;  // safe default
 		mSpawnYCaptured = false;
         for(int i = 0; i < 10; i++){
-            bullets[i] = NULL;
+			bullets[i][0] = NULL;
+			bullets[i][1] = NULL;
+			mActiveSlot[i] = -1;
             mTankRootBoneIdx[i] = -1;
             mAimValid[i] = false;
 			mWasAHeld[i] = false;
 			mMapOpen[i] = false;
         }
     }
+	int InkstrikeMgr::pickFreeSlot(int playerId) {
+    // Prefer an inactive slot
+    for(int slot = 0; slot < 2; slot++){
+        if(bullets[playerId][slot] != NULL && !bullets[playerId][slot]->isActive()){
+            return slot;
+        }
+    }
+    // Both active — shouldn't happen in normal play, but fall back to slot 0
+    return 0;
+	}
+	
+	BulletSuperArtillery *InkstrikeMgr::getActiveBullet(int playerId) {
+		if(mActiveSlot[playerId] < 0) return NULL;
+		return bullets[playerId][mActiveSlot[playerId]];
+	}
+	
     void InkstrikeMgr::informShotInkstrike(Game::Player *player, sead::Vector3<float> pos, sead::Vector3<float> dest, int paintgamefrm){
-        if(bullets[player->mIndex] != NULL && !bullets[player->mIndex]->mFlightActive){
+		int id = player->mIndex;
+		if(mActiveSlot[id] < 0) return;
+		BulletSuperArtillery *b = bullets[id][mActiveSlot[id]];
+        if(b != NULL && !b->mFlightActive){
             // BSA is already active from prepare(), transition it to flight
-            bullets[player->mIndex]->launch(pos, dest, paintgamefrm, mMatchEnding);
-            isAppliedWeapon[player->mIndex] = 0;
+            b->launch(pos, dest, paintgamefrm, mMatchEnding);
+			isAppliedWeapon[id] = 0;
         }
     }
     void InkstrikeMgr::onCalc(){
         if(Game::MainMgr::sInstance == NULL or !Utils::isSceneLoaded()){
             if(!isBulletDeinit){
-                for(int i = 0; i < 10; i++){
-                    if(bullets[i] != NULL){
-                        bullets[i]->reset();
-                    }
-                }
+				for(int i = 0; i < 10; i++){
+					for(int slot = 0; slot < 2; slot++){
+						if(bullets[i][slot] != NULL){
+							bullets[i][slot]->reset();
+						}
+					}
+					mActiveSlot[i] = -1;
+				}
                 resetBSAStatics();
                 isBulletDeinit = 1;
 				mMatchEnding = false;
@@ -94,17 +118,25 @@ namespace Flexlion{
         if(player->isInSpecial() and player->mSpecialWeaponId == TORNADO_SPECIAL_ID and playerState[id] == TornadoState::cNone){
             playerState[id] = TornadoState::cAim;
             isAppliedWeapon[id] = 0;
+			mRemoteShotPending[id] = false;  // clear stale flag from previous activation
+			// Pick a free BSA slot for this new activation
+			mActiveSlot[id] = pickFreeSlot(id);
             // Activate BSA so xlink cState_Wait effects play during aiming
-            if(bullets[id] != NULL && !bullets[id]->isActive()){
-                bullets[id]->prepare(player);
+            if(bullets[id][mActiveSlot[id]] != NULL && !bullets[id][mActiveSlot[id]]->isActive()){
+                bullets[id][mActiveSlot[id]]->prepare(player);
             }
         }
         // Handle remote players: network event received, defer launch through cShootPrepare
         // so the prepare animation plays before the BSA actually launches.
         if(mRemoteShotPending[id] && playerState[id] == TornadoState::cAim){
-            mShootPrepareFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
-            playerState[id] = TornadoState::cShootPrepare;
-            mRemoteShotPending[id] = false;
+			mShootPrepareFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
+			playerState[id] = TornadoState::cShootPrepare;
+			mRemoteShotPending[id] = false;
+			// Mirror local commit — transition BSA to cState_Wait so the
+			// "position confirmed" xlink sound plays on remote consoles too
+			if(mActiveSlot[id] >= 0 && bullets[id][mActiveSlot[id]] != NULL){
+				bullets[id][mActiveSlot[id]]->mStateMachine.changeState(BSAState::cState_Wait);
+			}
         }
     }
     void InkstrikeMgr::playerFirstCalc(Game::Player *player){
@@ -137,16 +169,18 @@ namespace Flexlion{
                 // Player died without choosing a spot or picked up princess cannon or changed weapon in shooting range — cancel special
                 playerState[id] = TornadoState::cNone;
 				mWasAHeld[id] = false;
-                if(bullets[id] != NULL && bullets[id]->isActive()){
-                    bullets[id]->cancel();
-                }
+				mRemoteShotPending[id] = false;
+				if(mActiveSlot[id] >= 0 && bullets[id][mActiveSlot[id]] != NULL && bullets[id][mActiveSlot[id]]->isActive()){
+					bullets[id][mActiveSlot[id]]->cancel();
+				}
+				mActiveSlot[id] = -1;
                 if(isCtrlPerformer){
                     Game::MiniMap *mMap = Utils::getMinimap();
                     if(mMap != NULL) mMap->setVisible(true);
                 }
                 break;
             }
-            if(!player->isInSpecial() || mMatchEnding){
+            if((!player->isInSpecial() || mMatchEnding) && isCtrlPerformer){
 				sead::Vector3<float> autoDest;
 					if(mMatchEnding){
 						// Match ended — use player position.
@@ -184,12 +218,13 @@ namespace Flexlion{
 					}
 				}
 				playerState[id] = TornadoState::cShootPrepare;
-				player->mPlayerInkAction->mNoControlPtr = (u64)bullets[id];
+				player->mPlayerInkAction->mNoControlPtr = (u64)bullets[id][mActiveSlot[id]];
 				player->resetPaintGauge(0, 0, 0, 0);
 				Prot::ObfStore(&player->mSpecialLeftFrame, 0);
 				informPerformSpecial(player);
 				mWasAHeld[id] = false;
-				if(bullets[id] != NULL) bullets[id]->mStateMachine.changeState(BSAState::cState_Wait);
+				if(mActiveSlot[id] >= 0 && bullets[id][mActiveSlot[id]] != NULL) 
+						bullets[id][mActiveSlot[id]]->mStateMachine.changeState(BSAState::cState_Wait);
 				if(isCtrlPerformer){
 					Game::MiniMap *mMap = Utils::getMinimap();
 					if(mMap != NULL){
@@ -280,11 +315,12 @@ namespace Flexlion{
 					mPendingDest[id] = miniMapAt;
 					mShootPrepareFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
 					playerState[id] = TornadoState::cShootPrepare;
-					player->mPlayerInkAction->mNoControlPtr = (u64)bullets[id];
+					player->mPlayerInkAction->mNoControlPtr = (u64)bullets[id][mActiveSlot[id]];
 					player->resetPaintGauge(0, 0, 0, 0);
 					Prot::ObfStore(&player->mSpecialLeftFrame, 0);
 					informPerformSpecial(player);
-					if(bullets[id] != NULL) bullets[id]->mStateMachine.changeState(BSAState::cState_Wait);
+					if(mActiveSlot[id] >= 0 && bullets[id][mActiveSlot[id]] != NULL) 
+						bullets[id][mActiveSlot[id]]->mStateMachine.changeState(BSAState::cState_Wait);
 					if(mMap != NULL){
 						mMap->setVisible(false);
 						mMap->fadeAllEffect();
@@ -371,12 +407,14 @@ namespace Flexlion{
             mTankRootBoneIdx[id] = fullModel->searchBone(sead::SafeStringBase<char>::create("tank_root"));
         }
         // Create the BulletSuperArtillery actor for this player
-        bullets[id] = BulletSuperArtillery::create(
-            (Lp::Sys::Actor *)player,
-            mTornadoModel[id],
-            player->mTeam
-        );
-    }
+        for(int slot = 0; slot < 2; slot++){
+			bullets[id][slot] = BulletSuperArtillery::create(
+				(Lp::Sys::Actor *)player,
+				mTornadoModel[id],
+				player->mTeam
+			);
+		}
+	}
     void InkstrikeMgr::playerFourthCalc(Game::Player *player){
         int id = player->mIndex;
         if(mTornadoModel[id] == NULL || mTornadoMonitorModel[id] == NULL || player->mPlayerCustomMgr == NULL){

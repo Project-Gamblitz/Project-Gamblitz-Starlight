@@ -217,6 +217,7 @@ void BulletSuperArtillery::prepare(Game::Player *sender) {
     mHasBurst = false;
     mBurstRadius = 0.0f;
     mBurstFrm = 0;
+	mFlightTime = BSA_FLIGHT_TIME;
 
     // Set xlink matrix to player position so OnActivate sound plays there
     mXLinkMtx = {{
@@ -246,6 +247,7 @@ void BulletSuperArtillery::launch(sead::Vector3<float> src, sead::Vector3<float>
     if (mRot.mY > MATH_PI * 2.0f) mRot.mY -= MATH_PI * 2.0f;
     mFlightActive = true;
     mMatchEnding = forcedByMatchEnd;
+    mFlightTime = (forcedByMatchEnd || (mSender != NULL && !mSender->isAlive())) ? 150 : BSA_FLIGHT_TIME;
 
     // Update xlink root matrix to target position
 //    mXLinkMtx = {{
@@ -277,6 +279,7 @@ void BulletSuperArtillery::reset() {
     mBurstRadius = 0.0f;
     mBurstFrm = 0;
 	mMatchEnding = false;
+	mFlightTime = BSA_FLIGHT_TIME;
 }
 
 void BulletSuperArtillery::eatBombs(float radiusSq, float hitHalfHeight) {
@@ -1131,7 +1134,6 @@ void BulletSuperArtillery::stateEnterPronounce() {
 void BulletSuperArtillery::statePronounce() {
     calcFlight();
     int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mStartFrm;
-    int flightTime = BSA_FLIGHT_TIME;
 	if (elapsed >= 5) {
 		// Update xlink root matrix to target position
 		mXLinkMtx = {{
@@ -1140,7 +1142,7 @@ void BulletSuperArtillery::statePronounce() {
 			0.0f, 0.0f, 1.0f, mTo.mZ
 		}};
 	}
-    if (elapsed >= flightTime) {
+    if (elapsed >= mFlightTime) {
         mStateMachine.changeState(cState_Burst);
     }
 }
@@ -1229,8 +1231,7 @@ void BulletSuperArtillery::calcTankBone() {
 
 void BulletSuperArtillery::calcFlight() {
     int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mStartFrm;
-    int flightTime = (mMatchEnding || (mSender != NULL && mSender->isInTrouble_Dying())) ? 150 : BSA_FLIGHT_TIME;
-    float anim = float(elapsed) / float(flightTime);
+    float anim = float(elapsed) / float(mFlightTime);
     if (anim > 1.0f) anim = 1.0f;
 
     sead::Vector3<float> respos;

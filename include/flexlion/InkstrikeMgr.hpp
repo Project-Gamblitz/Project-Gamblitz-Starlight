@@ -34,7 +34,10 @@ namespace Flexlion{
         int mShootPrepareFrm[10];
         int mShootFrm[10];
         sead::Vector3<float> mPendingDest[10];
-        BulletSuperArtillery *bullets[10];
+        BulletSuperArtillery *bullets[10][2];
+		int pickFreeSlot(int playerId);
+		BulletSuperArtillery *getActiveBullet(int playerId);
+		int mActiveSlot[10];
         bool mAimValid[10];
 		bool mWasAHeld[10];
 		bool mMapOpen[10];

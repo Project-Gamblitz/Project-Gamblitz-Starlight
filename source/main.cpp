@@ -1012,18 +1012,26 @@ void kingSquidAnimSetControllerHook(Game::AnimSetController *anim, gsys::Partial
 	kingsquid->mKingSquidAnimCtrl->setMatSlot(1);
 	kingsquid->mKingSquidAnimCtrl->load();
 	kingsquid->mKingSquidAnimCtrl->setPartialSkeletalAnm(cool);
-}bool isSleepingAllHook(Game::BulletMgr *mgr){
+}
+
+bool isSleepingAllHook(Game::BulletMgr *mgr){
     if(mgr == NULL) return true;
     if(tornadoMgr != NULL){
         tornadoMgr->mMatchEnding = true;
         for(int i = 0; i < 10; i++){
-            Flexlion::BulletSuperArtillery *bsa = tornadoMgr->bullets[i];
-            if(bsa != NULL && bsa->isActive())
-                return false;
+            // Check if any BSA slot is still active
+            for(int slot = 0; slot < 2; slot++){
+                Flexlion::BulletSuperArtillery *bsa = tornadoMgr->bullets[i][slot];
+                if(bsa != NULL && bsa->isActive()){
+                    return false;
+                }
+            }
+            // Also check if player is still in aim/shoot states
             if(tornadoMgr->playerState[i] == Flexlion::TornadoState::cAim ||
                tornadoMgr->playerState[i] == Flexlion::TornadoState::cShootPrepare ||
-               tornadoMgr->playerState[i] == Flexlion::TornadoState::cShoot)
+               tornadoMgr->playerState[i] == Flexlion::TornadoState::cShoot){
                 return false;
+            }
         }
     }
     return isSleepingAllOrig(mgr);
@@ -1389,7 +1397,7 @@ void updateCursorEffectHook(Game::MiniMap *miniMap) {
 	*(u32*)(self + 3784) = 0;
 
 	if(!laserValid) {
-		Flexlion::BulletSuperArtillery *bsa = tornadoMgr->bullets[player->mIndex];
+		Flexlion::BulletSuperArtillery *bsa = tornadoMgr->getActiveBullet(player->mIndex);
 		Lp::Sys::XLink *xlink = (bsa != NULL) ? bsa->getXLink() : NULL;
 		xlink2::Handle handle;
 		if(xlink != NULL) xlink->searchAndEmitWrap("Icon", false, &handle);
@@ -1407,7 +1415,7 @@ void updateCursorEffectHook(Game::MiniMap *miniMap) {
 		}
 	}
 	if(laserValid) {
-		Flexlion::BulletSuperArtillery *bsa = tornadoMgr->bullets[player->mIndex];
+		Flexlion::BulletSuperArtillery *bsa = tornadoMgr->getActiveBullet(player->mIndex);
 		if(bsa != NULL) {
 			const float halfCanvas = 360.0f;
 			float halfFovyRad = tornadoMgr->camerafovy * 0.5f * MATH_PI / 180.0f;
@@ -1437,7 +1445,7 @@ sead::Vector3<float> inkstrikeBombVelHook(Game::PlayerInkAction *inkAction){
 }
 
 void inkstrikeShotHook(Game::BulletSpSuperBall *ball, Game::Player *sender, int senderId, int senderId2, sead::Vector3<float> *startpos, Game::SuperBallShotArg2 *arg2, int poop){
-	Flexlion::BulletSuperArtillery *bullet = tornadoMgr->bullets[sender->mIndex];
+	Flexlion::BulletSuperArtillery *bullet = tornadoMgr->getActiveBullet(sender->mIndex);
 	if(bullet and tornadoMgr->isShot) *startpos = bullet->mPos;
 	ball->shot(sender, senderId, senderId2, startpos, arg2, poop);
 }
