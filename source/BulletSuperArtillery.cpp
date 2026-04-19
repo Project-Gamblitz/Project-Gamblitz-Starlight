@@ -19,12 +19,17 @@ extern "C" {
     // VTV symbols for manual F32PropertyDefinition construction
     extern u8 _ZTVN6xlink221F32PropertyDefinitionE[];
     extern u8 _ZTVN4sead22BufferedSafeStringBaseIcEE[];
+    extern u8 _ZTVN4sead14SafeStringBaseIcEE[];
 	extern bool gSpecialWeaponPaint;
     void _ZN4Game13InkRailVersus12changeColor_EN3Cmn3Def4TeamE(void *self, int team);
     void _ZN4Game13InkRailVersus16emitAndPlayRail_Ev(void *self);
     void _ZN4Game15GrindRailDrawer10changeTeamEN3Cmn3Def4TeamE(void *drawer, int team);
 	void _ZN4Game15GrindRailVersus5emit_EN3Cmn3Def4TeamEj(void *self, int team, unsigned int gameFrame);
     void _ZN2Lp3Utl12StateMachine11changeStateEj(void *stateMachine, unsigned int newState);
+    void _ZN4Game9Gachihoko13informDamage_EiN3Cmn3Def3DMGENS2_4TeamE(
+        void *gachihoko, int attackerIdx, unsigned int damage, int team);
+    void _ZN4Game12SpongeVersus13informDamage_EN3Cmn3Def3DMGENS2_4TeamEb(
+        void *sponge, unsigned int damage, int team, bool forceAlreadyActivated);
 }
 #define CmnActorCtor _ZN3Cmn5ActorC2Ev
 #define EnumPropDefCtor _ZN6xlink222EnumPropertyDefinitionC2EPKcb
@@ -36,6 +41,8 @@ extern "C" {
 #define GrindRailChangeTeam _ZN4Game15GrindRailDrawer10changeTeamEN3Cmn3Def4TeamE
 #define GrindRailEmit _ZN4Game15GrindRailVersus5emit_EN3Cmn3Def4TeamEj
 #define StateMachineChangeState _ZN2Lp3Utl12StateMachine11changeStateEj
+#define GachihokoInformDamage _ZN4Game9Gachihoko13informDamage_EiN3Cmn3Def3DMGENS2_4TeamE
+#define SpongeVersusInformDamage _ZN4Game12SpongeVersus13informDamage_EN3Cmn3Def3DMGENS2_4TeamEb
 
 // Flight parameters
 const int BSA_FLIGHT_TIME = 120;
@@ -706,30 +713,13 @@ static void damageGachihokoInCylinder(
         float odz = pos[2] - center.mZ;
         float ody = pos[1] - center.mY;
         if (odx*odx + odz*odz < hitRadiusSq && ody > -hitHalfHeight && ody < hitHalfHeight) {
-            int directionalDmg = (senderTeamInt == 1) ? -dmg : dmg;
-            int *accum = (int *)((u8 *)obj + 0x5DC);
-            int newAccum = *accum + directionalDmg;
-            if (newAccum > 99999) newAccum = 99999;
-            if (newAccum < -99999) newAccum = -99999;
-            *accum = newAccum;
-
-            // Store attacker
-            *(int *)((u8 *)obj + 0x5E0) = attackerIdx;
-			
-			// Hit animation flag
-            *(u32 *)((u8 *)obj + 0x4F8) |= 2;
-			
-//            // Per-player hit timer for visual flash
-//            if (attackerIdx >= 0 && attackerIdx < 10) {
-//                *(int *)((u8 *)obj + 0x295C + attackerIdx * 4) = 10;
-//            }
-
-            // Burst only when HP threshold exceeded
-            int absAccum = newAccum < 0 ? -newAccum : newAccum;
-            if (absAccum >= 10000) {
-                *(u8 *)((u8 *)obj + 0x5E4) = 1;
-                *(int *)((u8 *)obj + 0x5E8) = attackerIdx;
-            }
+            // Call the game's own informDamage_ — this handles:
+            //  1. Team-directional damage (team=1 negates dmg)
+            //  2. Accumulation + clamping at ±99999
+            //  3. Break-barrier flag at threshold
+            //  4. Hit pulse animation (writes amplitude to +0x688, resets phase at +0x68C)
+            //     with cooldown gating so pulses don't stack too fast
+            GachihokoInformDamage(obj, attackerIdx, (unsigned int)dmg, senderTeamInt);
         }
     }
 }
@@ -849,33 +839,21 @@ static void damageSpongesInCylinder(
     int senderTeamInt, float hitRadiusSq, float hitHalfHeight,
     sead::Vector3<float> &center, int dmg, int burstFrm)
 {
-    if (burstFrm % 20 != 0) return;
+    if (burstFrm % 20 != 0) return;  // same rate-limit as before
     
     for (Cmn::Actor *obj = (Cmn::Actor *)iterNode->derivedFrontActiveActor();
          obj != NULL;
          obj = (Cmn::Actor *)iterNode->derivedNextActiveActor(obj))
     {
-        int spongeTeam = *(int *)((u8 *)obj + 0x5F0);
-
         float *pos = (float *)((u8 *)obj + 0x39C);
         float odx = pos[0] - center.mX;
         float odz = pos[2] - center.mZ;
         float ody = pos[1] - center.mY;
-
+        
         if (odx*odx + odz*odz < hitRadiusSq && ody > -hitHalfHeight && ody < hitHalfHeight) {
-            float *fill = (float *)((u8 *)obj + 0x610);
-
-            // Read max fill from params block
-            float maxFill = readSpongeMaxFill(obj);
-
-            if (spongeTeam == senderTeamInt) {
-                *fill += (float)dmg / 500.0f;
-                if (*fill > maxFill) *fill = maxFill;
-            } else {
-                *fill -= (float)dmg / 500.0f;
-                if (*fill < 1.0f) *fill = 1.0f;
-            }
-            *(u32 *)((u8 *)obj + 0x4F8) |= 2;
+            // Call the game's own informDamage_ — handles fill math, team color/LED change,
+            // "Damage"/"Thick" animations, "Max" sound, hit flags automatically
+            SpongeVersusInformDamage(obj, (unsigned int)dmg, senderTeamInt, false);
         }
     }
 }
@@ -1013,7 +991,7 @@ void BulletSuperArtillery::vtSecondCalc(BulletSuperArtillery *self) {
 	
 	// SpongeVersus — float fill, team-directional
 	damageSpongesInCylinder(Game::SpongeVersus::getClassIterNodeStatic(),
-		senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg * 5, self->mBurstFrm);
+		senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg * 10, self->mBurstFrm);
 		
 	// InkRailVersus — activate if inactive, heal friendly / drain enemy if active
 	postRailsInCylinder(Game::InkRailVersus::getClassIterNodeStatic(),

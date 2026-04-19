@@ -799,6 +799,9 @@ _ZN3Cmn5KDUtl4AttT18normalize_YX_DebugEPKci = 0x157E3C - 0x2EBE000;
 _ZN3Cmn5KDUtl4AttT18normalize_YZ_DebugEPKci = 0x157A54 - 0x2EBE000;
 _ZN3Cmn5KDUtl4Math12calcAngleAbsERKN4sead7Vector3IfEES6_ = 0x15A100 - 0x2EBE000;
 _ZN2Lp3Sys5XLink21setLocalPropertyValueEjf = 0x19928E8 - 0x2EBE000;
+_ZNK2Lp3Sys5XLink19searchActionSlotIdxERKN4sead14SafeStringBaseIcEE = 0x1992A54 - 0x2EBE000;
+_ZN2Lp3Sys5XLink14uniqSlotReset_EPNS0_19XLinkActionSlotBaseE = 0x19922FC - 0x2EBE000;
+_ZN2Lp3Sys5XLink13changeAction_EPKcPKNS0_19XLinkActionSlotBaseE = 0x1992244 - 0x2EBE000;
 _ZN4Game3Cmp14SearchableBase6searchEv = 0x625074 - 0x2EBE000;
 _ZNK4Game3Cmp14SearchableBase8isLockOnEv = 0x624BFC - 0x2EBE000;
 _ZNK4Game3Cmp16SearchablePlayer12getTargetPosEv = 0x628804 - 0x2EBE000;
@@ -923,6 +926,8 @@ _ZN4Game13InkRailVersus16emitAndPlayRail_Ev = 0xE4D44C - 0x2EBE000;
 _ZN4Game15GrindRailDrawer10changeTeamEN3Cmn3Def4TeamE = 0xB1F6EC - 0x2EBE000;
 _ZN4Game15GrindRailVersus5emit_EN3Cmn3Def4TeamEj = 0xE43798 - 0x2EBE000;
 _ZN2Lp3Utl12StateMachine11changeStateEj = 0x19F8578 - 0x2EBE000;
+_ZN4Game9Gachihoko13informDamage_EiN3Cmn3Def3DMGENS2_4TeamE = 0xE30A00 - 0x2EBE000;
+_ZN4Game12SpongeVersus13informDamage_EN3Cmn3Def3DMGENS2_4TeamEb = 0xE775A8 - 0x2EBE000;
 
 /* Player bullet damage — the real HP damage function used by bullet collision system */
 _PlayerApplyBulletDamage = 0x1028DCC - 0x2EBE000;
