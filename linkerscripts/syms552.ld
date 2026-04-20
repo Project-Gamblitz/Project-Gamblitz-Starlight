@@ -898,7 +898,6 @@ _ZN4Game24BulletUmbrellaCanopyBase22getClassIterNodeStaticEv = 0x4F0A1C - 0x2EBE
 _ZN4Game12SpongeVersus22getClassIterNodeStaticEv = 0xC70778 - 0x2EBE000;
 _ZN4Game14BulletBombTako22getClassIterNodeStaticEv = 0x4BA758 - 0x2EBE000;
 _ZN4Game14IidaBombOnline22getClassIterNodeStaticEv = 0x034B64 - 0x2EBE000;
-_ZN4Game8Blowouts22getClassIterNodeStaticEv = 0xBB55A0 - 0x2EBE000;
 _ZN4Game18BulletSpSuperStamp22getClassIterNodeStaticEv = 0x4F0BD4 - 0x2EBE000;
 _ZN4Game15BulletBombChase22getClassIterNodeStaticEv = 0x47BD68 - 0x2EBE000;
 _ZN4Game12BulletShield22getClassIterNodeStaticEv = 0x4F1250 - 0x2EBE000;
@@ -928,6 +927,17 @@ _ZN4Game15GrindRailVersus5emit_EN3Cmn3Def4TeamEj = 0xE43798 - 0x2EBE000;
 _ZN2Lp3Utl12StateMachine11changeStateEj = 0x19F8578 - 0x2EBE000;
 _ZN4Game9Gachihoko13informDamage_EiN3Cmn3Def3DMGENS2_4TeamE = 0xE30A00 - 0x2EBE000;
 _ZN4Game12SpongeVersus13informDamage_EN3Cmn3Def3DMGENS2_4TeamEb = 0xE775A8 - 0x2EBE000;
+_ZN4Game15ScrewLiftOnline22getClassIterNodeStaticEv = 0x347F4 - 0x2EBE000;
+_ZN4Game15ScrewLiftOnline14processDamage_EiN3Cmn3Def4TeamENS2_3DMGEibjRKNS_12DamageReasonE = 0xDA68D4 - 0x2EBE000;
+_ZN4Game8Blowouts22getClassIterNodeStaticEv = 0xBB4FD4 - 0x2EBE000;
+_ZN4Game8Blowouts6damageEN3Cmn3Def3DMGENS2_4TeamEi = 0xBB076C - 0x2EBE000;
+_ZN4Game12BlowoutsOcta22getClassIterNodeStaticEv = 0x9260C4 - 0x2EBE000;
+_ZN4Game14BlowoutsOnline22getClassIterNodeStaticEv = 0x2C25C - 0x2EBE000;
+_ZN4Game14BlowoutsOnline12startUnroll_Ev = 0xD73950 - 0x2EBE000;
+_ZN4Game14BlowoutsOnline14startRollback_Ev = 0xD73A40 - 0x2EBE000;
+_ZN4Game14BlowoutsOnline6reset_Ev = 0xD6F100 - 0x2EBE000;
+_ZN4Game14BlowoutsOnline6damageEPv = 0xD6E354 - 0x2EBE000;
+_ZN4Game32BulletBlowoutsOnlineNearByAttack22getClassIterNodeStaticEv = 0xD76568 - 0x2EBE000;
 
 /* Player bullet damage — the real HP damage function used by bullet collision system */
 _PlayerApplyBulletDamage = 0x1028DCC - 0x2EBE000;

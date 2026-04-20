@@ -1,5 +1,6 @@
 #include "flexlion/InkstrikeMgr.hpp"
 #include "flexlion/BigLaserModeMgr.hpp"
+#include "flexlion/BulletSuperArtillery.hpp"
 const int startflightdelay = 40; // delay from when a point is chosen to when the tornado is actually launched
 const int playerdelay = 60; // 60 frames Shoot_Tornado waiting for the player to transition from tornado cShoot to cNone, matches Splatoon 1 timing
 const float tornadoTankZOffset = -3.0f;
@@ -112,6 +113,14 @@ namespace Flexlion{
             return;
         }
         isBulletDeinit = 0;
+		// Diagnostic: dump all BlowoutsOnline furler state every 2 frames
+//		static int logThrottle = 0;
+//		if (logThrottle++ % 5 == 0) {
+//			char tag[16];
+//			int frame = Game::MainMgr::sInstance->mPaintGameFrame;
+//			snprintf(tag, sizeof(tag), "F%d", frame);
+//			Flexlion::dumpAllFurlers(tag);
+//		}
     }
     void InkstrikeMgr::detectChangeState(Game::Player *player){
         int id = player->mIndex;

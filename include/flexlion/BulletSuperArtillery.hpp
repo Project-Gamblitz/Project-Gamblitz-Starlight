@@ -15,6 +15,9 @@ namespace Game {
 	class BulletBombTako : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
 	class IidaBombOnline : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
 	class Blowouts : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
+	class BlowoutsOcta : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
+	class BlowoutsOnline : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
+	class BulletBlowoutsOnlineNearByAttack : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
 	class BulletShield : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
 	class BulletBombChase : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
 	class BulletSpSuperStamp : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
@@ -30,6 +33,7 @@ namespace Game {
 	class BulletUmbrellaCanopyBase : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
 	class InkRailVersus : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); void emit_(Cmn::Def::Team team, int paintGameFrame, bool skipSound); };
 	class GrindRailVersus : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
+	class ScrewLiftOnline : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
 }
 
 namespace Flexlion {
@@ -127,5 +131,6 @@ public:
 
 void initBSAVtable(BulletSuperArtillery *bsa);
 void resetBSAStatics();
+void dumpAllFurlers(const char *tag);
 
 } // namespace Flexlion

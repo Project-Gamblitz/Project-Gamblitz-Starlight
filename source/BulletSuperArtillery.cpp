@@ -30,7 +30,19 @@ extern "C" {
         void *gachihoko, int attackerIdx, unsigned int damage, int team);
     void _ZN4Game12SpongeVersus13informDamage_EN3Cmn3Def3DMGENS2_4TeamEb(
         void *sponge, unsigned int damage, int team, bool forceAlreadyActivated);
-}
+	int* _ZN4Game15ScrewLiftOnline14processDamage_EiN3Cmn3Def4TeamENS2_3DMGEibjRKNS_12DamageReasonE(
+        void *screw,           // a1
+        int attackerIdx,       // a2
+        int team,              // a3
+        int dmg,               // a4
+        int direction,         // a5   (+1 = clockwise, -1 = counter)
+        bool overMaxFlag,      // a6   (true if dmg was clamped to 99999)
+        unsigned int gameFrame,// a7
+        void *damageReason);   // a8   (u16 weaponId + u8 classTypePacked + ...)
+    float _ZN4Game8Blowouts6damageEN3Cmn3Def3DMGENS2_4TeamEi(
+        void *blowout, int dmg, int team, int attackerIdx);
+    void _ZN4Game14BlowoutsOnline6damageEPv(void *furler, void *damageInfo);
+	}
 #define CmnActorCtor _ZN3Cmn5ActorC2Ev
 #define EnumPropDefCtor _ZN6xlink222EnumPropertyDefinitionC2EPKcb
 #define EnumPropDefSetEntryBuf _ZN6xlink222EnumPropertyDefinition12setEntryBuf_EiPNS0_5EntryE
@@ -43,6 +55,12 @@ extern "C" {
 #define StateMachineChangeState _ZN2Lp3Utl12StateMachine11changeStateEj
 #define GachihokoInformDamage _ZN4Game9Gachihoko13informDamage_EiN3Cmn3Def3DMGENS2_4TeamE
 #define SpongeVersusInformDamage _ZN4Game12SpongeVersus13informDamage_EN3Cmn3Def3DMGENS2_4TeamEb
+#define ScrewLiftProcessDamage _ZN4Game15ScrewLiftOnline14processDamage_EiN3Cmn3Def4TeamENS2_3DMGEibjRKNS_12DamageReasonE
+#define BlowoutsDamage _ZN4Game8Blowouts6damageEN3Cmn3Def3DMGENS2_4TeamEi
+#define BlowoutsOnlineDamage _ZN4Game14BlowoutsOnline6damageEPv
+
+
+
 
 // Flight parameters
 const int BSA_FLIGHT_TIME = 120;
@@ -724,6 +742,60 @@ static void damageGachihokoInCylinder(
     }
 }
 
+// for Propellers
+struct MinimalDamageReason {
+    u16 mWeaponId;       // +0x00 — reads via *a8
+    u8  mClassTypeByte;  // +0x02 — bits used: low 6 bits sign-extended (<<26 >>26)
+    u8  _pad3;           // +0x03
+    u32 _pad4;           // +0x04
+    // Total 8 bytes should be plenty; function only reads +0 and +2
+};
+
+static void damageScrewLiftsInCylinder(
+    Lp::Sys::ActorClassIterNodeBase *iterNode,
+    int senderTeamInt, int attackerIdx,
+    float hitRadiusSq, float hitHalfHeight,
+    sead::Vector3<float> &center, int dmg, int gameFrame)
+{
+    // Build a DamageReason that won't trigger special cooldown paths.
+    // mClassType > 2 skips the weapon-kind lookup entirely.
+    MinimalDamageReason reason;
+    reason.mWeaponId = 0;
+    reason.mClassTypeByte = 0x3F;  // -1 after sign extension of low 6 bits -> classType != 1..2
+    reason._pad3 = 0;
+    reason._pad4 = 0;
+    
+    for (Cmn::Actor *obj = (Cmn::Actor *)iterNode->derivedFrontActiveActor();
+         obj != NULL;
+         obj = (Cmn::Actor *)iterNode->derivedNextActiveActor(obj))
+    {
+        float *pos = (float *)((u8 *)obj + 0x39C);
+        float odx = pos[0] - center.mX;
+        float odz = pos[2] - center.mZ;
+        float ody = pos[1] - center.mY;
+        
+        if (odx*odx + odz*odz < hitRadiusSq && ody > -hitHalfHeight && ody < hitHalfHeight) {
+            // Compute spin direction from hit position relative to screw axis.
+            // Screw axis is stored at: *(screw + 0x688) + 0x10 (mat row).
+            // But for simplicity we just force +1 direction — the platform will spin
+            // one way consistently from Inkstrike. If you want direction-based spin,
+            // dot (center - screwPos) with that axis vector.
+            int direction = 1;
+            
+            ScrewLiftProcessDamage(
+                obj,
+                attackerIdx,
+                senderTeamInt,
+                dmg,
+                direction,
+                false,         // overMaxFlag = false unless dmg >= 99999
+                (unsigned)gameFrame,
+                &reason
+            );
+        }
+    }
+}
+
 static void damageBubblesInCylinder(
     Lp::Sys::ActorClassIterNodeBase *iterNode,
     int senderTeamInt, float hitRadiusSq, float hitHalfHeight,
@@ -809,28 +881,97 @@ static void damageBubblesInCylinder(
 //    }
 //}
 
+
+// ============================================================
+// DIAGNOSTIC: Full-state logger for BlowoutsOnline actors
+// ============================================================
+void dumpAllFurlers(const char *tag) {
+    static int logFrame = 0;
+    logFrame++;
+    
+    auto iterNode = Game::BlowoutsOnline::getClassIterNodeStatic();
+    for (Cmn::Actor *obj = (Cmn::Actor *)iterNode->derivedFrontActiveActor();
+         obj != NULL;
+         obj = (Cmn::Actor *)iterNode->derivedNextActiveActor(obj))
+    {
+        u8 *base = (u8 *)obj;
+        int state    = *(int *)(base + 0x5A8);
+        float fill   = *(float *)(base + 0x5E8);
+        float vel    = *(float *)(base + 0x5EC);
+        u32 team328  = *(u32 *)(base + 0x328);
+        u8  g70      = *(u8  *)(base + 0xB70);
+        int tStart70 = *(int *)(base + 0xB74);
+        int tEnd70   = *(int *)(base + 0xB78);
+        u32 team7C   = *(u32 *)(base + 0xB7C);
+        u8  g80      = *(u8  *)(base + 0xB80);
+        int tStart80 = *(int *)(base + 0xB84);
+        int tEnd80   = *(int *)(base + 0xB88);
+        int b8C      = *(int *)(base + 0xB8C);
+        int b94      = *(int *)(base + 0xB94);
+        u32 pend98   = *(u32 *)(base + 0xB98);
+        int b9C      = *(int *)(base + 0xB9C);
+        int atkA8    = *(int *)(base + 0xBA8);
+        u8  gB0      = *(u8  *)(base + 0xBB0);
+        u8  hit658   = *(u8  *)(base + 0x658);
+        
+        // Log everything that's not pristine-idle
+        bool interesting = (state != 0) || (fill > 12.6f) || g70 || g80 || pend98 != 0xFFFFFFFF || atkA8 != -1 || b9C != -1 || b8C != -1;
+        if (!interesting) continue;
+        
+        FsLogger::LogFormatDefaultDirect(
+            "[%s/%d] %p s=%d fill=%.1f vel=%.2f team=%u | "
+            "g70=%u [%d->%d] t7C=%u | g80=%u [%d->%d] b8C=%d b94=%d | "
+            "pend98=0x%X b9C=%d atkA8=%d gBB0=%u | 658=%u\n",
+            tag, logFrame, obj, state, fill, vel, team328,
+            g70, tStart70, tEnd70, team7C,
+            g80, tStart80, tEnd80, b8C, b94,
+            pend98, b9C, atkA8, gB0,
+            hit658);
+    }
+}
+
 static void damageBlowoutsInCylinder(
     Lp::Sys::ActorClassIterNodeBase *iterNode,
     int senderTeamInt, float hitRadiusSq, float hitHalfHeight,
-    sead::Vector3<float> &center, int dmg, int attackerIdx)
+    sead::Vector3<float> &center, int dmg, int attackerIdx,
+    const char *className)
 {
     for (Cmn::Actor *obj = (Cmn::Actor *)iterNode->derivedFrontActiveActor();
          obj != NULL;
          obj = (Cmn::Actor *)iterNode->derivedNextActiveActor(obj))
     {
-        float *pos = (float *)((u8 *)obj + 0x39C);
-        float odx = pos[0] - center.mX;
-        float odz = pos[2] - center.mZ;
-        float ody = pos[1] - center.mY;
-
-        if (odx*odx + odz*odz < hitRadiusSq && ody > -hitHalfHeight && ody < hitHalfHeight) {
-            float dirDmg = (senderTeamInt == 1) ? -(float)dmg : (float)dmg;
-            // Approximate: assume threshold ~1000, so increment = (dmg/1000)*10
-            float *fill = (float *)((u8 *)obj + 0x588);
-            *fill += (dirDmg / 1000.0f) * 10.0f;
-            *(u8 *)((u8 *)obj + 0x658) = 1;  // hit flag
-            *(int *)((u8 *)obj + 0x950) = attackerIdx;
+        // Inkfurlers extend outward from the wall-mounted post. The post position
+        // at +0x39C is near the wall — often missed by Inkstrike on the floor.
+        // The game computes the unroll-hitbox bbox each frame into +0x5F8..+0x60C:
+        //   +0x5F8..+0x600 = bbox near corner (post-side)
+        //   +0x604..+0x60C = bbox far corner (unroll-tip-side)
+        // In state 0 (rest) both corners are ≈ the post position.
+        // In states 1/2/3 the far corner is the active hitbox center.
+        // We test both corners — if either is in range, we hit.
+        u8 *base = (u8 *)obj;
+        float *nearPos = (float *)(base + 0x5F8);
+        float *farPos  = (float *)(base + 0x604);
+        
+        bool inRange = false;
+        for (int i = 0; i < 2; i++) {
+            float *p = (i == 0) ? nearPos : farPos;
+            float odx = p[0] - center.mX;
+            float odz = p[2] - center.mZ;
+            float ody = p[1] - center.mY;
+            if (odx*odx + odz*odz >= hitRadiusSq) continue;
+            if (ody <= -hitHalfHeight || ody >= hitHalfHeight) continue;
+            inRange = true;
+            break;
         }
+        if (!inRange) continue;
+        
+        // NOTE: no friendly-skip — friendly damage extends unrolled duration
+        u8 dmgInfo[56] = {0};
+        *(u32 *)(dmgInfo + 8)  = (u32)attackerIdx;
+        *(u32 *)(dmgInfo + 12) = (u32)dmg;
+        *(u32 *)(dmgInfo + 48) = (u32)senderTeamInt;
+        
+        BlowoutsOnlineDamage(obj, dmgInfo);
     }
 }
 
@@ -984,10 +1125,10 @@ void BulletSuperArtillery::vtSecondCalc(BulletSuperArtillery *self) {
 	// Brella canopy — hitBarrier (reaction 11), game handles damage internally
 	self->eatActorClass(Game::BulletUmbrellaCanopyBase::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, 11);
 	
-// commented out because it crashes vvvvv - delete me when you fix it
-	//// Blowouts (rotating targets) — float damage
-	//damageBlowoutsInCylinder(Game::Blowouts::getClassIterNodeStatic(),
-	//	senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg, self->mSender->mIndex);
+	// BlowoutsOnline
+	damageBlowoutsInCylinder(Game::BlowoutsOnline::getClassIterNodeStatic(),
+		senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg, self->mSender->mIndex,
+		"Online");
 	
 	// SpongeVersus — float fill, team-directional
 	damageSpongesInCylinder(Game::SpongeVersus::getClassIterNodeStatic(),
@@ -1004,6 +1145,11 @@ void BulletSuperArtillery::vtSecondCalc(BulletSuperArtillery *self) {
 		senderTeamInt, self->mSender->mIndex,
 		hitRadiusSq, hitHalfHeight, self->mTo, dmg,
 		0x6F0);
+	
+	// Propellers
+	damageScrewLiftsInCylinder(Game::ScrewLiftOnline::getClassIterNodeStatic(),
+		senderTeamInt, self->mSender->mIndex, hitRadiusSq, hitHalfHeight,
+		self->mTo, dmg, Game::MainMgr::sInstance->mPaintGameFrame);
 	
 	// Bomb projectiles
     self->eatBombs(hitRadiusSq, hitHalfHeight);
@@ -1228,7 +1374,7 @@ void BulletSuperArtillery::calcFlight() {
 
 void BulletSuperArtillery::doBurst() {
     if (mSender == NULL) return;
-	resetActivatedRails();
+    resetActivatedRails();
     // Set BulletDistance = distance from controlled player (listener proxy) to burst pos, capped at 128
     Lp::Sys::XLink *xlink = getXLink();
     if (xlink) {
