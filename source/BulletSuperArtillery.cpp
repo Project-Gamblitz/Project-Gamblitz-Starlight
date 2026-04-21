@@ -42,6 +42,16 @@ extern "C" {
     float _ZN4Game8Blowouts6damageEN3Cmn3Def3DMGENS2_4TeamEi(
         void *blowout, int dmg, int team, int attackerIdx);
     void _ZN4Game14BlowoutsOnline6damageEPv(void *furler, void *damageInfo);
+	void _ZN4Game14IidaBombOnline6damageEPv(void *bomb, void *damageInfo);
+	void _ZN4Game15SwitchWeakPoint6damageEPv(void *weakPoint, void *damageInfo);
+	void _ZN4Game18DendenSwitchVersus9onDamage_EN3Cmn3Def3DMGENS2_4TeamEj(
+        void *denden, int damage, int team, unsigned int gameFrame);
+    void _ZN4Game11SwitchShock9onDamage_EN3Cmn3Def3DMGE(
+        void *shock, int damage);
+    void _ZN4Game12GeyserVersus6damageEPv(void *geyser, void *damageInfo);
+	void _ZN4Game13AirBallOnline6damageEPv(void *airball, void *damageInfo);
+	void _ZN4Game19AttractTargetVersus13startAttract_EPNS_6PlayerE(
+        void *attractTarget, Game::Player *player);
 	}
 #define CmnActorCtor _ZN3Cmn5ActorC2Ev
 #define EnumPropDefCtor _ZN6xlink222EnumPropertyDefinitionC2EPKcb
@@ -58,9 +68,13 @@ extern "C" {
 #define ScrewLiftProcessDamage _ZN4Game15ScrewLiftOnline14processDamage_EiN3Cmn3Def4TeamENS2_3DMGEibjRKNS_12DamageReasonE
 #define BlowoutsDamage _ZN4Game8Blowouts6damageEN3Cmn3Def3DMGENS2_4TeamEi
 #define BlowoutsOnlineDamage _ZN4Game14BlowoutsOnline6damageEPv
-
-
-
+#define IidaBombOnlineDamage _ZN4Game14IidaBombOnline6damageEPv
+#define SwitchWeakPointDamage    _ZN4Game15SwitchWeakPoint6damageEPv
+#define DendenSwitchVersusOnDamage  _ZN4Game18DendenSwitchVersus9onDamage_EN3Cmn3Def3DMGENS2_4TeamEj
+#define SwitchShockOnDamage         _ZN4Game11SwitchShock9onDamage_EN3Cmn3Def3DMGE
+#define GeyserVersusDamage _ZN4Game12GeyserVersus6damageEPv
+#define AirBallOnlineDamage _ZN4Game13AirBallOnline6damageEPv
+#define AttractTargetStartAttract _ZN4Game19AttractTargetVersus13startAttract_EPNS_6PlayerE
 
 // Flight parameters
 const int BSA_FLIGHT_TIME = 120;
@@ -206,6 +220,7 @@ BulletSuperArtillery::BulletSuperArtillery() {
     mBurstRadius = 0.0f;
     mBurstFrm = 0;
 	mMatchEnding = false;
+	mDidAttractGrab = false;
 }
 
 // ============================================================
@@ -305,6 +320,7 @@ void BulletSuperArtillery::reset() {
     mBurstFrm = 0;
 	mMatchEnding = false;
 	mFlightTime = BSA_FLIGHT_TIME;
+	mDidAttractGrab = false;
 }
 
 void BulletSuperArtillery::eatBombs(float radiusSq, float hitHalfHeight) {
@@ -882,54 +898,6 @@ static void damageBubblesInCylinder(
 //}
 
 
-// ============================================================
-// DIAGNOSTIC: Full-state logger for BlowoutsOnline actors
-// ============================================================
-void dumpAllFurlers(const char *tag) {
-    static int logFrame = 0;
-    logFrame++;
-    
-    auto iterNode = Game::BlowoutsOnline::getClassIterNodeStatic();
-    for (Cmn::Actor *obj = (Cmn::Actor *)iterNode->derivedFrontActiveActor();
-         obj != NULL;
-         obj = (Cmn::Actor *)iterNode->derivedNextActiveActor(obj))
-    {
-        u8 *base = (u8 *)obj;
-        int state    = *(int *)(base + 0x5A8);
-        float fill   = *(float *)(base + 0x5E8);
-        float vel    = *(float *)(base + 0x5EC);
-        u32 team328  = *(u32 *)(base + 0x328);
-        u8  g70      = *(u8  *)(base + 0xB70);
-        int tStart70 = *(int *)(base + 0xB74);
-        int tEnd70   = *(int *)(base + 0xB78);
-        u32 team7C   = *(u32 *)(base + 0xB7C);
-        u8  g80      = *(u8  *)(base + 0xB80);
-        int tStart80 = *(int *)(base + 0xB84);
-        int tEnd80   = *(int *)(base + 0xB88);
-        int b8C      = *(int *)(base + 0xB8C);
-        int b94      = *(int *)(base + 0xB94);
-        u32 pend98   = *(u32 *)(base + 0xB98);
-        int b9C      = *(int *)(base + 0xB9C);
-        int atkA8    = *(int *)(base + 0xBA8);
-        u8  gB0      = *(u8  *)(base + 0xBB0);
-        u8  hit658   = *(u8  *)(base + 0x658);
-        
-        // Log everything that's not pristine-idle
-        bool interesting = (state != 0) || (fill > 12.6f) || g70 || g80 || pend98 != 0xFFFFFFFF || atkA8 != -1 || b9C != -1 || b8C != -1;
-        if (!interesting) continue;
-        
-        FsLogger::LogFormatDefaultDirect(
-            "[%s/%d] %p s=%d fill=%.1f vel=%.2f team=%u | "
-            "g70=%u [%d->%d] t7C=%u | g80=%u [%d->%d] b8C=%d b94=%d | "
-            "pend98=0x%X b9C=%d atkA8=%d gBB0=%u | 658=%u\n",
-            tag, logFrame, obj, state, fill, vel, team328,
-            g70, tStart70, tEnd70, team7C,
-            g80, tStart80, tEnd80, b8C, b94,
-            pend98, b9C, atkA8, gB0,
-            hit658);
-    }
-}
-
 static void damageBlowoutsInCylinder(
     Lp::Sys::ActorClassIterNodeBase *iterNode,
     int senderTeamInt, float hitRadiusSq, float hitHalfHeight,
@@ -975,6 +943,97 @@ static void damageBlowoutsInCylinder(
     }
 }
 
+static void damageAirBallsInCylinder(
+    Lp::Sys::ActorClassIterNodeBase *iterNode,
+    int senderTeamInt, float hitRadiusSq, float hitHalfHeight,
+    sead::Vector3<float> &center, int dmg, int attackerIdx)
+{
+    for (Cmn::Actor *obj = (Cmn::Actor *)iterNode->derivedFrontActiveActor();
+         obj != NULL;
+         obj = (Cmn::Actor *)iterNode->derivedNextActiveActor(obj))
+    {
+        float *pos = (float *)((u8 *)obj + 0x39C);
+        float odx = pos[0] - center.mX;
+        float odz = pos[2] - center.mZ;
+        float ody = pos[1] - center.mY;
+        if (odx*odx + odz*odz >= hitRadiusSq) continue;
+        if (ody <= -hitHalfHeight || ody >= hitHalfHeight) continue;
+
+        u8 dmgInfo[56] = {0};
+        *(u32 *)(dmgInfo + 8)  = (u32)attackerIdx;
+        *(u32 *)(dmgInfo + 12) = (u32)dmg;
+        // dmgInfo[+16] = 0 (zero-init) — matches fresh actor's gate field
+        *(u32 *)(dmgInfo + 48) = (u32)senderTeamInt;
+
+        AirBallOnlineDamage(obj, dmgInfo);
+    }
+}
+
+static void attractGrapplersInCylinder(
+    bool *didGrabFlag,   // per-BSA latch
+    Lp::Sys::ActorClassIterNodeBase *iterNode,
+    float hitRadiusSq, float hitHalfHeight,
+    sead::Vector3<float> &center, Game::Player *sender)
+{
+    if (*didGrabFlag) return;   // already grabbed this BSA lifetime; skip entirely
+
+    for (Cmn::Actor *obj = (Cmn::Actor *)iterNode->derivedFrontActiveActor();
+         obj != NULL;
+         obj = (Cmn::Actor *)iterNode->derivedNextActiveActor(obj))
+    {
+        float *pos = (float *)((u8 *)obj + 0x39C);
+        float odx = pos[0] - center.mX;
+        float odz = pos[2] - center.mZ;
+        float ody = pos[1] - center.mY;
+        if (odx*odx + odz*odz >= hitRadiusSq) continue;
+        if (ody <= -hitHalfHeight || ody >= hitHalfHeight) continue;
+
+        AttractTargetStartAttract(obj, sender);
+        *didGrabFlag = true;     // latch it — no more grabs this BSA
+        return;
+    }
+}
+
+static void damageDendenSwitchesInCylinder(
+    Lp::Sys::ActorClassIterNodeBase *iterNode,
+    int senderTeamInt, float hitRadiusSq, float hitHalfHeight,
+    sead::Vector3<float> &center, int dmg, unsigned int gameFrame)
+{
+    for (Cmn::Actor *obj = (Cmn::Actor *)iterNode->derivedFrontActiveActor();
+         obj != NULL;
+         obj = (Cmn::Actor *)iterNode->derivedNextActiveActor(obj))
+    {
+        float *pos = (float *)((u8 *)obj + 0x39C);
+        float odx = pos[0] - center.mX;
+        float odz = pos[2] - center.mZ;
+        float ody = pos[1] - center.mY;
+        if (odx*odx + odz*odz >= hitRadiusSq) continue;
+        if (ody <= -hitHalfHeight || ody >= hitHalfHeight) continue;
+
+        DendenSwitchVersusOnDamage(obj, dmg, senderTeamInt, gameFrame);
+    }
+}
+
+static void damageSwitchShocksInCylinder(
+    Lp::Sys::ActorClassIterNodeBase *iterNode,
+    float hitRadiusSq, float hitHalfHeight,
+    sead::Vector3<float> &center, int dmg)
+{
+    for (Cmn::Actor *obj = (Cmn::Actor *)iterNode->derivedFrontActiveActor();
+         obj != NULL;
+         obj = (Cmn::Actor *)iterNode->derivedNextActiveActor(obj))
+    {
+        float *pos = (float *)((u8 *)obj + 0x39C);
+        float odx = pos[0] - center.mX;
+        float odz = pos[2] - center.mZ;
+        float ody = pos[1] - center.mY;
+        if (odx*odx + odz*odz >= hitRadiusSq) continue;
+        if (ody <= -hitHalfHeight || ody >= hitHalfHeight) continue;
+
+        SwitchShockOnDamage(obj, dmg);
+    }
+}
+
 static void damageSpongesInCylinder(
     Lp::Sys::ActorClassIterNodeBase *iterNode,
     int senderTeamInt, float hitRadiusSq, float hitHalfHeight,
@@ -996,6 +1055,91 @@ static void damageSpongesInCylinder(
             // "Damage"/"Thick" animations, "Max" sound, hit flags automatically
             SpongeVersusInformDamage(obj, (unsigned int)dmg, senderTeamInt, false);
         }
+    }
+}
+
+static void damageIidaBombsInCylinder(
+    Lp::Sys::ActorClassIterNodeBase *iterNode,
+    int senderTeamInt, float hitRadiusSq, float hitHalfHeight,
+    sead::Vector3<float> &center, int dmg, int attackerIdx)
+{
+    for (Cmn::Actor *obj = (Cmn::Actor *)iterNode->derivedFrontActiveActor();
+         obj != NULL;
+         obj = (Cmn::Actor *)iterNode->derivedNextActiveActor(obj))
+    {
+        // IidaBombOnline inherits Cmn::Actor — position at +0x39C
+        int bombTeam = *(int *)((u8 *)obj + 0x328);
+        if (bombTeam == senderTeamInt) continue;
+        float *pos = (float *)((u8 *)obj + 0x39C);
+        float odx = pos[0] - center.mX;
+        float odz = pos[2] - center.mZ;
+        float ody = pos[1] - center.mY;
+        if (odx*odx + odz*odz >= hitRadiusSq) continue;
+        if (ody <= -hitHalfHeight || ody >= hitHalfHeight) continue;
+        
+        // Skip bombs that are still in Wait/Marking/Fly (not yet damageable)
+        // State is at +0x5A8 — Set state = 3 per SP (Wait=0, Marking=1, Fly=2, Set=3).
+        u8 dmgInfo[56] = {0};
+        *(u32 *)(dmgInfo + 8)  = (u32)attackerIdx;
+        *(u32 *)(dmgInfo + 12) = (u32)dmg;
+        *(u32 *)(dmgInfo + 48) = (u32)senderTeamInt;
+        
+        IidaBombOnlineDamage(obj, dmgInfo);
+    }
+}
+
+static void damageWeakPointsInCylinder(
+    Lp::Sys::ActorClassIterNodeBase *iterNode,
+    int senderTeamInt, float hitRadiusSq, float hitHalfHeight,
+    sead::Vector3<float> &center, int dmg, int attackerIdx)
+{
+    for (Cmn::Actor *obj = (Cmn::Actor *)iterNode->derivedFrontActiveActor();
+         obj != NULL;
+         obj = (Cmn::Actor *)iterNode->derivedNextActiveActor(obj))
+    {
+        // Team gate: only the opposite team can damage.
+        int wpTeam = *(int *)((u8 *)obj + 0x328);
+        if (wpTeam == senderTeamInt) continue;
+
+        // Position check
+        float *pos = (float *)((u8 *)obj + 0x39C);
+        float odx = pos[0] - center.mX;
+        float odz = pos[2] - center.mZ;
+        float ody = pos[1] - center.mY;
+        if (odx*odx + odz*odz >= hitRadiusSq) continue;
+        if (ody <= -hitHalfHeight || ody >= hitHalfHeight) continue;
+
+        u8 dmgInfo[56] = {0};
+        *(u32 *)(dmgInfo + 8)  = (u32)attackerIdx;
+        *(u32 *)(dmgInfo + 12) = (u32)dmg;
+        *(u32 *)(dmgInfo + 48) = (u32)senderTeamInt;
+
+        SwitchWeakPointDamage(obj, dmgInfo);
+    }
+}
+
+static void damageGeysersInCylinder(
+    Lp::Sys::ActorClassIterNodeBase *iterNode,
+    int senderTeamInt, float hitRadiusSq, float hitHalfHeight,
+    sead::Vector3<float> &center, int dmg, int attackerIdx)
+{
+    for (Cmn::Actor *obj = (Cmn::Actor *)iterNode->derivedFrontActiveActor();
+         obj != NULL;
+         obj = (Cmn::Actor *)iterNode->derivedNextActiveActor(obj))
+    {
+        float *pos = (float *)((u8 *)obj + 0x39C);
+        float odx = pos[0] - center.mX;
+        float odz = pos[2] - center.mZ;
+        float ody = pos[1] - center.mY;
+        if (odx*odx + odz*odz >= hitRadiusSq) continue;
+        if (ody <= -hitHalfHeight || ody >= hitHalfHeight) continue;
+
+        u8 dmgInfo[56] = {0};
+        *(u32 *)(dmgInfo + 8)  = (u32)attackerIdx;
+        *(u32 *)(dmgInfo + 12) = (u32)dmg;
+        *(u32 *)(dmgInfo + 48) = (u32)senderTeamInt;
+
+        GeyserVersusDamage(obj, dmgInfo);
     }
 }
 // ============================================================
@@ -1130,6 +1274,14 @@ void BulletSuperArtillery::vtSecondCalc(BulletSuperArtillery *self) {
 		senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg, self->mSender->mIndex,
 		"Online");
 	
+	// Marina bombs
+	damageIidaBombsInCylinder(Game::IidaBombOnline::getClassIterNodeStatic(),
+		senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg, self->mSender->mIndex);
+	
+	// Enm_BossWeakPoint_VS (MP tentacle) — opposite-team only
+    damageWeakPointsInCylinder(Game::SwitchWeakPoint::getClassIterNodeStatic(),
+        senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg, self->mSender->mIndex);
+	
 	// SpongeVersus — float fill, team-directional
 	damageSpongesInCylinder(Game::SpongeVersus::getClassIterNodeStatic(),
 		senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg * 10, self->mBurstFrm);
@@ -1150,6 +1302,29 @@ void BulletSuperArtillery::vtSecondCalc(BulletSuperArtillery *self) {
 	damageScrewLiftsInCylinder(Game::ScrewLiftOnline::getClassIterNodeStatic(),
 		senderTeamInt, self->mSender->mIndex, hitRadiusSq, hitHalfHeight,
 		self->mTo, dmg, Game::MainMgr::sInstance->mPaintGameFrame);
+	
+	// DendenSwitchVersus — ink switch, anyone can hit
+    damageDendenSwitchesInCylinder(Game::DendenSwitchVersus::getClassIterNodeStatic(),
+        senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg * 3,
+        Game::MainMgr::sInstance->mPaintGameFrame);
+
+    // SwitchShock — other ink switch variant
+    damageSwitchShocksInCylinder(Game::SwitchShock::getClassIterNodeStatic(),
+        hitRadiusSq, hitHalfHeight, self->mTo, dmg * 3);
+		
+	// GeyserVersus - Damages in waiting state only
+    damageGeysersInCylinder(Game::GeyserVersus::getClassIterNodeStatic(),
+        senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg, self->mSender->mIndex);
+
+	// AirBallOnline — ink grapplers
+    damageAirBallsInCylinder(Game::AirBallOnline::getClassIterNodeStatic(),
+        senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg * 10,
+        self->mSender->mIndex);
+		
+	// AttractTargetVersus — MP ink grapplers. Sender grabs all in radius.
+    attractGrapplersInCylinder(&self->mDidAttractGrab,
+		Game::AttractTargetVersus::getClassIterNodeStatic(),
+		hitRadiusSq, hitHalfHeight, self->mTo, self->mSender);
 	
 	// Bomb projectiles
     self->eatBombs(hitRadiusSq, hitHalfHeight);
@@ -1592,6 +1767,7 @@ void BulletSuperArtillery::updateModelMatrix() {
 void BulletSuperArtillery::doSleep() {
     mHasBurst = false;
     mFlightActive = false;
+	mDidAttractGrab = false;
     asLpActor()->reserveSleepAll_(Lp::Sys::Actor::ListNodeKind::None);
 }
 

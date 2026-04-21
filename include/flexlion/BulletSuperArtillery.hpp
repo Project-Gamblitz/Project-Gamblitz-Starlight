@@ -34,6 +34,12 @@ namespace Game {
 	class InkRailVersus : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); void emit_(Cmn::Def::Team team, int paintGameFrame, bool skipSound); };
 	class GrindRailVersus : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
 	class ScrewLiftOnline : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
+	class SwitchWeakPoint : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
+	class DendenSwitchVersus : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
+	class SwitchShock : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
+	class GeyserVersus : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
+	class AirBallOnline : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
+	class AttractTargetVersus : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
 }
 
 namespace Flexlion {
@@ -66,6 +72,7 @@ public:
     float mBurstRadius;
     int mBurstFrm;
 	int mFlightTime;
+	bool mDidAttractGrab;
 
     Lp::Utl::StateMachine mStateMachine;
 

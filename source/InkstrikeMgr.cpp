@@ -113,14 +113,6 @@ namespace Flexlion{
             return;
         }
         isBulletDeinit = 0;
-		// Diagnostic: dump all BlowoutsOnline furler state every 2 frames
-//		static int logThrottle = 0;
-//		if (logThrottle++ % 5 == 0) {
-//			char tag[16];
-//			int frame = Game::MainMgr::sInstance->mPaintGameFrame;
-//			snprintf(tag, sizeof(tag), "F%d", frame);
-//			Flexlion::dumpAllFurlers(tag);
-//		}
     }
     void InkstrikeMgr::detectChangeState(Game::Player *player){
         int id = player->mIndex;

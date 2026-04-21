@@ -885,7 +885,7 @@ _ZN3Cmn13ComponentBase13ComponentBaseEPNS_15ComponentHolderE = 0x75F30 - 0x2EBE0
 _ZN4Game6Player23startSkill_DeathMarkingEib = 0x01011268;
 _ZN4Game6Player20startMarkingOne_ImplEPS0_NS0_11MarkingTypeEii = 0x01028854 - 0x2EBE000; 
 _ZN4Game16PlayerNetControl21sendSignal_AllMarkingEv = 0x01101180 - 0x2EBE000;
-
+_ZNK4Game6Player19isInState_NoControlEb = 0x1017E7C - 0x2EBE000;
 _ZN4Game6Player17receiveDamage_NetEiN3Cmn3Def3DMGERKN4sead7Vector3IfEERKNS_12DamageReasonEbbb = 0x0101A034 - 0x2EBE000;
 _ZN4Game6Player22informDamage_ForceKillEiRKNS_12DamageReasonE = 0x10103BC - 0x2EBE000;
 _ZN4Game12PlayerDamage12informDamageEPviN3Cmn3Def3DMGERKNS_12DamageReasonEb = 0x1066D50 - 0x2EBE000;
@@ -938,6 +938,20 @@ _ZN4Game14BlowoutsOnline14startRollback_Ev = 0xD73A40 - 0x2EBE000;
 _ZN4Game14BlowoutsOnline6reset_Ev = 0xD6F100 - 0x2EBE000;
 _ZN4Game14BlowoutsOnline6damageEPv = 0xD6E354 - 0x2EBE000;
 _ZN4Game32BulletBlowoutsOnlineNearByAttack22getClassIterNodeStaticEv = 0xD76568 - 0x2EBE000;
+_ZN4Game14IidaBombOnline22getClassIterNodeStaticEv = 0x34B64 - 0x2EBE000;
+_ZN4Game14IidaBombOnline6damageEPv = 0xD7D520 - 0x2EBE000;
+_ZN4Game15SwitchWeakPoint22getClassIterNodeStaticEv = 0xE84050 - 0x2EBE000;
+_ZN4Game15SwitchWeakPoint6damageEPv = 0xE81970 - 0x2EBE000;
+_ZN4Game18DendenSwitchVersus22getClassIterNodeStaticEv = 0xB535B8 - 0x2EBE000;
+_ZN4Game18DendenSwitchVersus9onDamage_EN3Cmn3Def3DMGENS2_4TeamEj = 0xE276AC - 0x2EBE000;
+_ZN4Game11SwitchShock22getClassIterNodeStaticEv = 0x1249F2C - 0x2EBE000;
+_ZN4Game11SwitchShock9onDamage_EN3Cmn3Def3DMGE = 0x1249A48 - 0x2EBE000;
+_ZN4Game12GeyserVersus22getClassIterNodeStaticEv = 0x348D0  - 0x2EBE000;
+_ZN4Game12GeyserVersus6damageEPv = 0xE3D7D4 - 0x2EBE000;
+_ZN4Game13AirBallOnline22getClassIterNodeStaticEv = 0xD5FF64 - 0x2EBE000;
+_ZN4Game13AirBallOnline6damageEPv = 0xD5FA58 - 0x2EBE000;
+_ZN4Game19AttractTargetVersus22getClassIterNodeStaticEv = 0x2B6C0  - 0x2EBE000;
+_ZN4Game19AttractTargetVersus13startAttract_EPNS_6PlayerE = 0xDFBD8C - 0x2EBE000;
 
 /* Player bullet damage — the real HP damage function used by bullet collision system */
 _PlayerApplyBulletDamage = 0x1028DCC - 0x2EBE000;
