@@ -52,6 +52,8 @@ extern "C" {
 	void _ZN4Game13AirBallOnline6damageEPv(void *airball, void *damageInfo);
 	void _ZN4Game19AttractTargetVersus13startAttract_EPNS_6PlayerE(
         void *attractTarget, Game::Player *player);
+    void _ZN4Game19RollingBarrelOnline10informHit_EPNS0_8HitInfoE(
+        void *barrel, Game::RollingBarrelOnline::HitInfo *h);
 	}
 #define CmnActorCtor _ZN3Cmn5ActorC2Ev
 #define EnumPropDefCtor _ZN6xlink222EnumPropertyDefinitionC2EPKcb
@@ -75,6 +77,7 @@ extern "C" {
 #define GeyserVersusDamage _ZN4Game12GeyserVersus6damageEPv
 #define AirBallOnlineDamage _ZN4Game13AirBallOnline6damageEPv
 #define AttractTargetStartAttract _ZN4Game19AttractTargetVersus13startAttract_EPNS_6PlayerE
+#define RollingBarrelInformHit _ZN4Game19RollingBarrelOnline10informHit_EPNS0_8HitInfoE
 
 // Flight parameters
 const int BSA_FLIGHT_TIME = 120;
@@ -994,6 +997,53 @@ static void attractGrapplersInCylinder(
     }
 }
 
+static void hitBarrelsInCylinder(
+    Lp::Sys::ActorClassIterNodeBase *iterNode,
+    float hitRadiusSq, float hitHalfHeight,
+    sead::Vector3<float> &center, int attackerIdx, int dmg)
+{
+    for (Cmn::Actor *obj = (Cmn::Actor *)iterNode->derivedFrontActiveActor();
+         obj != NULL;
+         obj = (Cmn::Actor *)iterNode->derivedNextActiveActor(obj))
+    {
+        float *pos = (float *)((u8 *)obj + 0x39C);
+        float odx = pos[0] - center.mX;
+        float odz = pos[2] - center.mZ;
+        float ody = pos[1] - center.mY;
+        if (odx*odx + odz*odz >= hitRadiusSq) continue;
+        if (ody <= -hitHalfHeight || ody >= hitHalfHeight) continue;
+
+        // Only hit barrels in waiting state (state 0)
+        if (*(int *)((u8 *)obj + 0x5A0) != 0) continue;
+
+        // Launch direction: barrel -> tornado landing, on ground plane
+        float dx = pos[0] - center.mX;
+        float dz = pos[2] - center.mZ;
+        float len2 = dx*dx + dz*dz;
+        if (len2 < 0.0001f) continue;   // barrel right under tornado: skip
+        float inv = 1.0f / sqrtf(len2);
+
+        // Read the barrel's instance typeId — required for informHit_ to accept
+        void *paramPtr = *(void **)((u8 *)obj + 0x7B0);
+        if (paramPtr == NULL) continue;   // defensive
+        int typeId = *(int *)((u8 *)paramPtr + 52);
+
+        Game::RollingBarrelOnline::HitInfo h;
+        h.typeId    = typeId;
+        h.playerIdx = attackerIdx;
+        h.damage    = dmg;           
+        h.pad12     = 0;
+        h.flag14    = 3;               // matches what the game writes
+        h.flag15    = 0;
+        h.dirX      = dx * inv;
+        h.dirY      = 0.0f;
+        h.dirZ      = dz * inv;
+        h.pad28     = 0;
+
+        RollingBarrelInformHit(obj, &h);
+    }
+}
+
 static void damageDendenSwitchesInCylinder(
     Lp::Sys::ActorClassIterNodeBase *iterNode,
     int senderTeamInt, float hitRadiusSq, float hitHalfHeight,
@@ -1320,6 +1370,12 @@ void BulletSuperArtillery::vtSecondCalc(BulletSuperArtillery *self) {
     damageAirBallsInCylinder(Game::AirBallOnline::getClassIterNodeStatic(),
         senderTeamInt, hitRadiusSq, hitHalfHeight, self->mTo, dmg * 10,
         self->mSender->mIndex);
+	
+	// RollingBarrelOnline - Roloniums
+    hitBarrelsInCylinder(
+        Game::RollingBarrelOnline::getClassIterNodeStatic(),
+        hitRadiusSq, hitHalfHeight, self->mTo,
+        self->mSender->mIndex, dmg);
 		
 	// AttractTargetVersus — MP ink grapplers. Sender grabs all in radius.
     attractGrapplersInCylinder(&self->mDidAttractGrab,

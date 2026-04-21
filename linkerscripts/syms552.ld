@@ -952,6 +952,8 @@ _ZN4Game13AirBallOnline22getClassIterNodeStaticEv = 0xD5FF64 - 0x2EBE000;
 _ZN4Game13AirBallOnline6damageEPv = 0xD5FA58 - 0x2EBE000;
 _ZN4Game19AttractTargetVersus22getClassIterNodeStaticEv = 0x2B6C0  - 0x2EBE000;
 _ZN4Game19AttractTargetVersus13startAttract_EPNS_6PlayerE = 0xDFBD8C - 0x2EBE000;
+_ZN4Game19RollingBarrelOnline22getClassIterNodeStaticEv = 0x34A88 - 0x2EBE000;
+_ZN4Game19RollingBarrelOnline10informHit_EPNS0_8HitInfoE = 0xD942C8 - 0x2EBE000;
 
 /* Player bullet damage — the real HP damage function used by bullet collision system */
 _PlayerApplyBulletDamage = 0x1028DCC - 0x2EBE000;
