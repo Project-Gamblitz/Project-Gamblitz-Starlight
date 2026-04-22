@@ -41,20 +41,20 @@ namespace Game {
 	class AirBallOnline : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
 	class AttractTargetVersus : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
 	class RollingBarrelOnline : public Cmn::Actor {
-	public:
+		public:
 		// HitInfo struct (32 bytes used, packet layout from game)
-		struct HitInfo {
-			int   typeId;     // +0  — must match barrel's instance ID (read from barrel)
-			int   playerIdx;  // +4  — attacker player index
-			int   damage;     // +8  — damage amount
-			short pad12;      // +12
-			char  flag14;     // +14 — game uses 3 here
-			char  flag15;     // +15
-			float dirX;       // +16 — launch direction (unit vector)
-			float dirY;       // +20
-			float dirZ;       // +24
-			int   pad28;      // +28 — padding
-		};
+			struct HitInfo {
+				int   typeId;     // +0  — must match barrel's instance ID (read from barrel)
+				int   playerIdx;  // +4  — attacker player index
+				int   damage;     // +8  — damage amount
+				short pad12;      // +12
+				char  flag14;     // +14 — game uses 3 here
+				char  flag15;     // +15
+				float dirX;       // +16 — launch direction (unit vector)
+				float dirY;       // +20
+				float dirZ;       // +24
+				int   pad28;      // +28 — padding
+			};
 		
 		static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic();
 		void informHit_(HitInfo *h);

@@ -924,6 +924,9 @@ _ZN4Game13InkRailVersus12changeColor_EN3Cmn3Def4TeamE = 0xE4A178 - 0x2EBE000;
 _ZN4Game13InkRailVersus16emitAndPlayRail_Ev = 0xE4D44C - 0x2EBE000;
 _ZN4Game15GrindRailDrawer10changeTeamEN3Cmn3Def4TeamE = 0xB1F6EC - 0x2EBE000;
 _ZN4Game15GrindRailVersus5emit_EN3Cmn3Def4TeamEj = 0xE43798 - 0x2EBE000;
+_ZN4Game3Cmp9Damagable8onDamageEiN3Cmn3Def4TeamENS3_3DMGE = 0x5EDF38 - 0x2EBE000;
+_ZN4Game13InkRailVersus5emit_EN3Cmn3Def4TeamEib = 0xE47A54 - 0x2EBE000;
+_ZN4Game15GrindRailVersus5emit_EN3Cmn3Def4TeamEj = 0xE43798 - 0x2EBE000;
 _ZN2Lp3Utl12StateMachine11changeStateEj = 0x19F8578 - 0x2EBE000;
 _ZN4Game9Gachihoko13informDamage_EiN3Cmn3Def3DMGENS2_4TeamE = 0xE30A00 - 0x2EBE000;
 _ZN4Game12SpongeVersus13informDamage_EN3Cmn3Def3DMGENS2_4TeamEb = 0xE775A8 - 0x2EBE000;
@@ -954,6 +957,7 @@ _ZN4Game19AttractTargetVersus22getClassIterNodeStaticEv = 0x2B6C0  - 0x2EBE000;
 _ZN4Game19AttractTargetVersus13startAttract_EPNS_6PlayerE = 0xDFBD8C - 0x2EBE000;
 _ZN4Game19RollingBarrelOnline22getClassIterNodeStaticEv = 0x34A88 - 0x2EBE000;
 _ZN4Game19RollingBarrelOnline10informHit_EPNS0_8HitInfoE = 0xD942C8 - 0x2EBE000;
+_ZN4Game12RespawnPoint22getClassIterNodeStaticEv = 0x4F0AF8 - 0x2EBE000;
 
 /* Player bullet damage — the real HP damage function used by bullet collision system */
 _PlayerApplyBulletDamage = 0x1028DCC - 0x2EBE000;
