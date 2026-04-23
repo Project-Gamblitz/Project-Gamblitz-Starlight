@@ -218,29 +218,32 @@ void miniMapCamCalcHook(Game::MiniMapCamera *_this){
 	u8 *base = (u8*)_this;
 	sead::Projection *perspProj = *(sead::Projection **)(base + 0x80);
 	sead::Projection *orthoProj = *(sead::Projection **)(base + 0x140);
-	if(anim > 0.0f){
+		if(anim > 0.0f){
 		float orig = 1.0f - anim;
-		// Top-down: position directly above the at point, north-up
+		// Top-down: position directly above the at point
 		float topX = _this->mAt.mX;
 		float topY = _this->mAt.mY + tornadoMgr->cameraheight;
 		float topZ = _this->mAt.mZ;
+        tornadoMgr->snapshotCamUp(_this->mAt);
+        float targetUpX = tornadoMgr->mCamUpX;
+        float targetUpZ = tornadoMgr->mCamUpZ;
+	
 		if(anim >= 1.0f){
-			// Snap to exact top-down to avoid float drift
 			_this->mPosition.mX = topX;
 			_this->mPosition.mY = topY;
 			_this->mPosition.mZ = topZ;
 			_this->mAt.mY = 0.0f;
-			_this->mUp.mX = 0.0f;
+			_this->mUp.mX = targetUpX;
 			_this->mUp.mY = 0.0f;
-			_this->mUp.mZ = -1.0f;
+			_this->mUp.mZ = targetUpZ;
 		} else {
 			_this->mPosition.mX = _this->mPosition.mX * orig + topX * anim;
 			_this->mPosition.mY = _this->mPosition.mY * orig + topY * anim;
 			_this->mPosition.mZ = _this->mPosition.mZ * orig + topZ * anim;
 			_this->mAt.mY *= orig;
-			_this->mUp.mX *= orig;
+			_this->mUp.mX = _this->mUp.mX * orig + targetUpX * anim;
 			_this->mUp.mY *= orig;
-			_this->mUp.mZ = _this->mUp.mZ * orig + (-1.0f) * anim;
+			_this->mUp.mZ = _this->mUp.mZ * orig + targetUpZ * anim;
 		}
 		// Switch to perspective projection
 		if(perspProj != NULL && perspProj != orthoProj){
@@ -1422,10 +1425,17 @@ void updateCursorEffectHook(Game::MiniMap *miniMap) {
 			float tanHalfFovy = sinf(halfFovyRad) / cosf(halfFovyRad);
 			float worldPerCanvas = tornadoMgr->cameraheight * tanHalfFovy / halfCanvas;
 			sead::Vector3<float> camAt = miniMap->mMiniMapCamera->mAt;
+			// Match the rotated cursor mapping (axis-aligned, from snapshot)
+			float Xu = tornadoMgr->mCamUpX;
+			float Zu = tornadoMgr->mCamUpZ;
+			float worldX = camAt.mX + miniMap->mCursorPos.mX * (-Zu) * worldPerCanvas
+									+ miniMap->mCursorPos.mY * (Xu)  * worldPerCanvas;
+			float worldZ = camAt.mZ + miniMap->mCursorPos.mX * (Xu)  * worldPerCanvas
+									+ miniMap->mCursorPos.mY * (Zu)  * worldPerCanvas;
 			bsa->mXLinkMtx = {{
-				1.0f, 0.0f, 0.0f, camAt.mX + miniMap->mCursorPos.mX * worldPerCanvas,
+				1.0f, 0.0f, 0.0f, worldX,
 				0.0f, 1.0f, 0.0f, 0.0f,
-				0.0f, 0.0f, 1.0f, camAt.mZ - miniMap->mCursorPos.mY * worldPerCanvas
+				0.0f, 0.0f, 1.0f, worldZ
 			}};
 		}
 	}

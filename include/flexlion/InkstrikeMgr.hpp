@@ -23,6 +23,7 @@ namespace Flexlion{
         void playerThirdCalc(Game::Player *player);
         void informShotInkstrike(Game::Player *player, sead::Vector3<float> pos, sead::Vector3<float> dest, int paintgamefrm);
         void onCalc();
+		void snapshotCamUp(sead::Vector3<float> camAt);
 		bool mMatchEnding;
         Lp::Sys::ModelArc *mTornadoArc;
         Lp::Sys::ModelArc *mTornadoMonitorArc;
@@ -51,6 +52,9 @@ namespace Flexlion{
         float camerafovy;
         bool isBulletDeinit;
 		float mSpawnY;  // stored once at match start, shared for all players
-		bool mSpawnYCaptured;
+		bool mSpawnYCaptured;float mCamUpX;   // X component of camera up vector (-1, 0, or +1)
+		float mCamUpZ;   // Z component of camera up vector (-1, 0, or +1)
+		// Exactly one is nonzero; together they form an axis-aligned mUp
+		bool mNeedCamUpSnapshot;
     };
 }

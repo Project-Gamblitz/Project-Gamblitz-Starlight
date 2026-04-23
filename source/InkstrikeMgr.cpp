@@ -1,12 +1,11 @@
 #include "flexlion/InkstrikeMgr.hpp"
 #include "flexlion/BigLaserModeMgr.hpp"
 #include "flexlion/BulletSuperArtillery.hpp"
+#include "Game/RespawnPoint.h"
+// #include "flexlion/FsLogger.hpp"
 const int startflightdelay = 40; // delay from when a point is chosen to when the tornado is actually launched
 const int playerdelay = 60; // 60 frames Shoot_Tornado waiting for the player to transition from tornado cShoot to cNone, matches Splatoon 1 timing
 const float tornadoTankZOffset = -3.0f;
-
-
-
 
 extern "C" {
     extern u8 _ZTVN4Game27MessagePlayerPerformSpecialE[];
@@ -44,6 +43,82 @@ static void informPerformSpecial(Game::Player *player) {
     player->informStartSpecialToLayout(0x11);
 }
 
+// Offsets verified from CameraVersusTopView::onCalc (SP 0x710117AB60).
+// On MP 5.5.2 stripped, offsets in the class are identical — only the entry
+// point addresses differ, and we only use offsets from already-loaded pointers.
+static constexpr int kOff_TopView_CameraParam  = 0x178;  // (u64*)topView[47]
+static constexpr int kOff_TopView_BravoInvType = 0x200;  // (int*)topView[128]
+static constexpr int kOff_CamParam_Pos         = 0x98;
+static constexpr int kOff_CamParam_At          = 0xD0;
+static constexpr int kOff_CamParam_Up          = 0x108;
+// ref_() lives at vtable slot 0xD8; returns (self + 0x2C) as Vector3<float>*
+static constexpr int kOff_ParamVec3Body        = 0x2C;
+static constexpr int kVtSlot_ParamVec3_Ref     = 0xD8;
+
+// Returns a pointer to the Vector3<float> data inside a Param<Vector3> sub-object.
+// Equivalent to calling the virtual ref_() but avoids indirect call and skips
+// anything the vtable might do. Works because ref_() is a trivial "return this + 0x2C".
+static inline const sead::Vector3<float>* getParamVec3Body(u64 paramNodeAddr) {
+    return (const sead::Vector3<float>*)(paramNodeAddr + kOff_ParamVec3Body);
+}
+
+// Safely walks the SeqMgr → CameraHolder → TopView chain.
+// Returns nullptr if we're not in a versus match or the chain isn't set up yet.
+static u64 getTopViewCameraRaw() {
+    u64 mainMgr = (u64)Game::MainMgr::sInstance;
+    if (!mainMgr) return 0;
+    u64 seqMgr = *(u64*)(mainMgr + 912);
+    if (!seqMgr) return 0;
+    u64 camHolder = *(u64*)(seqMgr + 1104);   // SeqMgrVersus + 0x450
+    if (!camHolder) return 0;
+    u64 topView = *(u64*)(camHolder + 0x30);  // CameraVersusTopView at index 6
+    return topView;
+}
+
+// Returns centroid of RespawnPoints for the given team. outFound is set true if
+// at least one was found.
+static sead::Vector3<float> findTeamSpawnCentroid(int team, bool *outFound) {
+    sead::Vector3<float> sum = sead::Vector3<float>::zero;
+    int count = 0;
+    auto iterNode = Game::RespawnPoint::getClassIterNodeStatic();
+    for (Cmn::Actor *obj = (Cmn::Actor *)iterNode->derivedFrontActiveActor();
+         obj != NULL;
+         obj = (Cmn::Actor *)iterNode->derivedNextActiveActor(obj))
+    {
+        if (*(int *)((u8 *)obj + 0x328) == team) {
+            float *pos = (float *)((u8 *)obj + 0x39C);
+            sum.mX += pos[0];
+            sum.mY += pos[1];
+            sum.mZ += pos[2];
+            count++;
+        }
+    }
+    if (outFound) *outFound = (count > 0);
+    if (count > 0) {
+        sum.mX /= (float)count;
+        sum.mY /= (float)count;
+        sum.mZ /= (float)count;
+    }
+    return sum;
+}
+
+// Returns the current stage's internal name (e.g. "Fld_Quarry00"). May return nullptr.
+static const char* getCurrentMapName() {
+    u64 mainMgr = (u64)Game::MainMgr::sInstance;
+    if (!mainMgr) return nullptr;
+    u64 staticMem = *(u64*)(mainMgr + 920);
+    if (!staticMem) return nullptr;
+    return *(const char**)(staticMem + 936);
+}
+
+// Case-sensitive prefix match helper
+static bool strStartsWith(const char* s, const char* prefix) {
+    if (!s || !prefix) return false;
+    while (*prefix) {
+        if (*s++ != *prefix++) return false;
+    }
+    return true;
+}
 
 namespace Flexlion{
     InkstrikeMgr *InkstrikeMgr::sInstance = NULL;
@@ -57,6 +132,9 @@ namespace Flexlion{
         camerafovy = 60.0f;
 		mSpawnY = 3000.0f;  // safe default
 		mSpawnYCaptured = false;
+		mCamUpX = -1.0f;  // default to vanilla-style if snapshot fails
+		mCamUpZ = 0.0f;
+		mNeedCamUpSnapshot = false;
         for(int i = 0; i < 10; i++){
 			bullets[i][0] = NULL;
 			bullets[i][1] = NULL;
@@ -83,6 +161,122 @@ namespace Flexlion{
 		return bullets[playerId][mActiveSlot[playerId]];
 	}
 	
+	// Align Minimap horizontally
+	void InkstrikeMgr::snapshotCamUp(sead::Vector3<float> camAt) {
+		if (!mNeedCamUpSnapshot) return;
+		
+		// FsLogger::LogFormatDefaultDirect("[InkOri] enter, needSnap=%d\n",
+		//     (int)mNeedCamUpSnapshot);
+	
+		bool alphaFound = false;
+		bool bravoFound = false;
+		sead::Vector3<float> alphaSpawn = findTeamSpawnCentroid(0, &alphaFound);
+		sead::Vector3<float> bravoSpawn = findTeamSpawnCentroid(1, &bravoFound);
+		// default to vanilla minimap orientation and skip the rest of the logic.
+		if (!alphaFound || !bravoFound) {
+			mCamUpX = 0.0f;
+			mCamUpZ = -1.0f;  // vanilla-style default
+			mNeedCamUpSnapshot = false;
+			return;
+		}
+		// FsLogger::LogFormatDefaultDirect("[InkOri] alphaSpawn=(%d,%d,%d) found=%d\n",
+		//     (int)alphaSpawn.mX, (int)alphaSpawn.mY, (int)alphaSpawn.mZ, (int)alphaFound);
+		// FsLogger::LogFormatDefaultDirect("[InkOri] bravoSpawn=(%d,%d,%d) found=%d\n",
+		//     (int)bravoSpawn.mX, (int)bravoSpawn.mY, (int)bravoSpawn.mZ, (int)bravoFound);
+	
+		float resultX = -1.0f;
+		float resultZ = 0.0f;
+	
+		Game::Player *ctrlPlayer = Game::PlayerMgr::sInstance->getControlledPerformer();
+		int bravoInvType = 0;
+		u64 topView = getTopViewCameraRaw();
+		u64 camParam = 0;
+		if (topView != 0) {
+			bravoInvType = *(int*)(topView + kOff_TopView_BravoInvType);
+			camParam = *(u64*)(topView + kOff_TopView_CameraParam);
+		}
+		int team = (ctrlPlayer != NULL) ? (int)ctrlPlayer->mTeam : -1;
+	
+		// if (camParam != 0) {
+		//     const sead::Vector3<float>* pos = getParamVec3Body(camParam + kOff_CamParam_Pos);
+		//     const sead::Vector3<float>* at  = getParamVec3Body(camParam + kOff_CamParam_At);
+		//     FsLogger::LogFormatDefaultDirect("[InkOri] cam pos=(%d,%d,%d) at=(%d,%d,%d)\n",
+		//         (int)pos->mX, (int)pos->mY, (int)pos->mZ,
+		//         (int)at->mX, (int)at->mY, (int)at->mZ);
+		// }
+	
+		if (bravoInvType == 1 || bravoInvType == 2) {
+			// Mirror map logic — same orientation for both teams
+			if (alphaFound && bravoFound) {
+				bool xShared = (alphaSpawn.mX >= 0.0f) == (bravoSpawn.mX >= 0.0f);
+				bool zShared = (alphaSpawn.mZ >= 0.0f) == (bravoSpawn.mZ >= 0.0f);
+	
+				if (xShared && !zShared) {
+					resultX = (alphaSpawn.mX >= 0.0f) ? -1.0f : 1.0f;
+					resultZ = 0.0f;
+				} else if (zShared && !xShared) {
+					resultX = 0.0f;
+					resultZ = (alphaSpawn.mZ >= 0.0f) ? -1.0f : 1.0f;
+				}
+				// else: ambiguous (both or neither axes shared) — fall back to default
+	
+				// If spawns are very close together (narrow/long map like First Deli),
+				// rotate the orientation 90° clockwise so the long axis becomes horizontal.
+				float dx = alphaSpawn.mX - bravoSpawn.mX;
+				float dz = alphaSpawn.mZ - bravoSpawn.mZ;
+				float spawnDist = sqrtf(dx * dx + dz * dz);
+	
+				// FsLogger::LogFormatDefaultDirect("[InkOri] spawnDist=%d\n", (int)spawnDist);
+	
+				if (spawnDist < 200.0f) {
+					float newX = resultZ;
+					float newZ = -resultX;
+					resultX = newX;
+					resultZ = newZ;
+				}
+			}
+		} else {
+			// Type 0 logic — axis dominance based on Alpha spawn
+			if (alphaFound) {
+				const char* mapName = getCurrentMapName();
+				// Fld_Quarry is laid out inconsistent with other Z-dominant maps;
+				// force Z-axis output to get correct orientation.
+				bool forceZAxis = strStartsWith(mapName, "Fld_Quarry");
+	
+				// FsLogger::LogFormatDefaultDirect("[InkOri] map=%s forceZ=%d\n",
+				//     mapName ? mapName : "(null)", (int)forceZAxis);
+	
+				if (forceZAxis) {
+					resultX = 0.0f;
+					resultZ = (alphaSpawn.mX >= 0.0f) ? 1.0f : -1.0f;
+				} else if (fabsf(alphaSpawn.mX) > fabsf(alphaSpawn.mZ)) {
+					// X-axis dominant: orient along Z
+					resultX = 0.0f;
+					resultZ = (alphaSpawn.mX >= 0.0f) ? 1.0f : -1.0f;
+				} else {
+					// Z-axis dominant: orient along X
+					resultX = (alphaSpawn.mZ >= 0.0f) ? -1.0f : 1.0f;
+					resultZ = 0.0f;
+				}
+	
+				// Type 0 Bravo: 180° rotation
+				if (team == 1) {
+					resultX = -resultX;
+					resultZ = -resultZ;
+				}
+			}
+		}
+	
+		mCamUpX = resultX;
+		mCamUpZ = resultZ;
+	
+		// FsLogger::LogFormatDefaultDirect(
+		//     "[InkOri] FINAL team=%d bravoInv=%d mUp=(%d,0,%d)\n",
+		//     team, bravoInvType,
+		//     (int)mCamUpX, (int)mCamUpZ);
+		
+		mNeedCamUpSnapshot = false;
+	}
     void InkstrikeMgr::informShotInkstrike(Game::Player *player, sead::Vector3<float> pos, sead::Vector3<float> dest, int paintgamefrm){
 		int id = player->mIndex;
 		if(mActiveSlot[id] < 0) return;
@@ -93,6 +287,24 @@ namespace Flexlion{
 			isAppliedWeapon[id] = 0;
         }
     }
+	static sead::Vector3<float> cursorToWorldXZ(
+    const sead::Vector3<float>& camAt,
+    const sead::Vector2<float>& cursorPos,
+    float worldPerCanvas)
+	{
+		float Xu = InkstrikeMgr::sInstance->mCamUpX;
+		float Zu = InkstrikeMgr::sInstance->mCamUpZ;
+		// With camera looking -Y and up = (Xu, 0, Zu):
+		//   screen_right = (-Zu, 0, Xu)   // canvas X-positive → world delta in this dir
+		//   screen_up    = (Xu,  0, Zu)   // canvas Y-positive → world delta in this dir
+		sead::Vector3<float> result;
+		result.mX = camAt.mX + cursorPos.mX * (-Zu) * worldPerCanvas
+							+ cursorPos.mY * (Xu)  * worldPerCanvas;
+		result.mZ = camAt.mZ + cursorPos.mX * (Xu)  * worldPerCanvas
+							+ cursorPos.mY * (Zu)  * worldPerCanvas;
+		result.mY = 0.0f;
+		return result;
+	}
     void InkstrikeMgr::onCalc(){
         if(Game::MainMgr::sInstance == NULL or !Utils::isSceneLoaded()){
             if(!isBulletDeinit){
@@ -119,6 +331,8 @@ namespace Flexlion{
         if(player->isInSpecial() and player->mSpecialWeaponId == TORNADO_SPECIAL_ID and playerState[id] == TornadoState::cNone){
             playerState[id] = TornadoState::cAim;
             isAppliedWeapon[id] = 0;
+			mRemoteShotPending[id] = false;
+			mNeedCamUpSnapshot = true;
 			mRemoteShotPending[id] = false;  // clear stale flag from previous activation
 			// Pick a free BSA slot for this new activation
 			mActiveSlot[id] = pickFreeSlot(id);
@@ -132,7 +346,6 @@ namespace Flexlion{
         if(mRemoteShotPending[id] && playerState[id] == TornadoState::cAim){
 			mShootPrepareFrm[id] = Game::MainMgr::sInstance->mPaintGameFrame;
 			playerState[id] = TornadoState::cShootPrepare;
-			mRemoteShotPending[id] = false;
 			// Mirror local commit — transition BSA to cState_Wait so the
 			// "position confirmed" xlink sound plays on remote consoles too
 			if(mActiveSlot[id] >= 0 && bullets[id][mActiveSlot[id]] != NULL){
@@ -239,19 +452,17 @@ namespace Flexlion{
 
             // Continuously validate aim position for the controlled player
             if(isCtrlPerformer and Utils::isShowMinimap() and cameraanim > 0.95f){
-                const float halfCanvas = 360.0f;
-                float halfFovyRad = camerafovy * 0.5f * MATH_PI / 180.0f;
-                float tanHalfFovy = sinf(halfFovyRad) / cosf(halfFovyRad);
-                float worldPerCanvas = cameraheight * tanHalfFovy / halfCanvas;
-                sead::Vector3<float> camAt = miniMap->mMiniMapCamera->mAt;
-                sead::Vector3<float> aimPos;
-                aimPos.mX = camAt.mX + miniMap->mCursorPos.mX * worldPerCanvas;
-                aimPos.mY = InkstrikeMgr::sInstance->mSpawnY;
-                aimPos.mZ = camAt.mZ - miniMap->mCursorPos.mY * worldPerCanvas;
-                bool groundFound = false;
-                Utils::calcGroundPos(player, aimPos, &groundFound);
-                mAimValid[id] = groundFound;
-            }
+				const float halfCanvas = 360.0f;
+				float halfFovyRad = camerafovy * 0.5f * MATH_PI / 180.0f;
+				float tanHalfFovy = sinf(halfFovyRad) / cosf(halfFovyRad);
+				float worldPerCanvas = cameraheight * tanHalfFovy / halfCanvas;
+				sead::Vector3<float> camAt = miniMap->mMiniMapCamera->mAt;
+				sead::Vector3<float> aimPos = cursorToWorldXZ(camAt, miniMap->mCursorPos, worldPerCanvas);
+				aimPos.mY = InkstrikeMgr::sInstance->mSpawnY;
+				bool groundFound = false;
+				Utils::calcGroundPos(player, aimPos, &groundFound);
+				mAimValid[id] = groundFound;
+			}
 			
 			// Play open sound on the frame the minimap becomes visible
 			if(isCtrlPerformer){
@@ -307,9 +518,8 @@ namespace Flexlion{
 					float tanHalfFovy = sinf(halfFovyRad) / cosf(halfFovyRad);
 					float worldPerCanvas = cameraheight * tanHalfFovy / halfCanvas;
 					sead::Vector3<float> camAt = miniMap->mMiniMapCamera->mAt;
-					miniMapAt.mX = camAt.mX + miniMap->mCursorPos.mX * worldPerCanvas;
+					miniMapAt = cursorToWorldXZ(camAt, miniMap->mCursorPos, worldPerCanvas);
 					miniMapAt.mY = InkstrikeMgr::sInstance->mSpawnY;
-					miniMapAt.mZ = camAt.mZ - miniMap->mCursorPos.mY * worldPerCanvas;
 					miniMapAt = Utils::calcGroundPos(player, miniMapAt);
 					if(isOnline) bulletCloneHandle->sendEvent_Shot(player->mIndex, miniMapAt, player->mPosition, Game::BulletCloneEvent::Type::BulletTypeInkstrike, 0);
 					isAppliedWeapon[id] = 0;
