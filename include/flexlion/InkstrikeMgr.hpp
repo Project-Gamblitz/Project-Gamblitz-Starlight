@@ -48,6 +48,12 @@ namespace Flexlion{
         u16 mDbgColAttr;
         bool mDbgColIsWall;
         float mDbgColY;  // Y coord where the validated hit was found
+        bool mDbgColIsObject;  // hit was on a registered Obj_ block, not the main Fld_
+        // Diagnostics for object-detection wiring
+        u32 mDbgMainBlkLo;   // low 32 bits of mainBlock pointer (0 = mgr/mainBlock missing)
+        u32 mDbgFloorBlkLo;  // low 32 bits of floor block pointer at +240
+        u32 mDbgWallBlkLo;   // low 32 bits of wall block pointer at +248
+        const char *mDbgColReason;  // last validation reason (ACCEPT_FLOOR, BAD_BITS, NO_GEOM, etc.)
         bool isShot;
         float cameraanim;
         float cameraheight;

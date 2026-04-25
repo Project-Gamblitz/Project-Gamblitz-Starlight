@@ -794,14 +794,27 @@ void renderEntrypoint(agl::DrawContext *drawContext, sead::TextWriter *textWrite
 			} else {
 				int mat = attr & 0x3F;
 				const char *matName = (mat <= 34) ? sMaterialNames[mat] : "???";
-				mTextWriter->printf("COL_%X %s%s Y=%.1f %s\n",
+				mTextWriter->printf("COL_%X %s%s%s Y=%.1f %s\n",
 					attr, matName,
 					tornadoMgr->mDbgColIsWall ? " (wall)" : "",
+					tornadoMgr->mDbgColIsObject ? " (obj)" : "",
 					tornadoMgr->mDbgColY,
 					tornadoMgr->mAimValid[ctrlPlayer->mIndex] ? "" : "[INVALID]");
 			}
 			sead::Vector3<float> pp = ctrlPlayer->mPosition;
 			mTextWriter->printf("PLR (%.1f, %.1f, %.1f)\n", pp.mX, pp.mY, pp.mZ);
+			// Diagnostic line: reason + block pointer fingerprints.
+			// main: low 32 bits of mainBlock (Manager+0). 0 means
+			//       mspManager null OR no field block registered yet.
+			// flr/wal: low 32 bits of floor/wall block pointers in
+			//          HitInfoImpl. 0 = slot wasn't populated this sweep.
+			// If main != 0 and (flr or wal) != main → that's an object.
+			const char *reason = tornadoMgr->mDbgColReason ? tornadoMgr->mDbgColReason : "?";
+			mTextWriter->printf("rsn=%s main=%X flr=%X wal=%X\n",
+				reason,
+				tornadoMgr->mDbgMainBlkLo,
+				tornadoMgr->mDbgFloorBlkLo,
+				tornadoMgr->mDbgWallBlkLo);
 		}
 	}
 	if(IS_DEV){

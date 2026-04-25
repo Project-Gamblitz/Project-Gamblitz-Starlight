@@ -2,6 +2,18 @@
 #include "flexlion/InkstrikeMgr.hpp"
 #include "flexlion/FsLogger.hpp"
 #include "Cmn/KDGndCol/Manager.h"
+
+// HitInfoImpl::mspManager is a static Manager* that gets populated when
+// Game::Field constructs a Manager (which calls HitInfoImpl::setup(this)).
+// Manager+0 holds the main field block pointer (set in Manager::regist
+// for the a2 & 1 branch). We use this to distinguish field/terrain hits
+// from object/Obj_ hits: hitBlock == mainBlock means it's the static
+// terrain, otherwise it's a registered object block.
+extern "C" {
+    extern void *_ZN3Cmn8KDGndCol11HitInfoImpl10mspManagerE;
+}
+#define KDGndColMspManager _ZN3Cmn8KDGndCol11HitInfoImpl10mspManagerE
+
 static bool wasSceneLoaded;
 static bool *isEffectPlay;
 rotateMtxFunc Utils::rotateMtxY = (rotateMtxFunc)(NULL);
@@ -39,29 +51,26 @@ sead::Vector3<float> Utils::calcGroundPos(Game::Player *player, sead::Vector3<fl
 		if(outFound) *outFound = false;
 		return pos;
 	}
-	sead::Vector3<float> oldpos = player->mPosition;
 
-	// Pierce loop. calcLandingPos sweeps ~500 units down from
-	// player.mPosition.Y. We:
-	//   - step probe.Y down by 450 if it didn't hit anything (covers
+	// Pierce loop. Each iteration sweeps a sphere from probe.Y straight
+	// down by 1000u with a broad mask that catches both the static
+	// field block AND registered object blocks. We:
+	//   - step probe.Y down by 950 if the sweep hits nothing (covers
 	//     stacked geometry / huge vertical drops)
-	//   - pierce 15u below the reported landPos if it hit something
-	//     invalid (bad mat / bad bits / no real surface info), so the
-	//     next sweep starts cleanly below the rejected surface
+	//   - pierce ~15u (or 20u for kill-plane bits 9/10) below the hit
+	//     if the surface validates as invalid, so the next sweep starts
+	//     cleanly below the rejected surface
 	//   - bail if probe.Y falls below -500 or we run out of attempts
 	//
 	// Start Y comes from mSpawnY (team respawn centroid Y + 150,
 	// captured once at match start by InkstrikeMgr::tryCaptureSpawnY).
-	//
-	// Pierce step (-15u) is sized just larger than calcLandingPos's
-	// internal sphere radius (~6-10u) so the next sweep doesn't overlap
-	// the surface we just rejected.
 	sead::Vector3<float> probe = pos;
 	probe.mY = Flexlion::InkstrikeMgr::sInstance->mSpawnY;
 
 	sead::Vector3<float> landPos = player->mPlayerSuperLanding->mLandingPos;
 	u16 lastAttr = 0xFFFF;
 	bool lastIsWall = false;
+	bool lastIsObject = false;
 	bool gotValidHit = false;
 	int attemptsUsed = 0;
 	const char *lastReason = "INIT";
@@ -75,104 +84,110 @@ sead::Vector3<float> Utils::calcGroundPos(Game::Player *player, sead::Vector3<fl
 			break;
 		}
 
-		player->mPosition = probe;
-		player->mPlayerSuperLanding->calcLandingPos();
-		// Restore mPosition immediately so the re-sweep below sees the
-		// player at their real location, and so we never leak a deep
-		// probe Y into other systems if we end up bailing out.
-		player->mPosition = oldpos;
-
-		if(player->mPlayerSuperLanding->mLandingDist >= 499.0f){
-			lastReason = "NOHIT_STEPDOWN";
-			probe.mY -= 450.0f;
-			continue;
-		}
-
-		landPos = player->mPlayerSuperLanding->mLandingPos;
-
-		// NOTE: we DO NOT early-return here when outFound is NULL.
-		// Both validation calls (every frame, with outFound) and commit
-		// calls (once at A-release, without outFound) must run the same
-		// pierce-and-validate logic. Otherwise the commit would just
-		// return the first calcLandingPos hit — which on a bit-9/10
-		// kill-plane surface is the kill plane itself, not the safe
-		// floor that validation pierced past. The Inkstrike then lands
-		// on the kill plane and the shooter dies. That was the visible
-		// "raycast says one thing, Inkstrike lands somewhere else"
-		// desync bug.
-
-		// Re-sweep at the landing position to fetch the KCL attribute.
-		// calcLandingPos itself doesn't expose the attr.
+		// Single broad-mask sphere sweep from probe.Y straight down.
+		// This REPLACES the previous calcLandingPos + re-sweep two-step.
 		//
-		// Sweep geometry tuned to be a tight probe of one point:
-		//   offset +10u: starts just above the reported landing without
-		//     re-hitting parent geometry above (which +100u tended to do).
-		//   dist 30u: only need to reach the surface calcLandingPos
-		//     already found; longer sweeps risk catching unrelated stuff.
-		//   radius 2u: smaller sphere = less chance of grazing sibling
-		//     geometry. We're probing a point, not physically moving.
+		// Why we don't use calcLandingPos anymore:
+		//   calcLandingPos uses mask 0x12020F (player-aware,
+		//   makeGndColAttrKeepOutPlayer | 0x100200F) which has bit 9
+		//   SET, so its sweep skips the registered-object array
+		//   entirely. That's why aiming at a map object made it go
+		//   straight through and land on the field underneath.
+		//
+		// Mask bit semantics for mask1 (verified in
+		// Manager::checkMoveSphere — the gates are at the byte at
+		// offset 77 of CheckSphereContext = byte 1 of mask1):
+		//   bit 8  (0x100): set = skip main field, clear = check it
+		//   bit 9  (0x200): set = skip OBJECTS, clear = iterate them
+		// We need both clear, hence 0xFFFFFCFF.
 		Cmn::KDGndCol::CheckIF colCheck((Cmn::Actor*)player);
-		sead::Vector3<float> sweepStart = landPos;
-		sweepStart.mY += 10.0f;
 		sead::Vector3<float> sweepDir;
 		sweepDir.mX = 0.0f;
 		sweepDir.mY = -1.0f;
 		sweepDir.mZ = 0.0f;
 		colCheck.checkMoveSphere(
-			sweepStart, sweepDir, 30.0f, 2.0f,
-			0xFFFFFEFF, 0xFFFFFFFF,
+			probe, sweepDir, 1000.0f, 5.0f,
+			0xFFFFFCFF, 0xFFFFFFFF,
 			Cmn::KDGndCol::Manager::cWallNrmY_L, 1.0f);
 
 		bool valid = true;
 		u16 attr = 0xFFFF;
 		bool isWall = false;
+		bool isObject = false;  // block != mainBlock = registered Obj_, not Fld_
 		bool hadBombBits = false;  // bit 9 or 10 = death-volume / bomb-only
 
 		int rf = colCheck.mResultFlags;
 		if(rf == 0){
-			// No material info — old code rejected this case.
-			valid = false;
-			lastReason = "NOMATERIAL";
+			// Sweep didn't hit anything in 1000u of probe.Y. Either we're
+			// above the map or there's a huge vertical gap. Step probe.Y
+			// down by 950 to look further down on the next iteration.
+			lastReason = "NOHIT_STEPDOWN";
+			probe.mY -= 950.0f;
+			continue;
 		} else {
 			u8 *hi = (u8*)colCheck.mHitInfoImpl;
 
 			// HitInfoImpl layout (RE'd from Cmn::KDGndCol::HitInfoImpl):
-			//   +140 (0x8C): u16 floor attr  (written by entryGeomL only
-			//                                 if a floor was actually hit)
-			//   +144 (0x90): float floor distance (clearImpl resets to
-			//                                     -3.4e38 sentinel)
-			//   +224 (0xE0): u16 wall attr   (only written if wall hit)
-			//   +228 (0xE4): float wall distance (sentinel reset)
+			//   +0x60 (96)  : vec3 floor hit position
+			//   +0xC8 (200) : vec3 wall  hit position
+			//   +140 (0x8C) : u16 floor attr   (only valid if floor hit)
+			//   +144 (0x90) : float floor metric (sentinel -FLT_MAX)
+			//   +224 (0xE0) : u16 wall  attr   (only valid if wall hit)
+			//   +228 (0xE4) : float wall  metric (sentinel)
+			//   +240 (0xF0) : Block* floor block
+			//   +248 (0xF8) : Block* wall  block
 			//
-			// The KEY insight: clearImpl does NOT clear +140 or +224
-			// directly — those retain STALE attr values from previous
-			// sweeps if the current sweep didn't write them. So picking
-			// the right field via mResultFlags & 1 (which only means
-			// "any hit") is wrong: when we hit only a wall, +140 still
-			// holds whatever floor attr a previous sweep left there.
-			//
-			// Correct test: check the distance fields. If floorDist is
-			// still the sentinel (-3.4e38), the floor attr was NOT
-			// written this sweep, so don't trust it. Same for wall.
+			// To distinguish field (Fld_) hits from object (Obj_) hits,
+			// we compare the chosen block pointer against the main field
+			// block (= Manager+0, set by Manager::regist when a field
+			// block registers itself). Match = Fld, mismatch = Obj.
 			float floorDist = *(float*)(hi + 144);
 			float wallDist  = *(float*)(hi + 228);
 			bool gotFloor = (floorDist > -1.0e30f);
 			bool gotWall  = (wallDist  > -1.0e30f);
 
+			void *floorBlock = *(void**)(hi + 240);
+			void *wallBlock  = *(void**)(hi + 248);
+
+			// Object hits sometimes don't populate the floor/wall metric
+			// at +144/+228 (the metric write path is gated on bits the
+			// engine sets only for terrain), so fall back to "block
+			// pointer non-null" as a populated-test for objects.
+			if(!gotFloor && floorBlock != NULL) gotFloor = true;
+			if(!gotWall  && wallBlock  != NULL) gotWall  = true;
+
+			void *mgr = KDGndColMspManager;
+			void *mainBlock = (mgr != NULL) ? *(void**)mgr : NULL;
+
+			// Snapshot the raw pointers for diagnostics. Low 32 bits is
+			// enough as a fingerprint to tell field/object apart in the
+			// debug overlay.
+			if(Flexlion::InkstrikeMgr::sInstance != NULL){
+				Flexlion::InkstrikeMgr::sInstance->mDbgMainBlkLo  = (u32)(uintptr_t)mainBlock;
+				Flexlion::InkstrikeMgr::sInstance->mDbgFloorBlkLo = (u32)(uintptr_t)floorBlock;
+				Flexlion::InkstrikeMgr::sInstance->mDbgWallBlkLo  = (u32)(uintptr_t)wallBlock;
+			}
+
 			if(gotFloor){
-				// Prefer floor attr — calcLandingPos found us a floor,
-				// this is the matching surface.
 				attr = *(u16*)(hi + 140);
 				isWall = false;
+				// Floor hit pos at +0x60..+0x68 (vec3 of floats).
+				landPos.mX = *(float*)(hi + 0x60);
+				landPos.mY = *(float*)(hi + 0x64);
+				landPos.mZ = *(float*)(hi + 0x68);
+				isObject = (mainBlock != NULL && floorBlock != NULL
+				            && floorBlock != mainBlock);
 			} else if(gotWall){
-				// No floor populated, but a wall was. Sphere likely
-				// brushed past a wall corner during descent.
 				attr = *(u16*)(hi + 224);
 				isWall = true;
+				// Wall hit pos at +0xC8..+0xD0.
+				landPos.mX = *(float*)(hi + 0xC8);
+				landPos.mY = *(float*)(hi + 0xCC);
+				landPos.mZ = *(float*)(hi + 0xD0);
+				isObject = (mainBlock != NULL && wallBlock != NULL
+				            && wallBlock != mainBlock);
 			} else {
-				// rf & 1 was set but neither floor nor wall got written
-				// (paint-only hit, or some other category). Can't trust
-				// any attr.
+				// Neither floor nor wall populated.
 				valid = false;
 				lastReason = "NO_GEOM";
 			}
@@ -210,9 +225,9 @@ sead::Vector3<float> Utils::calcGroundPos(Game::Player *player, sead::Vector3<fl
 
 				bool matIsBad = (mat == 9
 					|| mat == 11 || mat == 12
-					|| mat == 16
+					|| mat == 14 || mat == 16
 					|| mat == 18 || mat == 19
-					|| mat == 20 || mat == 21 || mat == 22
+					|| mat == 21 || mat == 22
 					|| mat == 24 || mat == 26 || mat == 27
 					|| mat == 29 || mat == 30
 					|| mat == 33 || mat == 34);
@@ -224,13 +239,28 @@ sead::Vector3<float> Utils::calcGroundPos(Game::Player *player, sead::Vector3<fl
 					// rather than a real paintable surface. Reject.
 					valid = false;
 					lastReason = "ATTR_ZERO";
+				} else if(isObject){
+					// Object collision (block != mainBlock). Objects
+					// (sponges, stage props, ride rails, etc.) often have
+					// grate/modifier bits set legitimately, so we don't
+					// reject on the full 0x9E00 mask. Only the
+					// death-volume bits 9/10 are deal-breakers.
+					if((attr & 0x0600) != 0){
+						valid = false;
+						lastReason = "BAD_BITS_OBJ";
+					} else if(matIsBad){
+						valid = false;
+						lastReason = "BAD_MAT_OBJ";
+					} else {
+						lastReason = isWall ? "ACCEPT_OBJ_WALL" : "ACCEPT_OBJ_FLOOR";
+					}
 				} else if(isWallKind){
-					// Walls legitimately have grate/modifier bits set,
-					// so only the material blacklist applies.
+					// Field walls legitimately have grate/modifier bits
+					// set, so only the material blacklist applies.
 					if(matIsBad){ valid = false; lastReason = "BAD_MAT"; }
 					else { lastReason = "ACCEPT_WALL"; }
 				} else {
-					// Floors: bits first, then mat blacklist.
+					// Field floors: bits first, then mat blacklist.
 					if(badBits != 0){ valid = false; lastReason = "BAD_BITS"; }
 					else if(matIsBad){ valid = false; lastReason = "BAD_MAT"; }
 					else { lastReason = "ACCEPT_FLOOR"; }
@@ -240,6 +270,7 @@ sead::Vector3<float> Utils::calcGroundPos(Game::Player *player, sead::Vector3<fl
 
 		lastAttr = attr;
 		lastIsWall = isWall;
+		lastIsObject = isObject;
 
 		if(valid){
 			gotValidHit = true;
@@ -254,13 +285,15 @@ sead::Vector3<float> Utils::calcGroundPos(Game::Player *player, sead::Vector3<fl
 		probe.mY = landPos.mY - pierceStep;
 	}
 
-	// Loop exited. mPosition is already restored (we restore it after
-	// every calcLandingPos call inside the loop), so no extra work here.
+	// Loop exited. We never modify mPosition anymore (the broad-mask
+	// sphere sweep doesn't need it as input), so no restore is needed.
 
 	if(Flexlion::InkstrikeMgr::sInstance != NULL){
 		Flexlion::InkstrikeMgr::sInstance->mDbgColAttr = lastAttr;
 		Flexlion::InkstrikeMgr::sInstance->mDbgColIsWall = lastIsWall;
 		Flexlion::InkstrikeMgr::sInstance->mDbgColY = landPos.mY;
+		Flexlion::InkstrikeMgr::sInstance->mDbgColIsObject = lastIsObject;
+		Flexlion::InkstrikeMgr::sInstance->mDbgColReason = lastReason;
 	}
 
 	if(!gotValidHit){
