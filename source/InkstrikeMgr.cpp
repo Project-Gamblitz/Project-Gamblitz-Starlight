@@ -130,7 +130,7 @@ namespace Flexlion{
         cameraheight = 1500.0f;
         cameraanim = 0.0f;
         camerafovy = 60.0f;
-		mSpawnY = 3000.0f;  // safe default
+		mSpawnY = 500.0f;  // safe default
 		mSpawnYCaptured = false;
 		mCamUpX = -1.0f;  // default to vanilla-style if snapshot fails
 		mCamUpZ = 0.0f;
@@ -310,9 +310,7 @@ namespace Flexlion{
             if(!isBulletDeinit){
 				for(int i = 0; i < 10; i++){
 					for(int slot = 0; slot < 2; slot++){
-						if(bullets[i][slot] != NULL){
-							bullets[i][slot]->reset();
-						}
+						bullets[i][slot] = NULL;
 					}
 					mActiveSlot[i] = -1;
 				}
@@ -320,12 +318,32 @@ namespace Flexlion{
                 isBulletDeinit = 1;
 				mMatchEnding = false;
 				mSpawnYCaptured = false;
-				mSpawnY = 3000.0f;
+				mSpawnY = 500.0f;
             }
             return;
         }
         isBulletDeinit = 0;
+        tryCaptureSpawnY();
     }
+
+    // Captures the controlled player's team respawn centroid Y + 150 once
+    // per match. Called every frame from onCalc() while the scene is loaded;
+    // bails early after first success. Reset back to the 500 default in
+    // onCalc()'s scene-unloaded branch so the next map re-captures.
+    void InkstrikeMgr::tryCaptureSpawnY(){
+        if(mSpawnYCaptured) return;
+        Game::PlayerMgr *pm = Game::PlayerMgr::sInstance;
+        if(pm == NULL) return;
+        Game::Player *ctrlPlayer = pm->getControlledPerformer();
+        if(ctrlPlayer == NULL) return;
+        int team = (int)ctrlPlayer->mTeam;
+        bool found = false;
+        sead::Vector3<float> centroid = findTeamSpawnCentroid(team, &found);
+        if(!found) return;
+        mSpawnY = centroid.mY + 115.0f;
+        mSpawnYCaptured = true;
+    }
+
     void InkstrikeMgr::detectChangeState(Game::Player *player){
         int id = player->mIndex;
         if(player->isInSpecial() and player->mSpecialWeaponId == TORNADO_SPECIAL_ID and playerState[id] == TornadoState::cNone){
@@ -360,10 +378,6 @@ namespace Flexlion{
             return;
         }
         Game::BulletMgr *bulletMgr = Game::MainMgr::sInstance->mBulletMgr;
-        if (!mSpawnYCaptured && player->isAlive() && isCtrlPerformer && player->mPosition.mY > 10.0f) {
-			mSpawnY = player->mPosition.mY + 110.0f;
-			mSpawnYCaptured = true;
-		}
         Game::PlayerInkAction *InkAction = player->mPlayerInkAction;
         Game::MiniMap *miniMap = Utils::getMinimap();
         sead::Vector3<float> miniMapAt = sead::Vector3<float>::zero;
@@ -402,17 +416,16 @@ namespace Flexlion{
 						autoDest.mY = InkstrikeMgr::sInstance->mSpawnY;
 						autoDest = Utils::calcGroundPos(player, autoDest);
 					} else if(isCtrlPerformer && mAimValid[id] && Lp::Utl::getCtrl(0)->isHoldContinue(starlight::Controller::Buttons::A, 1)){
-					// Special ran out or match ended while aiming at valid position — use cursor position
+					// Special ran out while aiming at valid position — use cursor position
 					const float halfCanvas = 360.0f;
 					float halfFovyRad = camerafovy * 0.5f * MATH_PI / 180.0f;
 					float tanHalfFovy = sinf(halfFovyRad) / cosf(halfFovyRad);
 					float worldPerCanvas = cameraheight * tanHalfFovy / halfCanvas;
 					sead::Vector3<float> camAt = miniMap->mMiniMapCamera->mAt;
-					autoDest.mX = camAt.mX + miniMap->mCursorPos.mX * worldPerCanvas;
+					autoDest = cursorToWorldXZ(camAt, miniMap->mCursorPos, worldPerCanvas);
 					autoDest.mY = InkstrikeMgr::sInstance->mSpawnY;
-					autoDest.mZ = camAt.mZ - miniMap->mCursorPos.mY * worldPerCanvas;
 					autoDest = Utils::calcGroundPos(player, autoDest);
-				} 
+				}
 				else {
 					// No valid aim — fall back to player position
 					autoDest = player->mPosition;
@@ -438,7 +451,7 @@ namespace Flexlion{
 				informPerformSpecial(player);
 				mWasAHeld[id] = false;
 				if(mActiveSlot[id] >= 0 && bullets[id][mActiveSlot[id]] != NULL) 
-						bullets[id][mActiveSlot[id]]->mStateMachine.changeState(BSAState::cState_Wait);
+					bullets[id][mActiveSlot[id]]->mStateMachine.changeState(BSAState::cState_Wait);
 				if(isCtrlPerformer){
 					Game::MiniMap *mMap = Utils::getMinimap();
 					if(mMap != NULL){

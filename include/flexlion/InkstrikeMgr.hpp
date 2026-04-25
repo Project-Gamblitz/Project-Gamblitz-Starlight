@@ -23,6 +23,7 @@ namespace Flexlion{
         void playerThirdCalc(Game::Player *player);
         void informShotInkstrike(Game::Player *player, sead::Vector3<float> pos, sead::Vector3<float> dest, int paintgamefrm);
         void onCalc();
+        void tryCaptureSpawnY();
 		void snapshotCamUp(sead::Vector3<float> camAt);
 		bool mMatchEnding;
         Lp::Sys::ModelArc *mTornadoArc;
@@ -46,6 +47,7 @@ namespace Flexlion{
         bool mRemoteShotPending[10];
         u16 mDbgColAttr;
         bool mDbgColIsWall;
+        float mDbgColY;  // Y coord where the validated hit was found
         bool isShot;
         float cameraanim;
         float cameraheight;

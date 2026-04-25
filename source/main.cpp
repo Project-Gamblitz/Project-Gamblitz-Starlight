@@ -794,8 +794,14 @@ void renderEntrypoint(agl::DrawContext *drawContext, sead::TextWriter *textWrite
 			} else {
 				int mat = attr & 0x3F;
 				const char *matName = (mat <= 34) ? sMaterialNames[mat] : "???";
-				mTextWriter->printf("COL_%X %s%s %s\n", attr, matName, tornadoMgr->mDbgColIsWall ? " (wall)" : "", tornadoMgr->mAimValid[ctrlPlayer->mIndex] ? "" : "[INVALID]");
+				mTextWriter->printf("COL_%X %s%s Y=%.1f %s\n",
+					attr, matName,
+					tornadoMgr->mDbgColIsWall ? " (wall)" : "",
+					tornadoMgr->mDbgColY,
+					tornadoMgr->mAimValid[ctrlPlayer->mIndex] ? "" : "[INVALID]");
 			}
+			sead::Vector3<float> pp = ctrlPlayer->mPosition;
+			mTextWriter->printf("PLR (%.1f, %.1f, %.1f)\n", pp.mX, pp.mY, pp.mZ);
 		}
 	}
 	if(IS_DEV){

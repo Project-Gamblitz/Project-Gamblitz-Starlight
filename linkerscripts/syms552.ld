@@ -958,6 +958,7 @@ _ZN4Game19AttractTargetVersus13startAttract_EPNS_6PlayerE = 0xDFBD8C - 0x2EBE000
 _ZN4Game19RollingBarrelOnline22getClassIterNodeStaticEv = 0x34A88 - 0x2EBE000;
 _ZN4Game19RollingBarrelOnline10informHit_EPNS0_8HitInfoE = 0xD942C8 - 0x2EBE000;
 _ZN4Game12RespawnPoint22getClassIterNodeStaticEv = 0x4F0AF8 - 0x2EBE000;
+_ZN3Cmn8KDGndCol11HitInfoImpl10mspManagerE = 0x2D61CD0 - 0x2EBE000;
 
 /* Player bullet damage — the real HP damage function used by bullet collision system */
 _PlayerApplyBulletDamage = 0x1028DCC - 0x2EBE000;
