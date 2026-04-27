@@ -1270,7 +1270,7 @@ void BulletSuperArtillery::vtSecondCalc(BulletSuperArtillery *self) {
 	self->eatActorClass(Game::BulletRollerSplash::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, -1);
 	self->eatActorClass(Game::BulletSpinnerBase::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, -1);
 	self->eatActorClass(Game::BulletTwinsBase::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, -1);
-	self->eatActorClass(Game::BulletSlosherBase::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, -1);
+	self->eatActorClass(Game::BulletSlosherBase::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, 6);
 	self->eatActorClass(Game::BulletSlosherSplash::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, -1);
 	self->eatActorClass(Game::BulletUmbrellaShotBase::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, -1);
 	self->eatActorClass(Game::BulletSpJetpackLauncher::getClassIterNodeStatic(), hitRadiusSq, hitHalfHeight, -1);
@@ -1370,17 +1370,15 @@ void BulletSuperArtillery::statePronounce() {
 }
 
 void BulletSuperArtillery::stateEnterWait() {
+	// Update xlink root matrix to tank position for rumble
+    if (mTornadoModel != NULL) {
+        mXLinkMtx = mTornadoModel->mtx;
+    }
 }
 
 void BulletSuperArtillery::stateWait() {
     // During cState_Wait, model is rendered at tank bone via calcTankBone in fourthCalc
     // State transitions to cState_Pronounce when launch() is called
-	// Update xlink root matrix to player position for rumble
-	mXLinkMtx = {{
-		1.0f, 0.0f, 0.0f, mSender->mPosition.mX,
-		0.0f, 1.0f, 0.0f, mSender->mPosition.mY,
-		0.0f, 0.0f, 1.0f, mSender->mPosition.mZ
-	}};
 }
 
 void BulletSuperArtillery::stateEnterBurst() {
