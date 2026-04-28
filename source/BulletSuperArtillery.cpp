@@ -8,6 +8,7 @@
 #include "Game/PaintUtl.h"
 #include "Game/DamageReason.h"
 #include "Game/SighterTarget.h"
+#include "Cmn/KDGndCol/Manager.h"
 #include "nn/fs.h"
 #include "flexlion/FsLogger.hpp"
 
@@ -22,6 +23,8 @@ extern "C" {
     extern u8 _ZTVN4sead22BufferedSafeStringBaseIcEE[];
     extern u8 _ZTVN4sead14SafeStringBaseIcEE[];
 	extern bool gSpecialWeaponPaint;
+	extern int gSpecialWeaponPlayerIdx;
+	extern bool gSpecialWeaponInkfurlerIdx[256];
     // Damagable::onDamage(damagable, attackerIdx, team, dmg)
     int _ZN4Game3Cmp9Damagable8onDamageEiN3Cmn3Def4TeamENS3_3DMGE(
         void *damagable, int attackerIdx, int team, int dmg);
@@ -62,6 +65,20 @@ extern "C" {
         void *attractTarget, Game::Player *player);
     void _ZN4Game19RollingBarrelOnline10informHit_EPNS0_8HitInfoE(
         void *barrel, Game::RollingBarrelOnline::HitInfo *h);
+
+    // Cmn::KDGndCol::HitInfo::getPaintBlock_PaintInfo(int blockIdx, u8* outPaintIdx,
+    //   sead::Vector3<float>* probePos, sead::Vector3<float>* outLocalPos,
+    //   PaintType* outPaintType, Block** outPaintInfo, Block** unused) const
+    // Called per paint block returned by checkSphere; outPaintIdx receives the
+    // block's ObjPaintIndex byte (0xFE = field, otherwise specific object slot).
+    void _ZNK3Cmn8KDGndCol7HitInfo23getPaintBlock_PaintInfoEiPhPN4sead7Vector3IfEES6_PNS1_9PaintTypeEPPNS0_5BlockESB_(
+        void *self, int blockIdx, unsigned char *outPaintIdx,
+        sead::Vector3<float> *probePos, sead::Vector3<float> *outLocalPos,
+        unsigned int *outPaintType, void **outPaintInfo, void *unused);
+
+    // Per-mode paint-block-count table. Indexed as [2 * curModeIdx], where
+    // curModeIdx is read from HitInfoImpl + 0x17C after a checkSphere succeeds.
+    extern unsigned int _ZN3Cmn8KDGndCol11HitInfoImpl19msaanHitBlock_PaintE[];
 	}
 #define CmnActorCtor _ZN3Cmn5ActorC2Ev
 #define EnumPropDefCtor _ZN6xlink222EnumPropertyDefinitionC2EPKcb
@@ -85,6 +102,8 @@ extern "C" {
 #define AirBallOnlineDamage _ZN4Game13AirBallOnline6damageEPv
 #define AttractTargetStartAttract _ZN4Game19AttractTargetVersus13startAttract_EPNS_6PlayerE
 #define RollingBarrelInformHit _ZN4Game19RollingBarrelOnline10informHit_EPNS0_8HitInfoE
+#define HitInfoGetPaintBlock_PaintInfo _ZNK3Cmn8KDGndCol7HitInfo23getPaintBlock_PaintInfoEiPhPN4sead7Vector3IfEES6_PNS1_9PaintTypeEPPNS0_5BlockESB_
+#define HitInfoImplMsaanHitBlock_Paint _ZN3Cmn8KDGndCol11HitInfoImpl19msaanHitBlock_PaintE
 
 // Flight parameters
 const int BSA_FLIGHT_TIME = 120;
@@ -93,11 +112,12 @@ const float tornadoTankZOffset = -3.0f;
 
 // Burst parameters
 const float BSA_BURST_RADIUS_START = 0.0f;   // Initial paint/hitbox radius
-const float BSA_BURST_RADIUS_MAX   = 300.0f;  // Maximum radius 
+const float BSA_BURST_RADIUS_MAX   = 300.0f;  // Maximum radius
 const float BSA_BURST_RADIUS_GROW  = 0.5f;    // Radius growth per frame
 const float BSA_BURST_TEX_ROTATION = 30.0f; // texture rotation per paint
 const float BSA_BURST_ROT_FRAMES   = 2.0f; // how many frames per rotation step (can be different)
 const int  	BSA_BURST_FRAMES	   = 2;		// how many frames each time paint is applied
+const float BSA_BURST_HEIGHT       = 280.0f; // cylinder half-height (paint reaches +/- this from mTo.y)
 const int   BSA_BURST_DAMAGE       = 25;       // 2.5 HP per frame (internal units: 25 = 2.5% of 1000 max HP)
 const float BSA_BURST_DMG_START	   = 120.0f;  // 12.0 HP at burst start
 const float BSA_BURST_DMG_END      = 30.0f;   // 3.0 HP at burst end
@@ -1530,7 +1550,7 @@ static int   s_BSA_BURST_DURATION     = BSA_BURST_DURATION;
 //}
 
 void BulletSuperArtillery::calcBurstFollow() {
-	int PlayerIndex = mSender->mIndex;
+    int PlayerIndex = mSender->mIndex;
     mBurstFrm++;
     float increment = (s_BSA_BURST_RADIUS_MAX - s_BSA_BURST_RADIUS_START) / (float)s_BSA_BURST_DURATION;
     float currentRadius = s_BSA_BURST_RADIUS_START + (float)mBurstFrm * increment;
@@ -1538,122 +1558,174 @@ void BulletSuperArtillery::calcBurstFollow() {
 
     // Paint every x frames
     if(mBurstFrm % s_BSA_BURST_FRAMES == 0){
-        // Rotate texture each paint application
-        // Each call rotates by x degrees — requestColAndPaint's vel parameter
-        // can be used to rotate the texture by passing a rotated direction vector
-		float rotAngle = (float)(mBurstFrm / s_BSA_BURST_ROT_FRAMES) * (s_BSA_BURST_TEX_ROTATION * MATH_PI / 180.0f);
+        float rotAngle = (float)(mBurstFrm / s_BSA_BURST_ROT_FRAMES) * (s_BSA_BURST_TEX_ROTATION * MATH_PI / 180.0f);
+        gSpecialWeaponPaint = true;
+        gSpecialWeaponPlayerIdx = PlayerIndex;
+
+        // Build the inkfurler paintIdx skip-set for this paint frame.
+        // BlowoutsOnline stores its assigned paintIdx at byte offset 0x570
+        // (verified from BlowoutsOnline::reset_'s requestClearPaint call).
+        // Cylinder paint persists in PaintDrawCommandMgr queues that the
+        // inkfurler roll/unroll reset can't drain — paintIdx values flagged
+        // here will be skipped by the cylinder loop and instead picked up
+        // by the trailing requestColAndPaint stamp pass.
+        memset(gSpecialWeaponInkfurlerIdx, 0, sizeof(gSpecialWeaponInkfurlerIdx));
+        {
+            Lp::Sys::ActorClassIterNodeBase *furlerIter =
+                Game::BlowoutsOnline::getClassIterNodeStatic();
+            for (Cmn::Actor *obj = (Cmn::Actor *)furlerIter->derivedFrontActiveActor();
+                 obj != NULL;
+                 obj = (Cmn::Actor *)furlerIter->derivedNextActiveActor(obj))
+            {
+                unsigned char furlerIdx = *((unsigned char*)obj + 0x570);
+                if (furlerIdx <= 0xFD)
+                    gSpecialWeaponInkfurlerIdx[furlerIdx] = true;
+            }
+        }
+
+        Cmn::Def::Team team = *(Cmn::Def::Team*)(_actorBase + 0x328);
+
+        // Volumetric cylinder paint via requestIndependentHeightRangePaint.
+        // paintIdx = 0xFE → field block (world-frame, no per-object transform).
+        // The hook on PaintDrawCommandMgr::requestPaint (552.slpatch FC26AC)
+        // intercepts the dispatch and overwrites the RequestPaintArg's
+        // playerIdx/cmd fields so the bursting player gets credit without
+        // refilling their special gauge.
+        sead::Vector2<float> heightRange;
+        heightRange.mX = -0.5f - BSA_BURST_HEIGHT;
+        heightRange.mY = BSA_BURST_HEIGHT;
+
+        sead::Vector2<float> extent;
+        extent.mX = currentRadius;
+        extent.mY = currentRadius;
+
+        sead::Vector2<float> paintDir;
+        paintDir.mX = sinf(rotAngle);
+        paintDir.mY = cosf(rotAngle);
+
+        u32 paintIdxData = 0xFE;
+        Game::ObjPaintIndex paintIdx;
+        paintIdx.mIndex = &paintIdxData;
+
+        unsigned int frame = Game::MainMgr::sInstance->mPaintGameFrame;
+
+        // Field paint (paintIdx 0xFE → world frame, no per-object transform).
+        Game::PaintUtl::requestIndependentHeightRangePaint(
+            frame, heightRange, mTo, sead::Vector3<float>::ey,
+            extent, paintDir, team, paintIdx,
+            (Game::PaintTexType)11, (Cmn::KDGndCol::HitInfo::PaintType)1);
+
+        // Object paint — mimic requestColAndPaint's per-block transform.
+        // Sphere-check to enumerate paint blocks the burst could touch, then
+        // for each unique paintIdx, read the block's paintInfo (basis matrix
+        // at +0x0C..+0x2C, origin at +0x30..+0x38) and compute the world→
+        // block-local transform exactly the way requestColAndPaint does
+        // internally:
+        //
+        //   delta     = mTo - blockOrigin
+        //   localPos  = basis · delta
+        //
+        // We pass localPos as the cylinder's position. The vtable34Hook
+        // (552.slpatch FC2500) skips the per-object pos transform inside
+        // requestIndependentHeightRangePaint so our pre-computed local
+        // value isn't re-transformed. This gives correct paint placement
+        // per block and naturally excludes far objects (their localPos
+        // ends up far outside their UV bounds → renderer paints nothing).
+        Cmn::KDGndCol::CheckIF colCheck(NULL);
+        sead::Vector3<float> probeWorld = mTo;
+        probeWorld.mY += 1.0f;
+        float sphereRad = (BSA_BURST_HEIGHT > currentRadius) ? BSA_BURST_HEIGHT : currentRadius;
+        // Wide kindFloor mask (same as Utils::calcGroundPos's raycast): include
+        // every floor kind, only clear bits 8 (skip main field) and 9 (skip
+        // objects) so both are iterated. Catches stage-specific block kinds
+        // like Mahi-Mahi's water-platform surfaces that the narrower
+        // requestColAndPaint mode (0x4040A) doesn't include.
+        unsigned int sweepMode = 0xFFFFFCFF;
+        bool hit = colCheck.checkSphere(probeWorld, sphereRad, sweepMode, 0xFFFFFFFF,
+                                        Cmn::KDGndCol::Manager::cWallNrmY_L);
+        if (hit && colCheck.mHitInfoImpl != NULL) {
+            bool seen[256] = {false};
+            seen[0xFE] = true;  // field already dispatched above
+            seen[0xFF] = true;  // sentinel — never paint
+            // Inkfurlers are routed to the requestColAndPaint stamp pass
+            // below; mark them as already-seen here so the cylinder loop
+            // doesn't dispatch a (queue-persistent) cylinder for them.
+            for (int idx = 0; idx < 256; ++idx)
+                if (gSpecialWeaponInkfurlerIdx[idx])
+                    seen[idx] = true;
+
+            unsigned int curModeIdx = *(unsigned int*)((unsigned char*)colCheck.mHitInfoImpl + 0x17C);
+            unsigned int numBlocks  = HitInfoImplMsaanHitBlock_Paint[2 * curModeIdx];
+
+            for (unsigned int i = 0; i < numBlocks; ++i) {
+                unsigned char paintIdxByte = 0xFE;
+                sead::Vector3<float> probeIO  = probeWorld;
+                sead::Vector3<float> localOut = {0.0f, 0.0f, 0.0f};
+                unsigned int paintTypeOut = 0;
+                void *paintInfoOut = NULL;
+
+                HitInfoGetPaintBlock_PaintInfo(
+                    colCheck.mHitInfoImpl, (int)i, &paintIdxByte,
+                    &probeIO, &localOut, &paintTypeOut, &paintInfoOut, NULL);
+
+                if (seen[paintIdxByte]) continue;
+                if (paintInfoOut == NULL) continue;
+                seen[paintIdxByte] = true;
+
+                // Read block transform from paintInfo (same offsets requestColAndPaint uses)
+                float* pi = (float*)paintInfoOut;
+                float b00 = pi[3],  b01 = pi[4],  b02 = pi[5];   // basis row 0  (off 0x0C/0x10/0x14)
+                float b10 = pi[6],  b11 = pi[7],  b12 = pi[8];   // basis row 1  (off 0x18/0x1C/0x20)
+                float b20 = pi[9],  b21 = pi[10], b22 = pi[11];  // basis row 2  (off 0x24/0x28/0x2C)
+                float ox  = pi[12], oy  = pi[13], oz  = pi[14];  // block origin (off 0x30/0x34/0x38)
+
+                float dx = mTo.mX - ox;
+                float dy = mTo.mY - oy;
+                float dz = mTo.mZ - oz;
+                sead::Vector3<float> localPos;
+                localPos.mX = dx * b00 + dy * b01 + dz * b02;
+                localPos.mY = dx * b10 + dy * b11 + dz * b12;
+                localPos.mZ = dx * b20 + dy * b21 + dz * b22;
+
+                u32 objIdxData = paintIdxByte;
+                Game::ObjPaintIndex objPaintIdx;
+                objPaintIdx.mIndex = &objIdxData;
+                Game::PaintUtl::requestIndependentHeightRangePaint(
+                    frame, heightRange, localPos, sead::Vector3<float>::ey,
+                    extent, paintDir, team, objPaintIdx,
+                    (Game::PaintTexType)11,
+                    (Cmn::KDGndCol::HitInfo::PaintType)1);
+            }
+        }
+
+        // Inkfurler stamp pass — one requestColAndPaint covering the burst
+        // sphere. Internally enumerates blocks and dispatches one-shot stamps
+        // via requestPaintImpl_, which inkfurler roll/unroll resets DO drain
+        // properly (cylinder paint commands persist in queues that don't get
+        // drained, hence the ghost-paint bug). The requestPaintImplHook
+        // filters every stamp through this hook and admits ONLY paintIdx
+        // values flagged in gSpecialWeaponInkfurlerIdx — so field, regular
+        // objects, and other surfaces (already painted by the cylinder pass
+        // above) are dropped, leaving only inkfurler stamps that survive.
+        // a7=true broadcasts the paint over the network so other players
+        // see the same paint on the inkfurler.
         sead::Vector3<float> vel;
         vel.mX = sinf(rotAngle);
         vel.mY = 0.0f;
         vel.mZ = cosf(rotAngle);
-		gSpecialWeaponPaint = true;
+        Game::PaintUtl::requestColAndPaint(
+            mTo,
+            BSA_BURST_HEIGHT,
+            extent,
+            vel,
+            (Game::PaintTexType)11,
+            team,
+            sead::Vector3<float>::ey,
+            true,                  // a7 = network broadcast
+            PlayerIndex,
+            BSA_BURST_HEIGHT);
 
-        sead::Vector2<float> paintSize = {currentRadius, currentRadius};
-        Cmn::Def::Team team = *(Cmn::Def::Team*)(_actorBase + 0x328);
-        Game::PaintUtl::requestColAndPaint(
-            mTo, paintSize, vel,
-            (Game::PaintTexType)11, team,
-            sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
-			
-		sead::Vector3<float> paintPosXXSHigh = mTo;
-		paintPosXXSHigh.mY += 280.0f; // units up
-        Game::PaintUtl::requestColAndPaint(
-            paintPosXXSHigh, paintSize, vel,
-            (Game::PaintTexType)11, team,
-            sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
-			
-		sead::Vector3<float> paintPosXSHigh = mTo;
-		paintPosXSHigh.mY += 240.0f; // units up
-        Game::PaintUtl::requestColAndPaint(
-            paintPosXSHigh, paintSize, vel,
-            (Game::PaintTexType)11, team,
-            sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
-			
-		sead::Vector3<float> paintPosSSHigh = mTo;
-		paintPosSSHigh.mY += 200.0f; // units up
-        Game::PaintUtl::requestColAndPaint(
-            paintPosSSHigh, paintSize, vel,
-            (Game::PaintTexType)11, team,
-            sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
-			
-		sead::Vector3<float> paintPosSHigh = mTo;
-		paintPosSHigh.mY += 160.0f; // units up
-        Game::PaintUtl::requestColAndPaint(
-            paintPosSHigh, paintSize, vel,
-            (Game::PaintTexType)11, team,
-            sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
-			
-		sead::Vector3<float> paintPosHigh = mTo;
-		paintPosHigh.mY += 120.0f; // units up
-        Game::PaintUtl::requestColAndPaint(
-            paintPosHigh, paintSize, vel,
-            (Game::PaintTexType)11, team,
-            sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
-			
-		sead::Vector3<float> paintPosMHigh = mTo;
-		paintPosMHigh.mY += 80.0f; // units up
-        Game::PaintUtl::requestColAndPaint(
-            paintPosMHigh, paintSize, vel,
-            (Game::PaintTexType)11, team,
-            sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
-			
-		sead::Vector3<float> paintPosLHigh = mTo;
-		paintPosLHigh.mY += 40.0f; // units up
-        Game::PaintUtl::requestColAndPaint(
-            paintPosLHigh, paintSize, vel,
-            (Game::PaintTexType)11, team,
-            sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
-			
-		sead::Vector3<float> paintPosLLow = mTo;
-		paintPosLLow.mY -= 40.0f; // units down
-        Game::PaintUtl::requestColAndPaint(
-            paintPosLLow, paintSize, vel,
-            (Game::PaintTexType)11, team,
-            sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
-			
-		sead::Vector3<float> paintPosMLow = mTo;
-		paintPosMLow.mY -= 80.0f; // units down
-        Game::PaintUtl::requestColAndPaint(
-            paintPosMLow, paintSize, vel,
-            (Game::PaintTexType)11, team,
-            sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
-			
-		sead::Vector3<float> paintPosLow = mTo;
-		paintPosLow.mY -= 120.0f; // units down
-        Game::PaintUtl::requestColAndPaint(
-            paintPosLow, paintSize, vel,
-            (Game::PaintTexType)11, team,
-            sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
-			
-		sead::Vector3<float> paintPosSLow = mTo;
-		paintPosSLow.mY -= 160.0f; // units down
-        Game::PaintUtl::requestColAndPaint(
-            paintPosSLow, paintSize, vel,
-            (Game::PaintTexType)11, team,
-            sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
-			
-		sead::Vector3<float> paintPosSSLow = mTo;
-		paintPosSSLow.mY -= 200.0f; // units down
-        Game::PaintUtl::requestColAndPaint(
-            paintPosSSLow, paintSize, vel,
-            (Game::PaintTexType)11, team,
-            sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
-			
-		sead::Vector3<float> paintPosXSLow = mTo;
-		paintPosXSLow.mY -= 240.0f; // units down
-        Game::PaintUtl::requestColAndPaint(
-            paintPosXSLow, paintSize, vel,
-            (Game::PaintTexType)11, team,
-            sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
-			
-		sead::Vector3<float> paintPosXXSLow = mTo;
-		paintPosXXSLow.mY -= 280.0f; // units down
-        Game::PaintUtl::requestColAndPaint(
-            paintPosXXSLow, paintSize, vel,
-            (Game::PaintTexType)11, team,
-            sead::Vector3<float>::ey, false, PlayerIndex, 80.0f);
-
-		gSpecialWeaponPaint = false;
+        gSpecialWeaponPaint = false;
     }
 
     if (mBurstFrm >= s_BSA_BURST_DURATION) {

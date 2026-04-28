@@ -358,6 +358,16 @@
 //Inkstrike Paint set as special paint
 00FC3918 BL requestPaintImplHook
 
+// Inkstrike Cylinder Paint — inject playerIdx + cmd into RequestPaintArg
+// so requestIndependentHeightRangePaint awards points without filling the
+// special gauge (mirrors requestPaintImplHook's behavior for ColAndPaint).
+00FC26AC BL paintDrawCommandMgrRequestPaintHook
+
+// Inkstrike Cylinder Paint — skip ObjPaint::vtable[34] pos transform when
+// BSA is bursting, so the dispatched cylinder uses world-space mTo instead
+// of being warped into each object's local frame.
+00FC2500 BL vtable34Hook
+
 // fizzy bomb white ink frames increase to 85 (another prochara balance change)
 010951A0 A80A8052
 

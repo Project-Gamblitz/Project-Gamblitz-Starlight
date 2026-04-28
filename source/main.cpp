@@ -110,6 +110,16 @@ extern "C" sead::ExpHeap *flexGetStarlightHeap(){
 
 // Special weapon paint flag — suppresses gauge fill for Inkstrike paint
 bool gSpecialWeaponPaint = false;
+// Player index to attribute special-weapon paint to (read by the
+// PaintDrawCommandMgr::requestPaint hook for cylinder/height-range paints,
+// since that path doesn't go through requestPaintImpl_).
+int gSpecialWeaponPlayerIdx = 0;
+// Per-paintIdx flag set by BSA before its paint frame: which paintIdx values
+// belong to BlowoutsOnline (inkfurler) actors. The cylinder dispatch loop
+// skips these (cylinder paint persists in queues that inkfurlers don't
+// drain on roll/unroll), and the stamp dispatch + requestPaintImplHook
+// admits only their stamps (which are one-shot and reset cleanly).
+bool gSpecialWeaponInkfurlerIdx[256] = {false};
 
 static void (*requestPaintImplOrig)(
     int, int, int,
@@ -126,12 +136,72 @@ void requestPaintImplHook(
     int texType, unsigned int objPaintIdx,
     const int* alpha, bool overwrite, bool a14, bool a15, int a16)
 {
-    if (gSpecialWeaponPaint && paintCommandType == 0)
-        paintCommandType = 2;
+    if (gSpecialWeaponPaint) {
+        // BSA's cylinder pass (requestIndependentHeightRangePaint) handles
+        // field and the bulk of objects — those stamps must NOT flow through
+        // here (would cause double-paint and waste). The exception is inkfurlers:
+        // cylinder paint persists in PaintDrawCommandMgr queues that the
+        // inkfurler's roll/unroll reset doesn't drain, leaving permanent ghost
+        // marks. So BSA also fires a single requestColAndPaint per paint frame
+        // as a *stamp* pass (one-shot, naturally cleared by inkfurler reset),
+        // and we admit ONLY stamps targeting paintIdx values flagged as
+        // inkfurlers. All other stamps coming through this hook while
+        // gSpecialWeaponPaint is true get dropped.
+        if (paintType) {
+            unsigned char idx = (unsigned char)paintType[0];
+            if (idx > 0xFD || !gSpecialWeaponInkfurlerIdx[idx])
+                return;
+        }
+        // Suppress self-gauge-fill: inkfurler stamps are still our paint and
+        // we want player credit without refilling the bursting player's gauge.
+        if (paintCommandType == 0)
+            paintCommandType = 2;
+    }
     requestPaintImplOrig(
         paintCommandType, playerIndex, frame,
         pos, nrm, size, paintDir, team, paintType,
         texType, objPaintIdx, alpha, overwrite, a14, a15, a16);
+}
+
+// PaintDrawCommandMgr::requestPaint hook.
+// requestIndependentHeightRangePaint builds a RequestPaintArg with playerIdx=0
+// and cmd=1 hardcoded (team paint, no per-player attribution) and dispatches
+// here. We intercept the BL inside that function (5.5.2: 0xFC26AC) and, if a
+// special weapon is currently painting, rewrite those two fields in the buffer
+// so the renderer credits the bursting player without refilling their gauge —
+// same effect requestPaintImplHook achieves for ColAndPaint stamps.
+//
+// RequestPaintArg layout (verified against RequestPaintArg::RequestPaintArg
+// constructor at 3.1 0x7100ddf474):
+//   +0x00 : int  playerIdx
+//   +0x38 : int  cmd / mActionType   (0=player+gauge, 1=team-only, 2=player+no-gauge)
+static __int64 (*paintDrawCommandMgrRequestPaintOrig)(__int64 mgr, int* paintArg);
+
+__int64 paintDrawCommandMgrRequestPaintHook(__int64 mgr, int* paintArg)
+{
+    if (gSpecialWeaponPaint && paintArg) {
+        ((int*)paintArg)[0]  = gSpecialWeaponPlayerIdx;   // +0x00 playerIdx
+        ((int*)paintArg)[14] = 2;                         // +0x38 cmd
+    }
+    return paintDrawCommandMgrRequestPaintOrig(mgr, paintArg);
+}
+
+// Hook for the BLR at 5.5.2 0xFC2500 inside requestIndependentHeightRangePaint.
+// That BLR calls ObjPaint::vtable[33] (byte offset 0x108) which transforms the
+// caller-provided pos in-place into the object's local coordinate frame —
+// causing distant objects to receive paint when their local UVs happen to land
+// near the transformed value. When gSpecialWeaponPaint is true (BSA bursting),
+// we skip the transform so the dispatched cylinder retains world-space mTo.
+// Vanilla callers (PaintTargetArea, PaintingLift) keep original behavior by
+// reconstructing the virtual call when the flag is false.
+void vtable34Hook(void* objPaint, sead::Vector3<float>* pos)
+{
+    if (gSpecialWeaponPaint) return;
+    if (objPaint == NULL) return;
+    void** vtable = *(void***)objPaint;
+    void (*method)(void*, sead::Vector3<float>*) =
+        (void (*)(void*, sead::Vector3<float>*))vtable[33];  // 0x108 / 8 = index 33
+    method(objPaint, pos);
 }
 
 static Starlion::KingSquidMgr *kingSquidMgr = NULL;
@@ -1120,6 +1190,7 @@ void init_starlion(){
 	isSleepingAllOrig = (bool (*)(Game::BulletMgr*))ProcessMemory::MainAddr(0x4E936C);
 	
 	requestPaintImplOrig = (decltype(requestPaintImplOrig))ProcessMemory::MainAddr(0xFC1BAC);
+	paintDrawCommandMgrRequestPaintOrig = (decltype(paintDrawCommandMgrRequestPaintOrig))ProcessMemory::MainAddr(0xFB25FC);
 
 	// Initialize MatchJoint LAN function pointers
 	MatchJointLan::init();
@@ -1568,6 +1639,8 @@ void hooks_init(){
 	isSleepingAllHook(NULL);
 	respawnRadarHook();
 	requestPaintImplHook(0, 0, 0, NULL, NULL, NULL, NULL, 0, NULL, 0, 0, NULL, 0, 0, 0, 0);
+	paintDrawCommandMgrRequestPaintHook(0, NULL);
+	vtable34Hook(NULL, NULL);
 	// AutoMatch LAN session init (BL hook inside reqAutoMatch)
 	autoMatchLanInitHook(NULL);
 	// Ink Tank Override
