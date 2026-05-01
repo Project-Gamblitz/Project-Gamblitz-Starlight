@@ -116,18 +116,40 @@ bool gSpecialWeaponPaint = false;
 int gSpecialWeaponPlayerIdx = 0;
 
 #if 0
-// Paint debug state — populated by paintDrawCommandInitializeHook for BSA
-// paint dispatches only (gated on gSpecialWeaponPaint). Re-enable together
-// with the [INKSTRIKE PAINT] overlay block in renderEntrypoint, the capture
-// inside paintDrawCommandInitializeHook, and the FB2710 BL hook in
-// patches/552.slpatch to instrument paint behavior again.
+// Paint debug state — populated by paintDrawCommandInitializeHook to capture
+// BSA paint dispatches (gated on gSpecialWeaponPaint) and vanilla paint side
+// by side. Re-enable together with the capture body in
+// paintDrawCommandInitializeHook, the [INKSTRIKE PAINT] overlay in
+// renderEntrypoint, the BSA debug writes (gPaintIdxIsTiedToField,
+// gPaintDbgMainBlockLo, tiedSkipped tracking), and the FB2710 BL hook in
+// patches/552.slpatch. The struct must be kept in sync with the matching
+// extern declaration in BulletSuperArtillery.cpp.
+//
+// lastBsa* / lastVan* capture the most recent cylinder dispatch's frame
+// (RequestPaintArg+0x04) and resulting RainbowInkFrame (cmd+0x20). They are
+// the smoking-gun datapoints for diagnosing override-priority issues —
+// we can compare BSA's frame/RIF against any vanilla shooter's in real time.
 struct PaintDbgState {
     unsigned int dispatchCountPerIdx[256];
     unsigned int totalThisSubFrame;
     unsigned int totalAllTime;
     unsigned int subFramesSeen;
     unsigned int castsSeen;
+    unsigned int lastBsaSceneFrame;
     unsigned int lastBsaFrame;
+    unsigned int lastBsaRIF;
+    int          lastBsaFaceType;
+    int          lastBsaPaintIdx;
+    int          lastBsaCmdAction;
+    int          lastBsaPlayerIdx;
+    unsigned int badRifCount;
+    unsigned int lastPaintFrameCounter;
+    unsigned int lastVanFrame;
+    unsigned int lastVanRIF;
+    int          lastVanFaceType;
+    int          lastVanPaintIdx;
+    int          lastVanCmdAction;
+    int          lastVanPlayerIdx;
 };
 PaintDbgState gPaintDbg = {0};
 bool gPaintIdxIsTiedToField[256] = {false};
@@ -202,9 +224,11 @@ void vtable34Hook(void* objPaint, sead::Vector3<float>* pos)
 }
 
 // Hook on the BL at 5.5.2 0xFB2710 inside PaintDrawCommandMgr::requestPaint
-// that dispatches to PaintDrawCommand::initialize. Currently a passthrough,
-// kept in place as a future intercept point if we need to mutate any cmd
-// fields after initialize sets them or capture paint state for debugging.
+// that dispatches to PaintDrawCommand::initialize. Currently a passthrough
+// kept in place as a future intercept point. Re-enable together with the
+// PaintDbgState struct + globals + the [INKSTRIKE PAINT] overlay block in
+// renderEntrypoint + the BL line in patches/552.slpatch to capture per-
+// dispatch frame/RIF/face/paintIdx for diagnosis.
 static void (*paintDrawCommandInitializeOrig)(__int64 cmd, int* arg);
 
 void paintDrawCommandInitializeHook(__int64 cmd, int* arg)
@@ -933,26 +957,47 @@ void renderEntrypoint(agl::DrawContext *drawContext, sead::TextWriter *textWrite
 		mTextWriter->printf("------------------------\n");
 	}
 #if 0
-	// Paint debug overlay — re-enable together with the PaintDbgState struct
-	// + the capture in paintDrawCommandInitializeHook + the FB2710 BL hook
-	// in patches/552.slpatch to instrument paint dispatches at runtime.
-	// Shows: total Inkstrike casts, paint sub-frames, dispatches per
-	// paintIdx, and a [T:tied,skipped] marker for floor-tied objects.
+	// Paint debug overlay — paired with the PaintDbgState struct, the
+	// capture in paintDrawCommandInitializeHook, and the FB2710 BL hook in
+	// patches/552.slpatch. Re-enable all four together to instrument paint
+	// dispatches at runtime. Shows: total Inkstrike casts, paint sub-frames,
+	// the live engine paint-frame counter and offline flag, per-paintIdx
+	// dispatch counts, [T:tied,skipped] for floor-tied objects, and most
+	// recent BSA vs VAN frame/RIF — these are the smoking-gun datapoints
+	// when override-priority bugs reappear.
 	if(IS_DEV && mTextWriter != NULL){
 		sead::Vector2<float> dbgPos = {10.0f, 200.0f};
 		mTextWriter->setCursorFromTopLeft(dbgPos);
+		unsigned int liveCounter = 0;
+		bool liveOfflineFlag = false;
+		if (Game::MainMgr::sInstance != NULL) {
+			liveCounter = Game::MainMgr::sInstance->mPaintGameFrame;
+			Game::CloneObjMgr* clone = Game::MainMgr::sInstance->cloneObjMgr;
+			if (clone != NULL) liveOfflineFlag = clone->mIsOfflineScene;
+		}
 		mTextWriter->printf("[INKSTRIKE PAINT] casts=%u subfrm=%u\n",
 			gPaintDbg.castsSeen, gPaintDbg.subFramesSeen);
 		mTextWriter->printf("totDispatch=%u thisSubFrm=%u tiedSkip=%u\n",
 			gPaintDbg.totalAllTime, gPaintDbg.totalThisSubFrame,
 			gPaintDbgTiedSkippedLast);
+		mTextWriter->printf("paintFrm=%u offline=%d bsaChose=%u\n",
+			liveCounter, liveOfflineFlag ? 1 : 0,
+			gPaintDbg.lastPaintFrameCounter);
+		mTextWriter->printf("BSA f=%u RIF=%u badRIF=%u idx=0x%02X face=%d cmd=%d p=%d\n",
+			gPaintDbg.lastBsaFrame, gPaintDbg.lastBsaRIF, gPaintDbg.badRifCount,
+			gPaintDbg.lastBsaPaintIdx, gPaintDbg.lastBsaFaceType,
+			gPaintDbg.lastBsaCmdAction, gPaintDbg.lastBsaPlayerIdx);
+		mTextWriter->printf("VAN f=%u RIF=%u idx=0x%02X face=%d cmd=%d p=%d\n",
+			gPaintDbg.lastVanFrame, gPaintDbg.lastVanRIF,
+			gPaintDbg.lastVanPaintIdx, gPaintDbg.lastVanFaceType,
+			gPaintDbg.lastVanCmdAction, gPaintDbg.lastVanPlayerIdx);
 		mTextWriter->printf("objArr=%X\n", gPaintDbgMainBlockLo);
 		if (gPaintDbg.dispatchCountPerIdx[0xFE] > 0) {
 			mTextWriter->printf("Field (0xFE) painted x%u\n",
 				gPaintDbg.dispatchCountPerIdx[0xFE]);
 		}
 		int linesPrinted = 0;
-		const int MAX_LINES = 11;
+		const int MAX_LINES = 9;
 		for (int i = 0; i < 0xFE; ++i) {
 			bool dispatched = (gPaintDbg.dispatchCountPerIdx[i] > 0);
 			bool tied = gPaintIdxIsTiedToField[i];

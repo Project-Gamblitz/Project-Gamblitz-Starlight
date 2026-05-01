@@ -1585,25 +1585,39 @@ void BulletSuperArtillery::calcBurstFollow() {
         Game::ObjPaintIndex paintIdx;
         paintIdx.mIndex = &paintIdxData;
 
-        // Pass 1024 as the frame value. This matches exactly what the engine
-        // returns from Game::MainMgr::getPaintGameFrame() during normal
-        // gameplay — internally, a flag on CloneObjMgr+0x400 makes that
-        // getter return the sentinel constant 1024 instead of the real
-        // mPaintGameFrame counter. ALL vanilla paint (every shooter, every
-        // other special, every cylinder/area paint) uses 1024 as its frame,
-        // which yields cmd+0x20 (RainbowInkFrame) = (playerIdx + 10*1024)/16
-        // ≈ 640 — the engine's "baseline paint priority".
+        // Use whatever frame value the engine itself reports for "now". This
+        // is exactly what every vanilla paint path does: call
+        // Game::MainMgr::getPaintGameFrame() and use its return as the
+        // RequestPaintArg.frame. The behavior of that getter is:
         //
-        // We previously passed mPaintGameFrame directly (bypassing the
-        // sentinel), so our paint was either at RIF=0 (frame=0: too low to
-        // override anything, and below the paint baseline) or at RIF >
-        // baseline (frame=current: above the baseline, which trips the
-        // "elevated paint = lock" gate at scene-time >15s).
+        //     if (*(byte*)(mainMgr->cloneObjMgr + 0x328))
+        //         return 1024;            // SENTINEL  — used OFFLINE
+        //     else
+        //         return mainMgr->mPaintGameFrame;  // real counter — used ONLINE
         //
-        // Passing 1024 puts us exactly on the engine's intended baseline:
-        // same priority as vanilla → override works on ties (newer command
-        // wins, that's us), AND we never exceed the baseline → no lock.
-        unsigned int frame = 1024;
+        // Our previous fix hardcoded 1024 because we observed that as
+        // "vanilla's value" — but that observation was offline-only. Online
+        // matches don't set the sentinel flag, so vanilla paint ships with
+        // frame=mPaintGameFrame (which grows). Hardcoding 1024 then put
+        // BSA's RIF (=640) below vanilla's RIF (=0.625*frame), so vanilla
+        // overrode our paint and enemy ink kept winning.
+        //
+        // By calling the engine's getter directly we move in lockstep with
+        // vanilla — same RIF as every other paint command, override works
+        // on tie regardless of online/offline. Inlined here because the
+        // function is tiny and we don't have the 5.5.2 symbol; offsets
+        // 0x440 (cloneObjMgr ptr) / 0x328 (sentinel flag) / 0x454
+        // (mPaintGameFrame counter) match the 3.1 layout and are
+        // engine-stable across versions.
+        unsigned int frame;
+        {
+            Game::CloneObjMgr* clone = Game::MainMgr::sInstance->cloneObjMgr;
+            if (clone != NULL && clone->mIsOfflineScene) {
+                frame = 1024;
+            } else {
+                frame = Game::MainMgr::sInstance->mPaintGameFrame;
+            }
+        }
 
         Game::PaintUtl::requestIndependentHeightRangePaint(
             frame, heightRange, mTo, sead::Vector3<float>::ey,
