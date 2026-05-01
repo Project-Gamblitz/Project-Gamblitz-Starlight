@@ -114,12 +114,26 @@ bool gSpecialWeaponPaint = false;
 // PaintDrawCommandMgr::requestPaint hook for cylinder/height-range paints,
 // since that path doesn't go through requestPaintImpl_).
 int gSpecialWeaponPlayerIdx = 0;
-// Per-paintIdx flag set by BSA before its paint frame: which paintIdx values
-// belong to BlowoutsOnline (inkfurler) actors. The cylinder dispatch loop
-// skips these (cylinder paint persists in queues that inkfurlers don't
-// drain on roll/unroll), and the stamp dispatch + requestPaintImplHook
-// admits only their stamps (which are one-shot and reset cleanly).
-bool gSpecialWeaponInkfurlerIdx[256] = {false};
+
+#if 0
+// Paint debug state — populated by paintDrawCommandInitializeHook for BSA
+// paint dispatches only (gated on gSpecialWeaponPaint). Re-enable together
+// with the [INKSTRIKE PAINT] overlay block in renderEntrypoint, the capture
+// inside paintDrawCommandInitializeHook, and the FB2710 BL hook in
+// patches/552.slpatch to instrument paint behavior again.
+struct PaintDbgState {
+    unsigned int dispatchCountPerIdx[256];
+    unsigned int totalThisSubFrame;
+    unsigned int totalAllTime;
+    unsigned int subFramesSeen;
+    unsigned int castsSeen;
+    unsigned int lastBsaFrame;
+};
+PaintDbgState gPaintDbg = {0};
+bool gPaintIdxIsTiedToField[256] = {false};
+unsigned int gPaintDbgMainBlockLo = 0;
+unsigned int gPaintDbgTiedSkippedLast = 0;
+#endif
 
 static void (*requestPaintImplOrig)(
     int, int, int,
@@ -136,27 +150,10 @@ void requestPaintImplHook(
     int texType, unsigned int objPaintIdx,
     const int* alpha, bool overwrite, bool a14, bool a15, int a16)
 {
-    if (gSpecialWeaponPaint) {
-        // BSA's cylinder pass (requestIndependentHeightRangePaint) handles
-        // field and the bulk of objects — those stamps must NOT flow through
-        // here (would cause double-paint and waste). The exception is inkfurlers:
-        // cylinder paint persists in PaintDrawCommandMgr queues that the
-        // inkfurler's roll/unroll reset doesn't drain, leaving permanent ghost
-        // marks. So BSA also fires a single requestColAndPaint per paint frame
-        // as a *stamp* pass (one-shot, naturally cleared by inkfurler reset),
-        // and we admit ONLY stamps targeting paintIdx values flagged as
-        // inkfurlers. All other stamps coming through this hook while
-        // gSpecialWeaponPaint is true get dropped.
-        if (paintType) {
-            unsigned char idx = (unsigned char)paintType[0];
-            if (idx > 0xFD || !gSpecialWeaponInkfurlerIdx[idx])
-                return;
-        }
-        // Suppress self-gauge-fill: inkfurler stamps are still our paint and
-        // we want player credit without refilling the bursting player's gauge.
-        if (paintCommandType == 0)
-            paintCommandType = 2;
-    }
+    // While a special weapon is painting, suppress own-gauge-fill: cmd 0
+    // (player + gauge fill) becomes cmd 2 (player + no gauge fill).
+    if (gSpecialWeaponPaint && paintCommandType == 0)
+        paintCommandType = 2;
     requestPaintImplOrig(
         paintCommandType, playerIndex, frame,
         pos, nrm, size, paintDir, team, paintType,
@@ -202,6 +199,17 @@ void vtable34Hook(void* objPaint, sead::Vector3<float>* pos)
     void (*method)(void*, sead::Vector3<float>*) =
         (void (*)(void*, sead::Vector3<float>*))vtable[33];  // 0x108 / 8 = index 33
     method(objPaint, pos);
+}
+
+// Hook on the BL at 5.5.2 0xFB2710 inside PaintDrawCommandMgr::requestPaint
+// that dispatches to PaintDrawCommand::initialize. Currently a passthrough,
+// kept in place as a future intercept point if we need to mutate any cmd
+// fields after initialize sets them or capture paint state for debugging.
+static void (*paintDrawCommandInitializeOrig)(__int64 cmd, int* arg);
+
+void paintDrawCommandInitializeHook(__int64 cmd, int* arg)
+{
+    paintDrawCommandInitializeOrig(cmd, arg);
 }
 
 static Starlion::KingSquidMgr *kingSquidMgr = NULL;
@@ -845,7 +853,11 @@ void renderEntrypoint(agl::DrawContext *drawContext, sead::TextWriter *textWrite
 
 	// Beta gear delivery is handled via DeliveryBox hook (installed in init_starlion)
 
-	// Debug: show collision attribute under Inkstrike cursor
+#if 0
+	// Debug: show collision attribute under Inkstrike cursor.
+	// Re-enable to diagnose Utils::calcGroundPos raycast results during
+	// cursor aim — shows last hit's attr/material/Y, player pos, and the
+	// validation reason + main/floor/wall block pointer fingerprints.
 	if(mTextWriter != NULL){
 		static const char *sMaterialNames[] = {
 			"Stone00", "Stone01", "Grass00", "Soil00", "Glass00",
@@ -873,12 +885,6 @@ void renderEntrypoint(agl::DrawContext *drawContext, sead::TextWriter *textWrite
 			}
 			sead::Vector3<float> pp = ctrlPlayer->mPosition;
 			mTextWriter->printf("PLR (%.1f, %.1f, %.1f)\n", pp.mX, pp.mY, pp.mZ);
-			// Diagnostic line: reason + block pointer fingerprints.
-			// main: low 32 bits of mainBlock (Manager+0). 0 means
-			//       mspManager null OR no field block registered yet.
-			// flr/wal: low 32 bits of floor/wall block pointers in
-			//          HitInfoImpl. 0 = slot wasn't populated this sweep.
-			// If main != 0 and (flr or wal) != main → that's an object.
 			const char *reason = tornadoMgr->mDbgColReason ? tornadoMgr->mDbgColReason : "?";
 			mTextWriter->printf("rsn=%s main=%X flr=%X wal=%X\n",
 				reason,
@@ -887,6 +893,7 @@ void renderEntrypoint(agl::DrawContext *drawContext, sead::TextWriter *textWrite
 				tornadoMgr->mDbgWallBlkLo);
 		}
 	}
+#endif
 	if(IS_DEV){
 		size_t freeBytes = Collector::mHeapMgr->getCurrentHeap()->getFreeSize();
 		float freeMB = (float)freeBytes / (1024.0f * 1024.0f);
@@ -925,6 +932,45 @@ void renderEntrypoint(agl::DrawContext *drawContext, sead::TextWriter *textWrite
 		mTextWriter->printf("Free: %.1f mb\n", freeMB);
 		mTextWriter->printf("------------------------\n");
 	}
+#if 0
+	// Paint debug overlay — re-enable together with the PaintDbgState struct
+	// + the capture in paintDrawCommandInitializeHook + the FB2710 BL hook
+	// in patches/552.slpatch to instrument paint dispatches at runtime.
+	// Shows: total Inkstrike casts, paint sub-frames, dispatches per
+	// paintIdx, and a [T:tied,skipped] marker for floor-tied objects.
+	if(IS_DEV && mTextWriter != NULL){
+		sead::Vector2<float> dbgPos = {10.0f, 200.0f};
+		mTextWriter->setCursorFromTopLeft(dbgPos);
+		mTextWriter->printf("[INKSTRIKE PAINT] casts=%u subfrm=%u\n",
+			gPaintDbg.castsSeen, gPaintDbg.subFramesSeen);
+		mTextWriter->printf("totDispatch=%u thisSubFrm=%u tiedSkip=%u\n",
+			gPaintDbg.totalAllTime, gPaintDbg.totalThisSubFrame,
+			gPaintDbgTiedSkippedLast);
+		mTextWriter->printf("objArr=%X\n", gPaintDbgMainBlockLo);
+		if (gPaintDbg.dispatchCountPerIdx[0xFE] > 0) {
+			mTextWriter->printf("Field (0xFE) painted x%u\n",
+				gPaintDbg.dispatchCountPerIdx[0xFE]);
+		}
+		int linesPrinted = 0;
+		const int MAX_LINES = 11;
+		for (int i = 0; i < 0xFE; ++i) {
+			bool dispatched = (gPaintDbg.dispatchCountPerIdx[i] > 0);
+			bool tied = gPaintIdxIsTiedToField[i];
+			if (!dispatched && !tied) continue;
+			if (linesPrinted >= MAX_LINES) {
+				int more = 0;
+				for (int j = i; j < 0xFE; ++j)
+					if (gPaintDbg.dispatchCountPerIdx[j] > 0 || gPaintIdxIsTiedToField[j]) more++;
+				mTextWriter->printf("...and %d more paintIdx\n", more);
+				break;
+			}
+			mTextWriter->printf("Obj 0x%02X painted x%u%s\n",
+				i, gPaintDbg.dispatchCountPerIdx[i],
+				tied ? " [T:tied,skipped]" : "");
+			linesPrinted++;
+		}
+	}
+#endif
 	static int renderstate = 0;
 	static int renderctr = 0;
 	static bool msgWindowShown = false;
@@ -1191,6 +1237,7 @@ void init_starlion(){
 	
 	requestPaintImplOrig = (decltype(requestPaintImplOrig))ProcessMemory::MainAddr(0xFC1BAC);
 	paintDrawCommandMgrRequestPaintOrig = (decltype(paintDrawCommandMgrRequestPaintOrig))ProcessMemory::MainAddr(0xFB25FC);
+	paintDrawCommandInitializeOrig = (decltype(paintDrawCommandInitializeOrig))ProcessMemory::MainAddr(0xFB0614);
 
 	// Initialize MatchJoint LAN function pointers
 	MatchJointLan::init();
@@ -1641,6 +1688,7 @@ void hooks_init(){
 	requestPaintImplHook(0, 0, 0, NULL, NULL, NULL, NULL, 0, NULL, 0, 0, NULL, 0, 0, 0, 0);
 	paintDrawCommandMgrRequestPaintHook(0, NULL);
 	vtable34Hook(NULL, NULL);
+	paintDrawCommandInitializeHook(0, NULL);
 	// AutoMatch LAN session init (BL hook inside reqAutoMatch)
 	autoMatchLanInitHook(NULL);
 	// Ink Tank Override

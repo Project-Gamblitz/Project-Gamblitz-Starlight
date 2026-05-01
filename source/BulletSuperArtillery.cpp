@@ -24,7 +24,6 @@ extern "C" {
     extern u8 _ZTVN4sead14SafeStringBaseIcEE[];
 	extern bool gSpecialWeaponPaint;
 	extern int gSpecialWeaponPlayerIdx;
-	extern bool gSpecialWeaponInkfurlerIdx[256];
     // Damagable::onDamage(damagable, attackerIdx, team, dmg)
     int _ZN4Game3Cmp9Damagable8onDamageEiN3Cmn3Def4TeamENS3_3DMGE(
         void *damagable, int attackerIdx, int team, int dmg);
@@ -1562,27 +1561,6 @@ void BulletSuperArtillery::calcBurstFollow() {
         gSpecialWeaponPaint = true;
         gSpecialWeaponPlayerIdx = PlayerIndex;
 
-        // Build the inkfurler paintIdx skip-set for this paint frame.
-        // BlowoutsOnline stores its assigned paintIdx at byte offset 0x570
-        // (verified from BlowoutsOnline::reset_'s requestClearPaint call).
-        // Cylinder paint persists in PaintDrawCommandMgr queues that the
-        // inkfurler roll/unroll reset can't drain — paintIdx values flagged
-        // here will be skipped by the cylinder loop and instead picked up
-        // by the trailing requestColAndPaint stamp pass.
-        memset(gSpecialWeaponInkfurlerIdx, 0, sizeof(gSpecialWeaponInkfurlerIdx));
-        {
-            Lp::Sys::ActorClassIterNodeBase *furlerIter =
-                Game::BlowoutsOnline::getClassIterNodeStatic();
-            for (Cmn::Actor *obj = (Cmn::Actor *)furlerIter->derivedFrontActiveActor();
-                 obj != NULL;
-                 obj = (Cmn::Actor *)furlerIter->derivedNextActiveActor(obj))
-            {
-                unsigned char furlerIdx = *((unsigned char*)obj + 0x570);
-                if (furlerIdx <= 0xFD)
-                    gSpecialWeaponInkfurlerIdx[furlerIdx] = true;
-            }
-        }
-
         Cmn::Def::Team team = *(Cmn::Def::Team*)(_actorBase + 0x328);
 
         // Volumetric cylinder paint via requestIndependentHeightRangePaint.
@@ -1607,9 +1585,26 @@ void BulletSuperArtillery::calcBurstFollow() {
         Game::ObjPaintIndex paintIdx;
         paintIdx.mIndex = &paintIdxData;
 
-        unsigned int frame = Game::MainMgr::sInstance->mPaintGameFrame;
+        // Pass 1024 as the frame value. This matches exactly what the engine
+        // returns from Game::MainMgr::getPaintGameFrame() during normal
+        // gameplay — internally, a flag on CloneObjMgr+0x400 makes that
+        // getter return the sentinel constant 1024 instead of the real
+        // mPaintGameFrame counter. ALL vanilla paint (every shooter, every
+        // other special, every cylinder/area paint) uses 1024 as its frame,
+        // which yields cmd+0x20 (RainbowInkFrame) = (playerIdx + 10*1024)/16
+        // ≈ 640 — the engine's "baseline paint priority".
+        //
+        // We previously passed mPaintGameFrame directly (bypassing the
+        // sentinel), so our paint was either at RIF=0 (frame=0: too low to
+        // override anything, and below the paint baseline) or at RIF >
+        // baseline (frame=current: above the baseline, which trips the
+        // "elevated paint = lock" gate at scene-time >15s).
+        //
+        // Passing 1024 puts us exactly on the engine's intended baseline:
+        // same priority as vanilla → override works on ties (newer command
+        // wins, that's us), AND we never exceed the baseline → no lock.
+        unsigned int frame = 1024;
 
-        // Field paint (paintIdx 0xFE → world frame, no per-object transform).
         Game::PaintUtl::requestIndependentHeightRangePaint(
             frame, heightRange, mTo, sead::Vector3<float>::ey,
             extent, paintDir, team, paintIdx,
@@ -1647,12 +1642,18 @@ void BulletSuperArtillery::calcBurstFollow() {
             bool seen[256] = {false};
             seen[0xFE] = true;  // field already dispatched above
             seen[0xFF] = true;  // sentinel — never paint
-            // Inkfurlers are routed to the requestColAndPaint stamp pass
-            // below; mark them as already-seen here so the cylinder loop
-            // doesn't dispatch a (queue-persistent) cylinder for them.
-            for (int idx = 0; idx < 256; ++idx)
-                if (gSpecialWeaponInkfurlerIdx[idx])
-                    seen[idx] = true;
+
+            // ObjPaintMgr's array of ObjPaint pointers — indexed by paintIdx.
+            // Layout:
+            //   PaintMgr::sInstance + 0xE9B8 = embedded ObjPaintMgr
+            //   ObjPaintMgr + 0x18           = paint-object count (u32)
+            //   ObjPaintMgr + 0x20           = void** array (one entry per paintIdx)
+            // We read this once per paint frame and use it to look up an
+            // ObjPaint instance by paintIdx so we can inspect its vtable.
+            char* paintMgr = (char*)Game::PaintMgr::sInstance;
+            char* objPaintMgr = paintMgr + 0xE9B8;
+            void** objPaintArray = *(void***)(objPaintMgr + 0x20);
+            unsigned int objPaintCount = *(unsigned int*)(objPaintMgr + 0x18);
 
             unsigned int curModeIdx = *(unsigned int*)((unsigned char*)colCheck.mHitInfoImpl + 0x17C);
             unsigned int numBlocks  = HitInfoImplMsaanHitBlock_Paint[2 * curModeIdx];
@@ -1671,6 +1672,45 @@ void BulletSuperArtillery::calcBurstFollow() {
                 if (seen[paintIdxByte]) continue;
                 if (paintInfoOut == NULL) continue;
                 seen[paintIdxByte] = true;
+
+                // Floor-tied detection: ObjPaintFloor and ObjPaintYPlusFloor
+                // override draw() to tail-call FloorPainter::drawToFloor when
+                // faceType==4 (floor face). That writes paint to the FIELD's
+                // RT instead of (or in addition to) the object's own RT, so
+                // dispatching cylinder paint to these objects on top of our
+                // explicit field dispatch above produces visible double-paint
+                // — what the user described as "3-4 Inkstrikes landed at the
+                // same time". Skat-park / Tuzura have several such objects.
+                //
+                // We can't link against ObjPaintFloor's vtable in 5.5.2 (no
+                // symbols) so we detect it at runtime by signature:
+                //   vtable[13]() = `draw(this, drawCtx, paintCmd, paintType, drawCache)`
+                // Both ObjPaintFloor::draw and ObjPaintYPlusFloor::draw start
+                // with the same 8-byte prologue:
+                //   LDR W8, [X2, #0x54]   = 0xB9405448  (load cmd+0x54 = faceType)
+                //   CMP W8, #4            = 0x7100111F
+                // No other ObjPaint subclass starts with this — they all have
+                // proper stack-frame prologues. So this signature uniquely
+                // identifies the floor-drawing-tied subclasses.
+                if (paintIdxByte < objPaintCount && objPaintArray != NULL) {
+                    void* objPaint = objPaintArray[paintIdxByte];
+                    if (objPaint != NULL) {
+                        void** vtable = *(void***)objPaint;
+                        if (vtable != NULL) {
+                            void* drawFn = vtable[13];  // 0x68/8 = 13 (ObjPaintBase::draw slot)
+                            if (drawFn != NULL) {
+                                unsigned int* instr = (unsigned int*)drawFn;
+                                if (instr[0] == 0xB9405448u &&
+                                    instr[1] == 0x7100111Fu) {
+                                    // Floor-tied object — paint goes to field RT
+                                    // anyway via FloorPainter::drawToFloor. Skip
+                                    // our dispatch to avoid double-paint.
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                }
 
                 // Read block transform from paintInfo (same offsets requestColAndPaint uses)
                 float* pi = (float*)paintInfoOut;
@@ -1697,33 +1737,6 @@ void BulletSuperArtillery::calcBurstFollow() {
                     (Cmn::KDGndCol::HitInfo::PaintType)1);
             }
         }
-
-        // Inkfurler stamp pass — one requestColAndPaint covering the burst
-        // sphere. Internally enumerates blocks and dispatches one-shot stamps
-        // via requestPaintImpl_, which inkfurler roll/unroll resets DO drain
-        // properly (cylinder paint commands persist in queues that don't get
-        // drained, hence the ghost-paint bug). The requestPaintImplHook
-        // filters every stamp through this hook and admits ONLY paintIdx
-        // values flagged in gSpecialWeaponInkfurlerIdx — so field, regular
-        // objects, and other surfaces (already painted by the cylinder pass
-        // above) are dropped, leaving only inkfurler stamps that survive.
-        // a7=true broadcasts the paint over the network so other players
-        // see the same paint on the inkfurler.
-        sead::Vector3<float> vel;
-        vel.mX = sinf(rotAngle);
-        vel.mY = 0.0f;
-        vel.mZ = cosf(rotAngle);
-        Game::PaintUtl::requestColAndPaint(
-            mTo,
-            BSA_BURST_HEIGHT,
-            extent,
-            vel,
-            (Game::PaintTexType)11,
-            team,
-            sead::Vector3<float>::ey,
-            true,                  // a7 = network broadcast
-            PlayerIndex,
-            BSA_BURST_HEIGHT);
 
         gSpecialWeaponPaint = false;
     }
