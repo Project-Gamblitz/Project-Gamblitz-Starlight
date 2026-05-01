@@ -140,6 +140,8 @@
 
 // RespawnRadar
 00A14AA8 BL respawnRadarHook
+00A12C34 BL respawnRadarMiniMapInfoHook
+00A12E0C BL respawnRadarMiniMapCtrlHook
 
 // DeathMarking
 0113641C BL startSkill_DeathMarkingHook
@@ -367,6 +369,14 @@
 // BSA is bursting, so the dispatched cylinder uses world-space mTo instead
 // of being warped into each object's local frame.
 00FC2500 BL vtable34Hook
+
+// Inkstrike Cylinder Paint — BL inside PaintDrawCommandMgr::requestPaint
+// that calls PaintDrawCommand::initialize. Currently disabled (the hook
+// function is a passthrough). Re-enable to mutate cmd fields after init
+// sets them, or to feed the [INKSTRIKE PAINT] debug overlay
+// (un-#if0 the PaintDbgState block + capture logic + overlay block in
+// main.cpp at the same time).
+// 00FB2710 BL paintDrawCommandInitializeHook
 
 // fizzy bomb white ink frames increase to 85 (another prochara balance change)
 010951A0 A80A8052

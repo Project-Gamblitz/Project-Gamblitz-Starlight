@@ -1494,6 +1494,35 @@ bool respawnRadarHook() {
     return Game::Utl::isSpectatorStation();
 }
 
+// Hooks BL isSpectatorStation inside Game::MiniMap::calcIconLayout_ (5.5.2 0xA12C34).
+// When RespawnRadar is active and the controlled player is in spawn, force the
+// spectator branch of calcIconLayout_ — which routes per-player info through
+// setMapPlayerInfoForSpectator, displaying enemy weapon icons on the minimap
+// (mirrors Splatoon 1 RespawnRadar behavior).
+bool respawnRadarMiniMapInfoHook() {
+    Game::Player *ctrlPlayer = starlight::Collector::mControlledPlayer;
+    if (ctrlPlayer != nullptr && isSpecialSkill_RespawnRadar(ctrlPlayer)) {
+        bool inSpawn = ctrlPlayer->isInTrouble_RespawnWait() || (*(u32*)(((u8*)ctrlPlayer) + 0xBE0) >= 1);
+        if (inSpawn) return true;
+    }
+    return Game::Utl::isSpectatorStation();
+}
+
+// Hooks BL Lp::Utl::getCtrl inside the spectator branch of calcIconLayout_
+// (5.5.2 0xA12E0C). The original branch reads ctrl[+0x10] bit 2 (ZL) and, when
+// pressed, swaps player icons to spectator-camera button hints. Under our
+// RespawnRadar fake-spectator gate, return a zero-filled stub so ZL reads as 0
+// and the icons remain weapon-detail.
+static u32 gRespawnRadarFakeCtrl[8] = {0};
+Lp::Sys::Ctrl* respawnRadarMiniMapCtrlHook(int n) {
+    Game::Player *ctrlPlayer = starlight::Collector::mControlledPlayer;
+    if (ctrlPlayer != nullptr && isSpecialSkill_RespawnRadar(ctrlPlayer)) {
+        bool inSpawn = ctrlPlayer->isInTrouble_RespawnWait() || (*(u32*)(((u8*)ctrlPlayer) + 0xBE0) >= 1);
+        if (inSpawn) return (Lp::Sys::Ctrl*)gRespawnRadarFakeCtrl;
+    }
+    return Lp::Utl::getCtrl(n);
+}
+
 static xlink2::Event *gLaserIconEvent = NULL;
 static u32 gLaserIconEventId = 0;
 static xlink2::Event *gArtIconSndEvent = NULL;
@@ -1685,6 +1714,8 @@ void hooks_init(){
 	isInSpecialForShotGuideHook(NULL);
 	isSleepingAllHook(NULL);
 	respawnRadarHook();
+	respawnRadarMiniMapInfoHook();
+	respawnRadarMiniMapCtrlHook(0);
 	requestPaintImplHook(0, 0, 0, NULL, NULL, NULL, NULL, 0, NULL, 0, 0, NULL, 0, 0, 0, 0);
 	paintDrawCommandMgrRequestPaintHook(0, NULL);
 	vtable34Hook(NULL, NULL);
