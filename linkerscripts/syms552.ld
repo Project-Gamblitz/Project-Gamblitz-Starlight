@@ -170,6 +170,8 @@ _ZN3Cmn3Def10getCurModeEv = 0xE24D0 - 0x2EBE000;
 _ZN3Cmn9SceneBase15setupPlayerInfoEv = 0xB24F0 - 0x2EBE000;
 _ZN3Cmn13PlayerInfoAry19dbgSetInfoIfInvalidENS_3Def4ModeERKN4sead14SafeStringBaseIcEE = 0x1B30FC - 0x2EBE000;
 _ZNK3Cmn12TeamColorMgr11getCurColorENS_3Def4TeamENS0_14ColorVariationE = 0x144CB4 - 0x2EBE000;
+/* Cmn::TeamColorMgr::TeamColorMgr() merged ctor+load in 5.5.2. */
+_ZN3Cmn12TeamColorMgrC2Ev = 0x14221C - 0x2EBE000;
 _ZN3Cmn14PlayerInfoUtil23setPlayerInfoBySaveDataEPNS_10PlayerInfoENS_3Def4ModeE = 0x1B3710 - 0x2EBE000;
 _ZN3Cmn14PlayerInfoUtil19overwriteWeaponGearENS_3Def4ModeE = 0x1B3EC8 - 0x2EBE000;
 _ZN3Cmn14PlayerInfoUtil25overwriteWeaponGear_Show_ENS_3Def4ModeE = 0x1B4614 - 0x2EBE000;

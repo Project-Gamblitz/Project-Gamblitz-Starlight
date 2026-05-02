@@ -1,5 +1,6 @@
 #include "main.hpp"
 #include "flexlion/PlayerWeaponSuperShot.hpp"
+#include "flexlion/BulletInkzooka.hpp"
 #include "flexlion/PlayerWeaponTornado.hpp"
 #include "flexlion/BigLaserModeMgr.hpp"
 #include "flexlion/BetaDelivery.hpp"
@@ -1220,10 +1221,13 @@ bool isSleepingAllHook(Game::BulletMgr *mgr){
     return isSleepingAllOrig(mgr);
 }
 
+#include "flexlion/InkColorExtension.hpp"
+
 void init_starlion(){
 	exl::util::impl::InitMemLayout();
 	FsLogger::Initialize();
 	FsLogger::LogFormatDefaultDirect("[Gamblitz] Initialized funcs/vars!\n");
+	inkColorExtensionInit();
 	if(IS_DEV){
 		FsLogger::LogFormatDefaultDirect("[Gamblitz Development Build]\nDev Build v.%s ", DEV_VER);
 		FsLogger::LogFormatDefaultDirect("Mod Version: %s\n", MOD_VER);
@@ -1761,6 +1765,11 @@ void hooks_init(){
 	respawnRadarHook();
 	respawnRadarMiniMapInfoHook();
 	respawnRadarMiniMapCtrlHook(0);
+	teamColorMgrLoadHook(0);
+	{
+		sead::Vector3<float> _dummyVec = sead::Vector3<float>::zero;
+		initializeSenderHook(NULL, NULL, 0, 0, _dummyVec, _dummyVec, 0, 0);
+	}
 	requestPaintImplHook(0, 0, 0, NULL, NULL, NULL, NULL, 0, NULL, 0, 0, NULL, 0, 0, 0, 0);
 	paintDrawCommandMgrRequestPaintHook(0, NULL);
 	vtable34Hook(NULL, NULL);

@@ -143,6 +143,13 @@
 00A12C34 BL respawnRadarMiniMapInfoHook
 00A12E0C BL respawnRadarMiniMapCtrlHook
 
+// Ink color combo extension — hook the BL that constructs/loads the
+// TeamColorMgr (5.5.2 0x10D238 → calls load() at 0x14221C). After the
+// original load fills entries[1..N] from the static name table, our hook
+// appends 14 Splatoon 1 leftover color combos to the slack pre-allocated
+// slots via the engine's own .bprm loader. See source/InkColorExtension.cpp.
+0010D238 BL teamColorMgrLoadHook
+
 // DeathMarking
 0113641C BL startSkill_DeathMarkingHook
 
@@ -168,6 +175,11 @@
 // ^ Cmn::PlayerCustomMgr::setup
 //01097730+88 TBZ W23, #0, #8
 01097730+12B0 ORR W21, W21, W23
+// BL inside PlayerInkAction::shotBullet_N that calls
+// BulletGachihoko::initializeSender. Hook patches the bullet's vtable
+// post-init / pre-onActivate so its getXlinkName returns "BulletSuperShot"
+// and the engine resolves the xlink to the friend's tornado elink user.
+010990F4 BL initializeSenderHook
 
 // Damage Reason
 01314250+1C B damageReasonHook
