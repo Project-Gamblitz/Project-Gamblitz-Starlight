@@ -40,6 +40,15 @@ namespace Game {
 	class GeyserVersus : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
 	class AirBallOnline : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
 	class AttractTargetVersus : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
+	// Drives the lowering-water gimmick (Mahi-Mahi). Holds:
+	//   +0x3A0 (928)  : float baseY (actor position Y)
+	//   +0x4D0 (1232) : ptr to params struct; params +0x38 (56) = float water-Y offset
+	//                   so worldWaterY = baseY + paramsYOffset
+	//   +0x5AF (1455) : u8 Surface_Down event fired (== "water is down").
+	//                   While 0, underwater paint targets must be filtered out.
+	// Stages without the gimmick have no instance — derivedFrontActiveActor()
+	// returns NULL and the filter naturally stays off.
+	class SeaSurfaceVersus : public Cmn::Actor { public: static Lp::Sys::ActorClassIterNodeBase* getClassIterNodeStatic(); };
 	class RollingBarrelOnline : public Cmn::Actor {
 		public:
 		// HitInfo struct (32 bytes used, packet layout from game)

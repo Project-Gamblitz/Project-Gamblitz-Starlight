@@ -1573,6 +1573,59 @@ void BulletSuperArtillery::calcBurstFollow() {
         heightRange.mX = -0.5f - BSA_BURST_HEIGHT;
         heightRange.mY = BSA_BURST_HEIGHT;
 
+        // Lowering-water gimmick (Mahi-Mahi): if the SeaSurfaceVersus actor
+        // is present and its Surface_Down event hasn't fired yet, the water
+        // is still up at world Y == waterY. Clip the cylinder's BOTTOM so
+        // it doesn't extend below the water surface — anything submerged
+        // at that point should not receive paint until the water drops.
+        // This works for both the field cylinder and every per-object
+        // cylinder below because they share `heightRange`, and the engine
+        // interprets the range as world-Y offsets relative to position.Y
+        // (with the "normal" arg = world up = (0,1,0)). Once Surface_Down
+        // fires the bytes flips to 1, the iter still returns the actor, but
+        // we leave heightRange untouched so paint behaves normally on the
+        // now-exposed floors. Stages without the gimmick: no SeaSurfaceVersus
+        // instance → derivedFrontActiveActor() returns NULL → no clip.
+        // See docs/PAINT_PIPELINE.md §7.3 for the full field-offset map.
+        bool cylinderEntirelySubmerged = false;
+        {
+            Lp::Sys::ActorClassIterNodeBase* seaIter =
+                Game::SeaSurfaceVersus::getClassIterNodeStatic();
+            if (seaIter != NULL) {
+                Lp::Sys::Actor* sea = seaIter->derivedFrontActiveActor();
+                if (sea != NULL) {
+                    unsigned char* seaBytes = (unsigned char*)sea;
+                    unsigned char surfaceDownFired = seaBytes[1455];
+                    if (!surfaceDownFired) {
+                        // waterY = sea.Y (+0x3A0) + params.yOffset (+0x38)
+                        // sub_7100E74050 in 5.5.2 uses this exact formula
+                        // to drive the water visual's Y target each frame.
+                        float baseY = *(float*)(seaBytes + 928);
+                        char* params = *(char**)(seaBytes + 1232);
+                        if (params != NULL) {
+                            float yOffset = *(float*)(params + 56);
+                            float waterY = baseY + yOffset;
+                            // Cylinder world-Y bottom = mTo.Y + heightRange.mX.
+                            // Clip so the bottom sits at water level (or above).
+                            float waterRel = waterY - mTo.mY;
+                            if (heightRange.mX < waterRel) {
+                                heightRange.mX = waterRel;
+                            }
+                            // If the burst is so far below water that the
+                            // entire cylinder ends up under it, the range
+                            // collapses (mX >= mY) and we skip dispatch
+                            // altogether — nothing should paint, but the
+                            // burst hitbox / damage above still happen
+                            // because they use mTo, not heightRange.
+                            if (heightRange.mX >= heightRange.mY) {
+                                cylinderEntirelySubmerged = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         sead::Vector2<float> extent;
         extent.mX = currentRadius;
         extent.mY = currentRadius;
@@ -1619,10 +1672,12 @@ void BulletSuperArtillery::calcBurstFollow() {
             }
         }
 
-        Game::PaintUtl::requestIndependentHeightRangePaint(
-            frame, heightRange, mTo, sead::Vector3<float>::ey,
-            extent, paintDir, team, paintIdx,
-            (Game::PaintTexType)11, (Cmn::KDGndCol::HitInfo::PaintType)1);
+        if (!cylinderEntirelySubmerged) {
+            Game::PaintUtl::requestIndependentHeightRangePaint(
+                frame, heightRange, mTo, sead::Vector3<float>::ey,
+                extent, paintDir, team, paintIdx,
+                (Game::PaintTexType)11, (Cmn::KDGndCol::HitInfo::PaintType)1);
+        }
 
         // Object paint — mimic requestColAndPaint's per-block transform.
         // Sphere-check to enumerate paint blocks the burst could touch, then
@@ -1652,7 +1707,10 @@ void BulletSuperArtillery::calcBurstFollow() {
         unsigned int sweepMode = 0xFFFFFCFF;
         bool hit = colCheck.checkSphere(probeWorld, sphereRad, sweepMode, 0xFFFFFFFF,
                                         Cmn::KDGndCol::Manager::cWallNrmY_L);
-        if (hit && colCheck.mHitInfoImpl != NULL) {
+        // Per-block enumeration is also gated by the water clip — if the
+        // entire cylinder is submerged the field dispatch above was skipped,
+        // and we skip every per-object dispatch here too.
+        if (!cylinderEntirelySubmerged && hit && colCheck.mHitInfoImpl != NULL) {
             bool seen[256] = {false};
             seen[0xFE] = true;  // field already dispatched above
             seen[0xFF] = true;  // sentinel — never paint

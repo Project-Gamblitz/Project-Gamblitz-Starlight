@@ -553,6 +553,31 @@ _ZN3Cmn15PlayerCustomMgr27checkAndCreateSpecialWeaponEiNS_12PlayerCustom4KindEb_
 _ZN3Cmn15PlayerCustomMgr27checkAndCreateSpecialWeaponEiNS_12PlayerCustom4KindEb_1D4 = _ZN3Cmn15PlayerCustomMgr27checkAndCreateSpecialWeaponEiNS_12PlayerCustom4KindEb + 0x1D4;
 _ZN2Lp3Sys5Actor6createIN3Cmn19PlayerWeaponShooterEEEPT_PS1_PN4sead4HeapE = 0x1813A0 - 0x2EBE000;
 _ZN4Game15BulletGachihoko22getClassIterNodeStaticEv = 0x4DD3A8 - 0x2EBE000;
+/* BulletGachihoko::firstCalcSubEv — the inner per-frame logic called from
+ * BulletBombBase::firstCalc. Overriding this slot lets the outer firstCalc
+ * keep advancing position via Cmn::KDUtl::Rigid::updatePosAtt while we
+ * suppress the inner gravity/collision/paint pass.
+ *
+ * 5.5.2 address: 0x4D97D0 (file-relative) verified by size match with xr45
+ * (3.1 had 0x131C bytes, 5.5.2 has 0x1324 bytes — same function +8 bytes).
+ *
+ * Note: the vtable slot index for firstCalcSubEv DRIFTED from 209 (3.1) to
+ * 217 (5.5.2) — extra virtual method(s) added in inheritance chain. We use
+ * address-find rather than fixed slot index to be robust across versions. */
+_ZN4Game15BulletGachihoko12firstCalcSubEv = 0x4D97D0 - 0x2EBE000;
+/* BulletGachihoko::calcDamageImpl_ — returns the damage value the bullet
+ * deals on hit. Vanilla returns getBombDamage() (~60). We override to
+ * return 1500 for SuperShot/Inkzooka one-shot kills.
+ * 5.5.2 address: 0x4DB3FC (size 0x60, matches xr45 0x710034a514). */
+_ZNK4Game15BulletGachihoko15calcDamageImpl_ENS_6Bullet9ArmorTypeEN3Cmn3Def4TeamERKN4sead7Vector3IfEE = 0x4DB3FC - 0x2EBE000;
+/* BulletGachihoko::initializeSender — wrapper that delegates to ::initialize.
+ * Called from PlayerInkAction::shotBullet_N at file-relative 0x10990F4.
+ * We hook that BL site (see patches/552.slpatch) to call our wrapper which
+ * invokes the original then patches the bullet's vtable BEFORE its onActivate
+ * runs next frame — so getXlinkName returns "BulletSuperShot" and the xlink
+ * resolves to the friend's elink user (tornado emitters auto-emit on activate).
+ * 5.5.2 address: 0x4D933C (size 0x4C, matches xr45 0x710034845c). */
+_ZN4Game15BulletGachihoko16initializeSenderEPKN3Cmn5ActorEiiRKN4sead7Vector3IfEES9_ij = 0x4D933C - 0x2EBE000;
 _ZN2Lp3Sys5Actor6createIN4Game16BulletSpAquaBallEEEPT_PS1_PN4sead4HeapE = 0x4F52C0 - 0x2EBE000;
 _ZN3Cmn18EffectManualHandle13searchAndEmitEPKcii = 0xEABCC - 0x2EBE000;
 _ZN3Cmn18EffectManualHandle12setTeamColorENS_3Def4TeamE = 0xEAE74 - 0x2EBE000;
@@ -949,6 +974,7 @@ _ZN4Game32BulletBlowoutsOnlineNearByAttack22getClassIterNodeStaticEv = 0xD76568 
 _ZN4Game14IidaBombOnline22getClassIterNodeStaticEv = 0x34B64 - 0x2EBE000;
 _ZN4Game14IidaBombOnline6damageEPv = 0xD7D520 - 0x2EBE000;
 _ZN4Game15SwitchWeakPoint22getClassIterNodeStaticEv = 0xE84050 - 0x2EBE000;
+_ZN4Game16SeaSurfaceVersus22getClassIterNodeStaticEv = 0xE74234 - 0x2EBE000;
 _ZN4Game15SwitchWeakPoint6damageEPv = 0xE81970 - 0x2EBE000;
 _ZN4Game18DendenSwitchVersus22getClassIterNodeStaticEv = 0xB535B8 - 0x2EBE000;
 _ZN4Game18DendenSwitchVersus9onDamage_EN3Cmn3Def3DMGENS2_4TeamEj = 0xE276AC - 0x2EBE000;
