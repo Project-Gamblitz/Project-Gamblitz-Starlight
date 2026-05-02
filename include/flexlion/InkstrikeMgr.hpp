@@ -23,6 +23,11 @@ namespace Flexlion{
         void playerThirdCalc(Game::Player *player);
         void informShotInkstrike(Game::Player *player, sead::Vector3<float> pos, sead::Vector3<float> dest, int paintgamefrm);
         void onCalc();
+        // Hard-reset every player + every BSA bullet — used when shooting-
+        // range cleanup (Game::SeqMgrShootingRange::stateEnterInkReset)
+        // fires. Cancels all bullets, clears all per-player state, kills
+        // any lingering xlinks, releases the tank-override lock.
+        void resetForCleanup();
         void tryCaptureSpawnY();
 		void snapshotCamUp(sead::Vector3<float> camAt);
 		bool mMatchEnding;

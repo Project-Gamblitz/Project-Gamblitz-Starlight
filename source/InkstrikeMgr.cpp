@@ -11,7 +11,21 @@ extern "C" {
     extern u8 _ZTVN4Game27MessagePlayerPerformSpecialE[];
     extern void *_ZN3Cmn18MessageBroadcaster9sInstanceE;
     void _ZN3Cmn17MessageDispatcher15dispatchMessageERKNS_7MessageE(void *, const void *);
+    // Tank-change inhibitor (defined in InkTankOverride.cpp). Used to
+    // freeze the tank choice while Inkstrike is in flight so a shooting-
+    // range weapon swap doesn't trigger an async tank reload that would
+    // crash BSA::calcTankBone mid-launch.
+    void inkTankOverride_lockForInkstrike(int weaponId);
+    void inkTankOverride_unlock();
+    // XLink kill-all helpers (engine globals). Used to abruptly drop the
+    // BSA's lingering xlink effects/sounds when the player swaps weapon
+    // during cShootPrepare — the wait-state effect would otherwise keep
+    // playing after the cancel.
+    void _ZN2Lp3Sys5XLink12killAllSoundEv(void *xlink);
+    void _ZN2Lp3Sys5XLink13killAllEffectEv(void *xlink);
 }
+#define XLinkKillAllSound  _ZN2Lp3Sys5XLink12killAllSoundEv
+#define XLinkKillAllEffect _ZN2Lp3Sys5XLink13killAllEffectEv
 #define MessagePlayerPerformSpecialVtable _ZTVN4Game27MessagePlayerPerformSpecialE
 #define MessageBroadcasterInstance _ZN3Cmn18MessageBroadcaster9sInstanceE
 #define dispatchMessage _ZN3Cmn17MessageDispatcher15dispatchMessageERKNS_7MessageE
@@ -326,6 +340,43 @@ namespace Flexlion{
         tryCaptureSpawnY();
     }
 
+    // Hard-reset every player slot + every BSA bullet. Invoked from the
+    // shooting-range cleanup hook (Game::SeqMgrShootingRange::stateEnterInkReset
+    // -> Game::PageHandlerShootingRange::inInkReset, intercepted via the BL
+    // at 0x011EE198). The shooting-range cleanup teleports the player and
+    // clears all paint/bullets in the scene; we mirror that by canceling
+    // any in-flight Inkstrike (paint cylinder included) and freeing every
+    // per-player state machine, so swap+cleanup combos don't leave us with
+    // a stale BSA actor or a stuck cAim/cShootPrepare/cShoot state.
+    void InkstrikeMgr::resetForCleanup(){
+        for(int id = 0; id < 10; id++){
+            // Cancel any active or sleeping BSA in either slot. Kill the
+            // xlink first (same pattern as the cShootPrepare swap path) so
+            // any wait/launch/flight effects drop instantly. Don't gate on
+            // isActive() — that returns false in cState_Wait but the xlink
+            // is still emitting; cancel() is safe to call regardless.
+            for(int slot = 0; slot < 2; slot++){
+                BulletSuperArtillery *b = bullets[id][slot];
+                if(b == NULL) continue;
+                Lp::Sys::XLink *bsaXLink = b->getXLink();
+                if(bsaXLink != NULL){
+                    XLinkKillAllSound(bsaXLink);
+                    XLinkKillAllEffect(bsaXLink);
+                }
+                b->cancel();
+            }
+            // Reset per-player tornado state machine + flags.
+            playerState[id]       = TornadoState::cNone;
+            mActiveSlot[id]       = -1;
+            mWasAHeld[id]         = false;
+            mRemoteShotPending[id]= false;
+            isAppliedWeapon[id]   = 0;
+        }
+        // Release the tank-override lock so future weapon swaps process
+        // normally on the post-cleanup scene state.
+        inkTankOverride_unlock();
+    }
+
     // Captures the controlled player's team respawn centroid Y + 150 once
     // per match. Called every frame from onCalc() while the scene is loaded;
     // bails early after first success. Reset back to the 500 default in
@@ -348,6 +399,11 @@ namespace Flexlion{
         int id = player->mIndex;
         if(player->isInSpecial() and player->mSpecialWeaponId == TORNADO_SPECIAL_ID and playerState[id] == TornadoState::cNone){
             playerState[id] = TornadoState::cAim;
+            // Lock the tank-override so any weapon swap in shooting range
+            // returns the Inkstrike-equipped weapon's tank ID instead of
+            // triggering an async tank reload that would crash BSA's
+            // calcTankBone mid-launch. Released on every cNone return.
+            inkTankOverride_lockForInkstrike((int)player->mMainWeaponId);
             isAppliedWeapon[id] = 0;
 			mRemoteShotPending[id] = false;
 			mNeedCamUpSnapshot = true;
@@ -396,6 +452,7 @@ namespace Flexlion{
             if(player->isInTrouble_Dying() || player->isInTrouble_WaterFall() || !player->isAlive() || checkMode == Flexlion::cPrincessCannon || (!player->isInSpecial() && player->mSpecialWeaponId != TORNADO_SPECIAL_ID)){
                 // Player died without choosing a spot or picked up princess cannon or changed weapon in shooting range — cancel special
                 playerState[id] = TornadoState::cNone;
+                inkTankOverride_unlock();
 				mWasAHeld[id] = false;
 				mRemoteShotPending[id] = false;
 				if(mActiveSlot[id] >= 0 && bullets[id][mActiveSlot[id]] != NULL && bullets[id][mActiveSlot[id]]->isActive()){
@@ -560,6 +617,57 @@ namespace Flexlion{
 				Game::MiniMap *mMap = Utils::getMinimap();
 				if(mMap != NULL) mMap->setVisible(true);
 			}
+            // Weapon swap during the launch wind-up (typical in shooting range
+            // test UI). Cancel the entire activation: BSA hasn't actually
+            // launched yet, so it's safe to fully tear down.
+            //
+            // Difference vs. cAim cancel: at the cAim→cShootPrepare transition
+            // (line 463) the engine ran informPerformSpecial(player) which
+            // swapped the player's held view-model to the special weapon's
+            // model (Inkstrike pack, Inkjet pack, etc.). To restore the normal
+            // weapon view we need the inverse — informGetWeapon_Impl_ with
+            // the player's CURRENT weapon ids (already updated to the new
+            // weapon by the swap). Without this, the special's held model
+            // stays stuck on the player even after the cancel.
+            if((!player->isInSpecial() && player->mSpecialWeaponId != TORNADO_SPECIAL_ID)){
+                playerState[id] = TornadoState::cNone;
+                inkTankOverride_unlock();
+                mWasAHeld[id] = false;
+                mRemoteShotPending[id] = false;
+                if(mActiveSlot[id] >= 0 && bullets[id][mActiveSlot[id]] != NULL){
+                    // Hard-stop the BSA's xlink effects/sounds before cancel().
+                    // cancel() alone calls doSleep() which puts the actor to
+                    // sleep but doesn't unwind the cState_Wait xlink — the
+                    // launch-confirmed effect/sound would otherwise linger
+                    // after the swap. Killing all xlink emissions on this
+                    // BSA is the abrupt drop we want for a player-initiated
+                    // cancel (only this branch — normal flow keeps the
+                    // launch-confirmed effect playing).
+                    //
+                    // No isActive() guard here: in cState_Wait the BSA's
+                    // own mFlightActive/mHasBurst are both false (they
+                    // only flip true after launch()), so isActive() reports
+                    // false even though the actor is reserveActivate'd and
+                    // the cState_Wait xlink IS playing. The cAim cancel
+                    // works without this kill because cAim's BSA is in
+                    // cState_Aim (do-nothing), no xlink to drop.
+                    Lp::Sys::XLink *bsaXLink = bullets[id][mActiveSlot[id]]->getXLink();
+                    if (bsaXLink != NULL) {
+                        XLinkKillAllSound(bsaXLink);
+                        XLinkKillAllEffect(bsaXLink);
+                    }
+                    bullets[id][mActiveSlot[id]]->cancel();
+                }
+                mActiveSlot[id] = -1;
+                player->mPlayerInkAction->mNoControlPtr = 0;
+                player->mPlayerMotion->animSeq_3C = -1;
+                player->informGetWeapon_Impl_(player->mMainWeaponId, player->mSubWeaponId, player->mSpecialWeaponId, 0);
+                if(isCtrlPerformer){
+                    Game::MiniMap *mMap = Utils::getMinimap();
+                    if(mMap != NULL) mMap->setVisible(true);
+                }
+                break;
+            }
             int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mShootPrepareFrm[id];
             if(elapsed >= startflightdelay || player->isInTrouble_Dying() || player->isInTrouble_AirFall() || player->isInTrouble_WaterFall() || mMatchEnding){
                 // Get launch position from ink tank bone
@@ -582,12 +690,39 @@ namespace Flexlion{
         case TornadoState::cShoot:
 		{
 			isAppliedWeapon[id] = 0;
+			// Weapon swap mid-flight: the BSA bullet is already on its arc
+			// and should burst as normal (don't reset the in-flight bullet).
+			// Just release the player from our state machine so they can
+			// use the new weapon immediately. The flying BSA self-terminates
+			// after its burst regardless of slot tracking.
+			//
+			// Mirrors the normal cShoot end below: animSeq_3C reset +
+			// informGetWeapon_Impl_ is what restores the player's held
+			// view-model from the special's model back to the new weapon's
+			// normal model (otherwise the Inkstrike pack stays stuck on
+			// the player's hands after the swap).
+			if((!player->isInSpecial() && player->mSpecialWeaponId != TORNADO_SPECIAL_ID)){
+				player->mPlayerInkAction->mNoControlPtr = 0;
+				playerState[id] = TornadoState::cNone;
+				inkTankOverride_unlock();
+				player->mPlayerMotion->animSeq_3C = -1;
+				player->informGetWeapon_Impl_(player->mMainWeaponId, player->mSubWeaponId, player->mSpecialWeaponId, 0);
+				// Detach our slot tracking so a future cast picks a fresh
+				// slot. Deliberately DO NOT call bullets[id][slot]->cancel() —
+				// the bullet keeps flying.
+				mActiveSlot[id] = -1;
+				break;
+			}
 			int flightDelay = player->isInTrouble_Dying() || player->isInTrouble_WaterFall() ? 10 : startflightdelay;
 			int elapsed = Game::MainMgr::sInstance->mPaintGameFrame - mShootFrm[id];
 			if(elapsed >= playerdelay){
 				// Release NoControl restriction
 				player->mPlayerInkAction->mNoControlPtr = 0;
 				playerState[id] = TornadoState::cNone;
+				// Release the tank-override lock now that the launch
+				// completed cleanly. Any pending weapon-swap that arrived
+				// mid-flight will now resolve to the correct new tank.
+				inkTankOverride_unlock();
 				player->mPlayerMotion->animSeq_3C = -1;
 				player->informGetWeapon_Impl_(player->mMainWeaponId, player->mSubWeaponId, player->mSpecialWeaponId, 0);
 			}

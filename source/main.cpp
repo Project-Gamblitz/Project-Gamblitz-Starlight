@@ -407,12 +407,22 @@ static void (*unpackStateEventOriginal)(Game::Player *player, Game::PlayerStateC
 // Game uses 1-54; we use 55 (StartBarrier) and 56 (EndBarrier).
 // Integer data must go in DWORD[6] (bytes 24-27) and DWORD[7] (bytes 28-31)
 // because bytes 0-23 are serialized as lossy compressed floats by pack().
-#define PACKET_START_BARRIER 55
-#define PACKET_END_BARRIER   56
-#define PACKET_ALL_MARKING   57
-#define PACKET_BIGLASER_PC   58
-#define PACKET_END_DEVILED   59
-#define PACKET_START_DEVILED 60
+// Custom packet event bytes (PlayerStateCloneEvent._data[32]). Must NOT
+// overlap with engine cases handled by Game::Player::unpackStateEvent.
+//
+// The 5.5.2 engine uses cases 1..41, 43..59, 61..64 — only case 42 and
+// case 60 are unused inside that range. Our previous values 55..60
+// collided with engine cases 55..59 (e.g. case 57 = Grapplink-related
+// PlayerAttract event) which made our AllMarking handler fire on every
+// remote Grapplink activation. Bumped to 100+ so we sit well past the
+// engine's max case (64) — safe across past and any plausible future
+// 5.x updates.
+#define PACKET_START_BARRIER 100
+#define PACKET_END_BARRIER   101
+#define PACKET_ALL_MARKING   102
+#define PACKET_BIGLASER_PC   103
+#define PACKET_END_DEVILED   104
+#define PACKET_START_DEVILED 105
 
 void receiveEndBarrier_Net_Reimpl(Game::Player *player){
 	player->mBarrierEndFrm = 0;
@@ -765,6 +775,109 @@ static void barrierEatBombs(Game::Player *player){
 		}
 		actor = next;
 	}
+}
+
+// =============================================================================
+// boneMtxLookupSafeHook — replaces engine `sub_71001A5698` (5.5.2 0x1A5698).
+// =============================================================================
+// The original is a bone-matrix lookup helper called every frame inside
+// Game::Player::thirdCalc → sub_710109A718 → sub_710108F17C (and one other
+// path via sub_71010A5714). Pseudocode of the original:
+//
+//   int packed = *(u32*)(a1 + 0x6B0);          // boneIdx packed (low16=idx, high16=mode)
+//   if (low16 == 0xFFFF || packed > 0xFFFEFFFF) return 0;   // sentinel
+//   void* P1   = *(void**)(a1 + 0x338);         // skeleton-ish
+//   void* P2   = *(void**)(P1  + 0x40);         // matrix table
+//   void* slot = *(void**)(P2 + signBoneIdx*8); // table entry
+//   void* obj  = *(void**)slot;                 // bone object
+//   obj->vtable[14](obj, a2, packed >> 16);     // dispatch
+//
+// Crash mechanism (see docs/INKSTRIKE_WEAPONSWAP_CRASH.md): when the player
+// swaps weapons in shooting range while Inkstrike is in cAim/cShootPrepare/
+// cShoot, the engine starts an async unload of the tank model. During the
+// load window the bone-index field at +0x6B0 still holds a valid (non-
+// sentinel) value, but P2 transiently goes NULL — the original chases the
+// chain and hits a fault at the table-slot LDR.
+//
+// Our re-impl mirrors the original logic exactly, with extra NULL guards on
+// every link in the chain (P1, P2, slot, obj, vtable, vtable[14]). Any NULL
+// short-circuits to `return 0;`, which is the same behavior the engine uses
+// for the sentinel case → the caller sees "no bone configured" and proceeds
+// safely. Caller side already null-checks `result` (sub_710108F17C tests v3
+// before calling) so this just hardens the deeper deref.
+//
+// Patched at the function entry via 552.slpatch: `001A5698 B boneMtxLookupSafeHook`.
+// All three callers (sub_710108F17C twice + sub_71010A5714 once) are
+// covered by a single patch site.
+__int64 boneMtxLookupSafeHook(__int64 a1, __int64 a2)
+{
+    if (a1 == 0) return 0;
+
+    unsigned int packed = *(unsigned int*)(a1 + 0x6B0);
+    // Original sentinel: low 16 bits == 0xFFFF, OR packed > 0xFFFEFFFF.
+    if (packed > 0xFFFEFFFFu || (unsigned short)packed == 0xFFFFu)
+        return 0;
+
+    void* P1 = *(void**)(a1 + 0x338);
+    if (P1 == NULL) return 0;
+    void* P2 = *(void**)((char*)P1 + 0x40);
+    if (P2 == NULL) return 0;
+
+    // SBFIZ X10, X8, #3, #0x10: sign-extend low 16 bits, then *8.
+    int   boneIdxSigned = (int)(short)(packed & 0xFFFF);
+    long  offset        = (long)boneIdxSigned * 8;
+    void* slot          = *(void**)((char*)P2 + offset);
+    if (slot == NULL) return 0;
+    void* boneObj = *(void**)slot;
+    if (boneObj == NULL) return 0;
+
+    void** vtable = *(void***)boneObj;
+    if (vtable == NULL) return 0;
+    void* fn = vtable[14];   // 0x70 / 8
+    if (fn == NULL) return 0;
+
+    int boneMode = (int)packed >> 16;   // ASR: signed shift
+    typedef void (*FnType)(void*, __int64, int);
+    ((FnType)fn)(boneObj, a2, boneMode);
+    return 1;
+}
+
+// =============================================================================
+// inkstrikeShootingRangeCleanupHook — replaces the BL at 5.5.2 0x011EE30C
+// inside Game::SeqMgrShootingRange::stateInkReset that calls
+// Cmn::SceneBase::requestSceneReset(scene, 4).
+// =============================================================================
+// CleanUp in the shooting range plays a brief "ink coat" transition over
+// the screen. While that animation runs, stateEnterInkReset has already
+// fired but the actual teleport / paint clear is gated behind
+// isAppearedInkReset (true once the ink-coat fully covers the view).
+// Hooking the BL to requestSceneReset INSIDE that branch lines our reset
+// up exactly with the moment the player is teleported and the engine
+// flushes paint/bullets — perfect timing-wise:
+//
+//   stateInkReset (per-frame):
+//     if (this->cleanupPending && isAppearedInkReset(handler)) {
+//         scene = getCurScene();
+//         requestSceneReset(scene, 4);  ← OUR HOOK FIRES HERE
+//         /* teleport + clear paint + outInkReset UI dismiss */
+//     }
+//
+// Hooking earlier (stateEnterInkReset's inInkReset BL) reset Inkstrike
+// before the screen was covered — visible glitch. This BL site fires once
+// per cleanup (cleared by `*(this+1081) = 0` afterwards).
+//
+// We forward to the original requestSceneReset so the engine's own scene
+// reset still runs normally. Hook signature mirrors the original:
+// (Cmn::SceneBase* scene, int resetType).
+static void (*requestSceneResetOrig)(void *scene, int type);
+
+void inkstrikeShootingRangeCleanupHook(void *scene, int type) {
+    if (Flexlion::InkstrikeMgr::sInstance != NULL) {
+        Flexlion::InkstrikeMgr::sInstance->resetForCleanup();
+    }
+    if (requestSceneResetOrig != NULL) {
+        requestSceneResetOrig(scene, type);
+    }
 }
 
 void playerThirdCalcHook(Game::Player *player){
@@ -1286,6 +1399,13 @@ void init_starlion(){
 	
 	requestPaintImplOrig = (decltype(requestPaintImplOrig))ProcessMemory::MainAddr(0xFC1BAC);
 	paintDrawCommandMgrRequestPaintOrig = (decltype(paintDrawCommandMgrRequestPaintOrig))ProcessMemory::MainAddr(0xFB25FC);
+	// Cmn::SceneBase::requestSceneReset — the original our cleanup hook
+	// (inkstrikeShootingRangeCleanupHook) forwards to after running our
+	// own Inkstrike reset. Replaced via the BL at 5.5.2 0x011EE30C, which
+	// is the single call site INSIDE the cleanup branch of stateInkReset
+	// (other callers of requestSceneReset are unaffected — only this
+	// specific BL is patched).
+	requestSceneResetOrig = (decltype(requestSceneResetOrig))ProcessMemory::MainAddr(0xB358C);
 	paintDrawCommandInitializeOrig = (decltype(paintDrawCommandInitializeOrig))ProcessMemory::MainAddr(0xFB0614);
 
 	// Initialize MatchJoint LAN function pointers
@@ -1778,6 +1898,8 @@ void hooks_init(){
 	autoMatchLanInitHook(NULL);
 	// Ink Tank Override
 	searchForVersusIdHook(nullptr, -1);
+	boneMtxLookupSafeHook(0, 0);
+	inkstrikeShootingRangeCleanupHook(NULL, 0);
 	// PrivateBattleSkills
 	onExeCallbackBtnEventHook(0, 0);
 	onExePostWakeHook(0);
@@ -2002,6 +2124,7 @@ int weaponFixHook(gsys::Model *model, sead::SafeStringBase<char> lol){
 void playerModelDrawHook(Cmn::PlayerWeapon *playerWeapon, sead::Matrix34<float> *mtx){
 	// Model re-setup is now done in bigLaserItemPickupHook (game logic phase).
 	// Calling sBaseSetupWithModel during draw phase crashes (NULL model from heap/render state mismatch).
+	if (playerWeapon == NULL) return;
 	playerWeapon->getRootBoneMtx(mtx);
 }
 

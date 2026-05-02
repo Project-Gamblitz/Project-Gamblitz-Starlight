@@ -127,6 +127,23 @@
 	MOV W0, #0x1
 	RET
 004CF4F8 BL handleBulletCloneEventHook
+// Bone-matrix lookup NULL safety — replaces engine sub_71001A5698 entry
+// with a re-impl that null-checks every link in the chain. Defends against
+// the weapon-swap teardown crash where the matrix table goes NULL while
+// the bone index is still a valid non-sentinel value (see
+// docs/INKSTRIKE_WEAPONSWAP_CRASH.md). Single patch covers all three
+// engine callers (sub_710108F17C twice + sub_71010A5714 once).
+001A5698 B boneMtxLookupSafeHook
+// Shooting-range cleanup hook — replaces the BL inside
+// SeqMgrShootingRange::stateInkReset that calls
+// Cmn::SceneBase::requestSceneReset(scene, 4) when the ink-coat
+// transition has fully covered the screen (isAppearedInkReset == true).
+// Lines our Inkstrike reset (bullets + per-player tornado state machine
+// + tank-override lock) up with the exact moment the engine teleports
+// the player and clears paint, so the cleanup is hidden behind the ink-
+// coat just like everything else. Forwards to the original
+// requestSceneReset so the engine's own reset still runs.
+011EE30C BL inkstrikeShootingRangeCleanupHook
 
 // All Marking
 0101334C BL startAllMarking_ImplHook

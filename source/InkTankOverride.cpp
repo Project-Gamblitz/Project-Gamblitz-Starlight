@@ -119,34 +119,75 @@ static const WeaponTankEntry sTankOverrides[] = {
 
 typedef void* (*GetWeaponEntryFn)(void* table, u64 unused, int weaponId);
 
-int searchForVersusIdHook(void* mushTankInfo, int weaponId) {
+// =============================================================================
+// Inkstrike-active tank-change inhibitor.
+// =============================================================================
+// In shooting range the player can swap weapons mid-Inkstrike-launch
+// (cAim/cShootPrepare/cShoot). The engine then calls
+// `searchForVersusIdHook` for the new weapon, gets a different tank ID,
+// and starts an async unload+load of the tank cosmetic. While the load
+// is in flight, BSA's `calcTankBone` and the InkstrikeMgr's bone-bound
+// monitor model both call `getRootBoneMtx` on a half-freed tank and the
+// engine null-derefs deep inside `sub_71001A5698`.
+//
+// Fix: while Inkstrike is active for a player, the hook ignores the
+// queried weaponId and returns the tank ID we locked in at cAim entry.
+// The engine then sees "no tank change needed" and skips the swap, the
+// tank model stays alive throughout the launch, and `getRootBoneMtx`
+// stays valid. After Inkstrike returns to cNone, the inhibit unlocks
+// and the engine processes the deferred tank change normally.
+//
+// Single-global state because shooting range only has the local player
+// swapping; remote players don't trigger this path.
+static int  gLockedTankId      = 0;
+static bool gInhibitTankChange = false;
+
+static int computeTankId(int weaponId) {
     if (weaponId >= 0) {
         for (const auto& entry : sTankOverrides) {
             if (entry.weaponId == weaponId)
                 return entry.tankId;
         }
     }
-
-    // og impl
     if (weaponId < 0)
         return 0;
-	
+
     auto getWeaponEntry = (GetWeaponEntryFn)ProcessMemory::MainAddr(0x9768);
-    void* instance    = *(void**)ProcessMemory::MainAddr(0x2D56A30);  // *sInstance
+    void* instance    = *(void**)ProcessMemory::MainAddr(0x2D56A30);
     void* weaponTable = *(void**)((u8*)instance + 0x50);
     void* weaponData  = getWeaponEntry(weaponTable, 0, weaponId);
-
     if (!weaponData)
-        return 0;  // Tnk_Simple
+        return 0;
 
     const char* name   = *(const char**)((u8*)weaponData + 0x10);
     const char* prefix = "Shooter_First_";
     const char* n = name;
     const char* p = prefix;
     while (*p && *n == *p) { ++n; ++p; }
-
     if (*p == '\0')
-        return 1;  // Tnk_Simple_Shot_First
+        return 1;
+    return 0;
+}
 
-    return 0;  // Tnk_Simple
+// Called from InkstrikeMgr when the player enters cAim (cNone → cAim
+// transition in detectChangeState). Captures the tank ID for the
+// player's currently equipped weapon and locks the hook to return that
+// value until inkTankOverride_unlock() runs.
+extern "C" void inkTankOverride_lockForInkstrike(int weaponId) {
+    gLockedTankId      = computeTankId(weaponId);
+    gInhibitTankChange = true;
+}
+
+// Called from InkstrikeMgr on every transition back to cNone (cancel
+// during cAim, normal end after cShoot, etc.) to release the lock so
+// future weapon swaps process normally.
+extern "C" void inkTankOverride_unlock() {
+    gInhibitTankChange = false;
+}
+
+int searchForVersusIdHook(void* mushTankInfo, int weaponId) {
+    if (gInhibitTankChange) {
+        return gLockedTankId;
+    }
+    return computeTankId(weaponId);
 }
