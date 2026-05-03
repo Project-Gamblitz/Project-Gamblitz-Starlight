@@ -1,6 +1,5 @@
 #include "main.hpp"
 #include "flexlion/PlayerWeaponSuperShot.hpp"
-#include "flexlion/BulletInkzooka.hpp"
 #include "flexlion/PlayerWeaponTornado.hpp"
 #include "flexlion/BigLaserModeMgr.hpp"
 #include "flexlion/BetaDelivery.hpp"
@@ -1886,10 +1885,6 @@ void hooks_init(){
 	respawnRadarMiniMapInfoHook();
 	respawnRadarMiniMapCtrlHook(0);
 	teamColorMgrLoadHook(0);
-	{
-		sead::Vector3<float> _dummyVec = sead::Vector3<float>::zero;
-		initializeSenderHook(NULL, NULL, 0, 0, _dummyVec, _dummyVec, 0, 0);
-	}
 	requestPaintImplHook(0, 0, 0, NULL, NULL, NULL, NULL, 0, NULL, 0, 0, NULL, 0, 0, 0, 0);
 	paintDrawCommandMgrRequestPaintHook(0, NULL);
 	vtable34Hook(NULL, NULL);

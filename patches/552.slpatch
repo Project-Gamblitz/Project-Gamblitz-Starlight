@@ -192,11 +192,6 @@
 // ^ Cmn::PlayerCustomMgr::setup
 //01097730+88 TBZ W23, #0, #8
 01097730+12B0 ORR W21, W21, W23
-// BL inside PlayerInkAction::shotBullet_N that calls
-// BulletGachihoko::initializeSender. Hook patches the bullet's vtable
-// post-init / pre-onActivate so its getXlinkName returns "BulletSuperShot"
-// and the engine resolves the xlink to the friend's tornado elink user.
-010990F4 BL initializeSenderHook
 
 // Damage Reason
 01314250+1C B damageReasonHook
