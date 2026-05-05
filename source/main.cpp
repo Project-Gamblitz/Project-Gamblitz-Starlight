@@ -1,5 +1,5 @@
 #include "main.hpp"
-#include "flexlion/PlayerWeaponSuperShot.hpp"
+//#include "flexlion/PlayerWeaponSuperShot.hpp"
 #include "flexlion/PlayerWeaponTornado.hpp"
 #include "flexlion/BigLaserModeMgr.hpp"
 #include "flexlion/BetaDelivery.hpp"
@@ -714,7 +714,7 @@ void playerFirstCalcHook(Game::Player *player){
     
     tornadoMgr->playerFirstCalc(player);
     Game::PlayerWeaponTornado::sInstance->playerFirstCalc(player);
-    Game::PlayerWeaponSuperShot::sInstance->playerFirstCalc(player);
+    //Game::PlayerWeaponSuperShot::sInstance->playerFirstCalc(player);
 }
 
 // Hook for the isInSpecial() call inside PlayerInkAction::getFlagDrawShooterGuide.
@@ -972,7 +972,12 @@ void renderEntrypoint(agl::DrawContext *drawContext, sead::TextWriter *textWrite
 		if(Collector::mMushDataHolder != NULL){
 			Starlion::Sp1WeaponLookup::Initialize();
 			custommgrjptHook();
-			Game::PlayerWeaponSuperShot::sInstance->initialize();
+			//Game::PlayerWeaponSuperShot::sInstance->initialize();
+			if(Utils::isValidWeapon(Cmn::Def::WeaponKind::cSpecial, 24)){
+				*(u64*)ProcessMemory::MainAddr(0x2A32000) = (u64)&getSuperShotBurstWaitFrameHook;
+				*(u64*)ProcessMemory::MainAddr(0x2A32008) = (u64)&getSuperShotBurstWarnFrameHook;
+				*(u64*)ProcessMemory::MainAddr(0x2A31F40) = (u64)&calcHokoDamageHook;
+			}
 			if(Utils::isValidWeapon(Cmn::Def::WeaponKind::cSpecial, 22)){
 				*(u64*)ProcessMemory::MainAddr(0x2A3F910) = (u64)&calcAquaBallDamageHook;
 			}
@@ -980,13 +985,14 @@ void renderEntrypoint(agl::DrawContext *drawContext, sead::TextWriter *textWrite
 		}
 	}
 	ctrlChecker->calc();
-	Game::PlayerWeaponSuperShot::sInstance->onCalc();
+	//Game::PlayerWeaponSuperShot::sInstance->onCalc();
 	agentThreeHandle();
 	kingSquidMgr->onCalc();
 	tornadoMgr->onCalc();
 	if(!Utils::isSceneLoaded() && bigLaserModeMgr != NULL){
 		bigLaserModeMgr->reset();
 	}
+	handleSupershot();
 
 	// Beta gear delivery is handled via DeliveryBox hook (installed in init_starlion)
 
@@ -1205,7 +1211,7 @@ u64 specialSetupWithoutModelHook(){
 }
 
 int *custommgrjptHook(){
-	custommgrjpt[0] = ((u64)&Game::PlayerWeaponSuperShot::supershotJumpHook) - ((u64)custommgrjpt);
+	custommgrjpt[0] = ((u64)&supershotJumpHook) - ((u64)custommgrjpt);
 	int *oldJptable = (int*)ProcessMemory::MainAddr(0x24BE358);
 	for(int i = 1; i < 27; i++){
 		custommgrjpt[i] = oldJptable[i - 1];
@@ -1217,6 +1223,35 @@ int *custommgrjptHook(){
 	custommgrjpt[2] = ((u64)&Game::PlayerWeaponTornado::tornadoJumpHook) - ((u64)custommgrjpt);
 	return custommgrjpt;
 }
+
+int getSuperShotBurstWaitFrameHook(Game::BulletGachihoko *bullet){
+	if(bullet == NULL){
+		return ((int (*)())ProcessMemory::MainAddr(0x4D7D84))();
+	}
+	if(!Utils::isPlayerClass(bullet->mSender)){
+		return ((int (*)())ProcessMemory::MainAddr(0x4D7D84))();
+	}
+	Game::Player *player = (Game::Player*)bullet->mSender;
+	if(player->isInSpecial() and player->mSpecialWeaponId == 24){
+		return 0;
+	}
+	return ((int (*)())ProcessMemory::MainAddr(0x4D7D84))();
+}
+
+int getSuperShotBurstWarnFrameHook(Game::BulletGachihoko *bullet){
+	if(bullet == NULL){
+		return ((int (*)())ProcessMemory::MainAddr(0x4D7DB4))();
+	}
+	if(!Utils::isPlayerClass(bullet->mSender)){
+		return ((int (*)())ProcessMemory::MainAddr(0x4D7DB4))();
+	}
+	Game::Player *player = (Game::Player*)bullet->mSender;
+	if(player->isInSpecial() and player->mSpecialWeaponId == 24){
+		return 0;
+	}
+	return ((int (*)())ProcessMemory::MainAddr(0x4D7DB4))();
+}
+
 
 CURLcode curl_easy_perform_hook(CURL *curl){
 	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
@@ -1364,7 +1399,7 @@ void init_starlion(){
 	kingSquidMgr = new Starlion::KingSquidMgr();
 	FsLogger::LogFormatDefaultDirect("[Gamblitz] Created KingSquidMgr, 0x%x free RAM.\n", Collector::mHeapMgr->getCurrentHeap()->getFreeSize());
 	mS1Inkstrike = new Starlion::S1Inkstrike();
-	new Game::PlayerWeaponSuperShot();
+	//new Game::PlayerWeaponSuperShot();
 	new Game::PlayerWeaponTornado();
 	bigLaserModeMgr = new Flexlion::BigLaserModeMgr();
 	Flexlion::BigLaserModeMgr::initHook();
@@ -1416,7 +1451,7 @@ void playerModelSetupHook(Game::PlayerModel *pmodel){
 	pmodel->setup();
 	pmodel->mPlayer->mPlayerKingSquid = new Starlion::PlayerKingSquid(pmodel->mPlayer);
 	tornadoMgr->registerPlayer(pmodel->mPlayer);
-	Game::PlayerWeaponSuperShot::sInstance->registerPlayer(pmodel->mPlayer);
+	//Game::PlayerWeaponSuperShot::sInstance->registerPlayer(pmodel->mPlayer);
 	int idx = pmodel->mPlayer->mIndex;
 }
 
@@ -1852,9 +1887,12 @@ void hooks_init(){
 	setupKingSquidAnimHook(NULL, NULL);
 	kingSquidAnimSetControllerHook(NULL, NULL);
 	actorDbHook(NULL, NULL, NULL);
+	supershotJumpHook();
+	getSuperShotBurstWaitFrameHook(NULL);
+	getSuperShotBurstWarnFrameHook(NULL);
 	searchHappi002Hook(0, 0);
 	getSaveWriteFixed();
-	Game::PlayerWeaponSuperShot::supershotJumpHook();
+	//Game::PlayerWeaponSuperShot::supershotJumpHook();
 	Flexlion::BigLaserModeMgr::bigLaserJumpHook();
 	custommgrjptHook();
 	specialSetupWithoutModelHook();
@@ -1901,6 +1939,45 @@ void hooks_init(){
 	onExeFadeInInitHook(0);
 	calcDraw_SuperJumpSign_Hide_AlwaysHook(0.0f, 0.0f);
 	calcValue_RespawnTime_Save_AlwaysHook(0, 0, 0, 0);
+}
+
+void handleSupershot(){
+	Game::Player *player = Collector::mControlledPlayer;
+	if(player == NULL or !Utils::isSceneLoaded()){
+		return;
+	}
+	if(player->isInSpecial() and player->mSpecialWeaponId == 24){
+		player->mPlayerInkAction->mChargerChargeState = 100;
+		Prot::ObfStore(&player->mPlayerInkAction->mChargerChargeFrame, 1000);
+	}
+	auto iterNode = Game::BulletGachihoko::getClassIterNodeStatic();
+	for(Game::BulletGachihoko *ita = (Game::BulletGachihoko*)iterNode->derivedFrontActiveActor(); ita != NULL; ita = (Game::BulletGachihoko*)iterNode->derivedNextActiveActor(ita)){
+		if(!Utils::isPlayerClass(ita->mSender)){
+			continue;
+		}
+	}
+}
+
+int calcHokoDamageHook(Game::BulletGachihoko *bullet, int armortype, Cmn::Def::Team team, sead::Vector3<float> const& pos){
+	int res = ((int (*)(Game::BulletGachihoko *, int, Cmn::Def::Team, sead::Vector3<float> const&))ProcessMemory::MainAddr(0x4DB3FC))(bullet, armortype, team, pos);
+	if(!Utils::isPlayerClass(bullet->mSender)){
+		return res;
+	}
+	Game::Player *player = (Game::Player*)bullet->mSender;
+	if(player->isInSpecial() and player->mSpecialWeaponId == 24 and res != 0){
+		return 1500;
+	}
+	return res;
+}
+
+void supershotJumpHook(){
+	asm("CMP W20, #0");
+	asm("B.EQ #8");
+	asm("B _ZN3Cmn15PlayerCustomMgr27checkAndCreateSpecialWeaponEiNS_12PlayerCustom4KindEb_CC");
+	asm("MOV X0, X19");
+	asm("MOV X1, XZR");
+	asm("BL _ZN2Lp3Sys5Actor6createIN3Cmn19PlayerWeaponShooterEEEPT_PS1_PN4sead4HeapE");
+	asm("B _ZN3Cmn15PlayerCustomMgr27checkAndCreateSpecialWeaponEiNS_12PlayerCustom4KindEb_1D4");
 }
 
 int LobbyRivalGetPlayerTypeHook(Cmn::SaveDataCmn *saveDataCmn){

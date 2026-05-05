@@ -21,6 +21,11 @@
 ushort GetCharKindHook(uintptr_t _this, ushort charKind);
 // tornadoJumpHook moved to PlayerWeaponTornado
 //int getBombThrowSpanFrmHook(Game::PlayerInkAction *inkAction, bool a);
+void handleSupershot();
+int getSuperShotBurstWaitFrameHook(Game::BulletGachihoko *bullet);
+int getSuperShotBurstWarnFrameHook(Game::BulletGachihoko *bullet);
+void supershotJumpHook();
+int calcHokoDamageHook(Game::BulletGachihoko *bullet, int armortype, Cmn::Def::Team team, sead::Vector3<float> const& pos);
 u64 specialSetupWithoutModelHook();
 void playerModelResourceLoadHook(Game::PlayerModelResource *res, sead::Heap *heap);
 gsys::Model *createPlayerModelHook(Cmn::Def::Team team,sead::SafeStringBase<char> const& name,Lp::Sys::ModelArc &arc,Lp::Utl::ModelCreateArg const&createArg,sead::Heap *heap);

@@ -185,11 +185,9 @@
 00181934+B4:
 	BL custommgrjptHook
 	MOV X9, X0
-// ^ Cmn::PlayerCustomMgr::checkAndCreateSpecialWeapon
 001821F8+AA4:
 	BL specialSetupWithoutModelHook
 	MOV X9, X0
-// ^ Cmn::PlayerCustomMgr::setup
 //01097730+88 TBZ W23, #0, #8
 01097730+12B0 ORR W21, W21, W23
 
