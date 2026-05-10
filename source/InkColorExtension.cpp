@@ -91,12 +91,14 @@ static const ExtraColorEntry kExtras[] = {
     {"Vss_Regular_OrangeBlue_Default",  1},
     {"Vss_Regular_PinkOrange",          1},
     {"Vss_Regular_TurquoiseOrange",     1},
+    {"Vss_Regular_TurquoiseRed",     	1},
     // 6 new Vss_Gachi (Ranked)
     {"Vss_Gachi_DarkblueYellow",        2},
     {"Vss_Gachi_GreenOrange",           2},
     {"Vss_Gachi_LightgreenBlue",        2},
     {"Vss_Gachi_LumigreenPurple",       2},
     {"Vss_Gachi_SodaPink",              2},
+    {"Vss_Gachi_TurquoiseRed",          2},
     {"Vss_Gachi_YellowLilac_Default",   2},
 };
 
