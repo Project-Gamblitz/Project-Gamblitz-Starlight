@@ -1,0 +1,434 @@
+[version=551, target=main]
+// Beta DeliveryBox: redirect ALL searchIdHappiReplica calls to hook
+01157D54 BL searchHappi002Hook
+01157F34 BL searchHappi002Hook
+01157FD8 BL searchHappi002Hook
+01158860 BL searchHappi002Hook
+01158E30 BL searchHappi002Hook
+// OctaTypeAnimHandle::set (5.5.2: sub_7100442428)
+// Original: (type & ~1) == 2 → only types 2,3 get octo icon
+// New: type >= 2 → types 2,3,4,5,6,7 all get octo icon
+00442428:
+	LDR X0, [X0]
+	FMOV S0, WZR
+	CMP W1, #2
+	B.LT #0x8
+	FMOV S0, #1.0
+	NOP
+	NOP
+00442444 05575514
+// Fix broken GetSaveWrite (0x202B20) in delivery box calc
+01158004 BL getSaveWriteFixed
+// Kraken
+010ED040+1AC 05000014
+01002410+1AAC:
+	MOV X0, X19
+	BL jetPackJetHook
+01020714 B krakenDiveHook
+00FE8400+820 BL playerModelSetupHook
+01002410+34 BL playerKingSquidCalcHook
+010F1AC4+7D0 BL kingSquidAnimSetControllerHook
+010F1AC4+6EC BL setupKingSquidAnimHook
+010F1AC4+3DC BL registBigLaserAnimHumanHook
+010F1AC4+3F4 BL registKingSquidAnimHook
+00FF81E4+2048:
+	LDR X0, [X19, #0xF50]
+	BL stepPaintTypeHook
+	ORR W8, W0, #1
+00FF81E4+2184:
+	LDR X0, [X19, #0xF50]
+	BL stepPaintTypeHook
+	ORR W8, W0, #1
+00FF81E4+263C:
+	LDR X0, [X19, #0xF50]
+	BL stepPaintTypeHook
+	ORR W8, W0, #1
+00FF81E4+2848:
+	LDR X0, [X19, #0xF50]
+	BL stepPaintTypeHook
+	ORR W8, W0, #1
+//00FF81E4+51e4:
+//	LDR X0, [X19, #0xF50]
+//	BL stepPaintTypeHook
+//	ORR W8, W0, #1
+0100174C+1FC:
+	LDR X0, [X19, #0xF50]
+	BL stepPaintTypeHook
+	ORR W8, W0, #1
+0100E290 BL fixEffHook
+
+// Some Hair Hook
+010E6668+18 BL playerModelResourceLoadHook
+
+// Weapon
+01066298:
+	MOV W0, #0x1
+	RET
+// Killer Wail shot hook
+010B66B4+100 BL bulletSuperLaserShotHook
+// BulletSuperLaser::getClassName -> return "BulletOldSuperLaser" for S1 Killer Wail XLink
+0058ACB4 B bulletSuperLaserGetClassNameOverride
+
+004DEEF8+7C20 BL extraBigLaserBulletHook
+
+// BigLaserItemOnline pickup -> set Princess Cannon mode
+00D68320 BL bigLaserItemPickupHook
+// PlayerWeaponBigLaser::setupWithModel -> swap model name for KW
+001A4EC0 B bigLaserSetupWithModelHook
+// Special weapon model pre-registration -> also register Wsp_OldBigLaser
+003D08D4 BL weaponModelPreRegHook
+// Player Weapon Mtx stuff
+0018A7EC+34 BL playerModelDrawHook
+
+// Shot Guide fix: allow shot guide during Barrier/FreeBombs
+010B2014 BL isInSpecialForShotGuideHook
+
+// Seeker
+00478410 01000014
+
+// Save onto sd card
+0240E1CB "_ZN2nn2fs11MountSdCardEPKc"
+// Save renamed to "saveG.dat"
+024B31EE "saveG.dat"
+
+
+// No map error
+00376BF0 09000014
+
+// lan players show up in Plaza
+//00376F80 1F2003D5
+
+// start game on timeout
+0036E304 21028052
+
+// skip news scratches
+00175A7C 20008052
+001759B0 20008052
+
+//Don't initialize SoundMic (VC) v550 
+001CE08C C0035FD6 
+
+// BCAT
+00327EA0 BL bcatHook
+00327DD8 BL bcatHook
+003280FC BL bcatHook
+
+// Npc Fix
+00F42238:
+	BL npcHeapFix
+	4122
+
+// InkStrike
+010B919C+34 BL inkstrikeBombVelHook
+010B919C+10C BL inkstrikeShotHook
+010B919C+E0 BL inkstrikeNetHook
+00FEFF0C B isInInkstrikeCarryHook
+010B663C:
+	MOV W0, #0x1
+	RET
+004CF4F8 BL handleBulletCloneEventHook
+// Bone-matrix lookup NULL safety — replaces engine sub_71001A5698 entry
+// with a re-impl that null-checks every link in the chain. Defends against
+// the weapon-swap teardown crash where the matrix table goes NULL while
+// the bone index is still a valid non-sentinel value (see
+// docs/INKSTRIKE_WEAPONSWAP_CRASH.md). Single patch covers all three
+// engine callers (sub_710108F17C twice + sub_71010A5714 once).
+001A5698 B boneMtxLookupSafeHook
+// Shooting-range cleanup hook — replaces the BL inside
+// SeqMgrShootingRange::stateInkReset that calls
+// Cmn::SceneBase::requestSceneReset(scene, 4) when the ink-coat
+// transition has fully covered the screen (isAppearedInkReset == true).
+// Lines our Inkstrike reset (bullets + per-player tornado state machine
+// + tank-override lock) up with the exact moment the engine teleports
+// the player and clears paint, so the cleanup is hidden behind the ink-
+// coat just like everything else. Forwards to the original
+// requestSceneReset so the engine's own reset still runs.
+011EE30C BL inkstrikeShootingRangeCleanupHook
+
+// All Marking
+0101334C BL startAllMarking_ImplHook
+01028854+F8 MOV W8, WZR
+01028DB8 630080D2
+01028DFC 630080D2
+01028D70 630080D2
+
+// MiniMap Cursor Effect
+00A136D8 BL updateCursorEffectHook
+
+// RespawnRadar
+00A14AA8 BL respawnRadarHook
+00A12C34 BL respawnRadarMiniMapInfoHook
+00A12E0C BL respawnRadarMiniMapCtrlHook
+
+// Ink color combo extension — hook the BL that constructs/loads the
+// TeamColorMgr (5.5.2 0x10D238 → calls load() at 0x14221C). After the
+// original load fills entries[1..N] from the static name table, our hook
+// appends 14 Splatoon 1 leftover color combos to the slack pre-allocated
+// slots via the engine's own .bprm loader. See source/InkColorExtension.cpp.
+0010D238 BL teamColorMgrLoadHook
+
+// DeathMarking
+0113641C BL startSkill_DeathMarkingHook
+
+// Team Changer Crash Fix
+0106EB4C 01000014
+
+// Plaza Mod Checker 
+0008B4EC+2B4 BL actorDbHook
+0008B4EC+2E0 BL actorDbHook
+0008B4EC+30C BL actorDbHook
+
+// SuperShot
+00181934+A8:
+	SUB W8, W8, #0xF
+	CMP W8, #0x18
+00181934+B4:
+	BL custommgrjptHook
+	MOV X9, X0
+001821F8+AA4:
+	BL specialSetupWithoutModelHook
+	MOV X9, X0
+//01097730+88 TBZ W23, #0, #8
+01097730+12B0 ORR W21, W21, W23
+
+// Damage Reason
+01314250+1C B damageReasonHook
+
+// GetCharKindHook
+00425AC8+150 BL GetCharKindHook
+00425E84+114 BL GetCharKindHook
+
+// Starlight Hooks
+018512B8+284 NOP // enable display debug stuff (which is used for hook)
+018512B8+390:
+	MOV X1, X0
+	MOV X0, X25
+	BL renderEntrypoint
+	B #0x2B8
+
+// Kelp Physics everywhere
+0018099C 48008052
+
+// number versionHook
+000E54C4 BL handleDisplayVersion
+
+//splashdown
+01133494 BL healPlayerSuperLandingHook
+
+// Agnet 3 gear
+000E98C8+38 BL msnArmorHook
+001821F8+2EC BL msnArmorHook
+
+//Disable automatic camera movement [YoshiCrystal]
+010403D0 1F2003D5
+
+//Skip friend list on PB and League [YoshiCrystal]
+0149C924 20008052
+
+// One Player Private Battles [OatmealDome]
+00371E78 1F2003D51F2003D509000014
+00379338 1F2003D51F2003D509000014
+014C1CE8 21008052
+014DEFD0 1F2003D5
+014DFB14 21008052
+
+//Find anyone on ranked matching
+00333270 0C000014
+
+//Rival Unpatch [YoshiCrystal]
+01454A54 1F2003D5 // save validation removed
+001B5CF8 1F2003D5 // if modeltype = 5 and up dont do anything (network)
+// Rival Fix [Shadow] requires OE
+010EF2A8 0D000014
+010EF30C E0031FAA
+
+// Rival XLink voices/effects fix
+0106FA54 BL xlinkVoiceCheckIsRivalHook
+
+// Rival Customize Fix 
+008F8052 008F8052 // size + 8
+014CA104 008F8052 // size + 8
+//000E0AAC 00F4A152 // bump GearHeap 200 -> 250mb | nvm not needed
+000DEDB8 7F3A02F9F4031F2A // relocated GearHeap = NULL
+000E0AE0 683A02F9 // store relocated GearHeap 0x3D8 -> 0x470
+000E0BD4 01000014 // return CustomizeSeqBase and heap for our convenience
+000E0BE0 01000014 // return CustomizeSeqBase and heap for our convenience
+000E0BF8 06000014 // return CustomizeSeqBase and heap for our convenience
+000E0C20 B CustomizeSeqBaseLoadHook // call our hook to create rival customize player 
+000E0FD4 623A42F9 // return relocated GearHeap
+000DF080 BL CustomizeAmiiboCbHelperFunc // fixup player id
+000DF180 1F150071 // cmp 4 -> 5
+000DF1A4 1F150071 // cmp 4 -> 5
+000E0F58 1F150071 // cmp 4 -> 5
+000E0F88 1F150071 // cmp 4 -> 5
+000E0FF4 3F150071 // cmp 4 -> 5
+000E1024 1F150071 // cmp 4 -> 5
+000E1044 1F150071 // cmp 4 -> 5
+000E1114 1F150071 // cmp 4 -> 5
+000E1130 1F150071 // cmp 4 -> 5
+000E10E4 1F180071410000548000805260EA03B960EE03B904000014 // sigma
+000E13F4 1F150071 // cmp 4 -> 5
+000E1D2C 1F150071 // cmp 4 -> 5
+000E1DA0 1F150071 // cmp 4 -> 5
+000E1E28 1F150071 // cmp 4 -> 5
+000E1E4C 1F150071 // cmp 4 -> 5
+
+// Rival Lobby Fix
+014984FC 007F8052 // size + 8
+01498598 02108052 // relocated Lobby::CoopCommander = NULL
+01498C64 60FA01F9 // store relocated Lobby::CoopCommander 0x3C0 -> 0x3F0
+01498CF8 60FA41F9 // load relocated Lobby::CoopCommander 0x3C0 -> 0x3F0
+01498CC8 1F150071 // cmp 4 -> 5
+01498CE4 1F150071 // cmp 4 -> 5
+01498DE8 1F150071 // cmp 4 -> 5
+01498E18 1F150071 // cmp 4 -> 5
+01498E84 3F150071 // cmp 4 -> 5
+01498EB4 1F150071 // cmp 4 -> 5
+01498ED4 1F150071 // cmp 4 -> 5
+014989AC BL LobbyRivalFixHook // create our rival
+01498B60 BL LobbyRivalGetPlayerTypeHook // map rival -> 4
+014B2A6C 3F150071 // cmp 4 -> 5
+014B28F4 3F150071 // cmp 4 -> 5
+014B2794 3F150071 // cmp 4 -> 5
+014B26E0 3F150071 // cmp 4 -> 5
+014B21D0 3F150071 // cmp 4 -> 5
+014B21AC DF160071 // cmp 4 -> 5
+014B2180 BL LobbyRivalGetPlayerTypeHook
+003A5790 3F150071
+
+//Remove splatfest from vs select
+//014B2484 00008052
+
+// Resource Heap Size Bump (if using merged testfire ptcl)
+0039FA90 00E0A152 // static res
+0039C044 0048A052 // effect
+
+// EndBarrier unpackStateEvent hook
+// 3.1.0 IDA ref: BL at 0x7100e77374, inside receiveStateEvent (0x7100e77320)
+0104A04C BL unpackStateEventHook
+
+// StartBarrier — replace stubbed sendEvent_StartBarrier tail call inside startBarrier_Common
+// 3.1.0 IDA ref: BL at 0x7100e45f64, 5.5.2: B at 0x710101964C (tail call to stub at 0x7101100FE0)
+0101964C B sendEvent_StartBarrierHook
+
+// EndDeviled — replace stubbed sendEvent_EndDeviled BL inside Player::thirdCalc
+// 5.5.1 IDA: BL at 0x7101004980 (inside thirdCalc 0x7101002410), stub at 0x7101101048
+// thirdCalc starts at same offset in 5.5.1 and 5.5.2, so call site offset is identical.
+// By this point thirdCalc has already cleared local deviled fields via Prot::ObfStore + plain write.
+01004980 BL sendEvent_EndDeviledHook
+
+// StartDeviled — replace stubbed sendEvent_StartDeviled tail-call inside Player::startDeviled_Sender
+// 5.5.1 IDA: B at 0x7101029088 (inside startDeviled_Sender 0x7101028EBC), stub at 0x7101101040
+// Args at call site: X0=netCtrl(player+0xFF8), W1=deviledCountMax, W2=duration(pre-subtracted), W3=1.
+// startDeviled_Sender is named in 5.5.1; tail-call offset should be identical in 5.5.2.
+01029088 B sendEvent_StartDeviledHook
+
+// playDamageHook barrier
+01049CA0 BL playDamageVoiceAndRumbleHook
+010569EC BL playDamageVoiceAndRumbleHook
+
+01056A2C BL emitAndPlay_StealthDamageHook
+01049CB4 BL emitAndPlay_StealthDamageHook
+
+// receiveDamage_Net_WithLifeNumber: NOP the TBZ that skips voice for NoDamage
+0101A658 NOP
+
+// informDamage_WithVoiceAndRumble: hook playDamageVoiceAndRumble
+010105B0 BL playDamageVoiceAndRumbleHook
+
+// Always show Shifty Stations on PBs [YoshiCrystal]
+// Not sure if this will show on rotations
+00410CC4 1F2003D5
+
+// ---- Extend BGM slots from 16 to 25 ----
+// 1. getVersusBgmNum: change MOV W8, #16 -> MOV W8, #25 (default versus path) - done via code now
+000E86B8 A8038052
+// fest up to 4 bgm i think
+000E86A8 80008052
+
+// 2. Replace choiceBgm entirely with our hook that uses static storage sized for 25 BGMs.
+//    This fixes the crash: the original function has both the free-node pool and the
+//    PtrArray buffer hardcoded to 16 entries on the stack. With 25 BGMs requested,
+//    bgmfuncthign exhausts the pool at node 17 (NULL deref) AND overflows the buffer.
+//    NOTE: The setBuffer capacity patch (376A28) is intentionally omitted here —
+//    choiceBgmHook never calls setBuffer; it manages its own static struct.
+// 	  special thanks to mr claude for this shit i was going to end it all
+00376950 B choiceBgmHook
+
+// reduce Last Ditch Effort units from 24 to 18
+0107D21C 0050261E
+
+// aquaball free movement on walls
+01037300 30000014
+
+// isSleepingAll hook — wait for tornado before ending match
+00F8D7E8 BL isSleepingAllHook
+0137533C BL isSleepingAllHook
+
+// AutoMatch LAN Init Fix DONT TOUCH PLEASE
+0036C960 BL autoMatchLanInitHook
+
+// Lan on Versus Lobby and change local to lan
+// 0149D070 03000014
+// 0149D080 08000014
+
+//Save Game on LAN Match [Custom Splatfest Patch]
+01365890 20008052
+
+//Fix MatchingSave [Custom Splatfest Patch]
+00376F80 20008052
+01365694 20008052
+
+//Inkstrike Paint set as special paint
+00FC3918 BL requestPaintImplHook
+
+// Inkstrike Cylinder Paint — inject playerIdx + cmd into RequestPaintArg
+// so requestIndependentHeightRangePaint awards points without filling the
+// special gauge (mirrors requestPaintImplHook's behavior for ColAndPaint).
+00FC26AC BL paintDrawCommandMgrRequestPaintHook
+
+// Inkstrike Cylinder Paint — skip ObjPaint::vtable[34] pos transform when
+// BSA is bursting, so the dispatched cylinder uses world-space mTo instead
+// of being warped into each object's local frame.
+00FC2500 BL vtable34Hook
+
+// Inkstrike Cylinder Paint — BL inside PaintDrawCommandMgr::requestPaint
+// that calls PaintDrawCommand::initialize. Currently disabled (the hook
+// function is a passthrough). Re-enable to mutate cmd fields after init
+// sets them, or to feed the [INKSTRIKE PAINT] debug overlay
+// (un-#if0 the PaintDbgState block + capture logic + overlay block in
+// main.cpp at the same time).
+// 00FB2710 BL paintDrawCommandInitializeHook
+
+// fizzy bomb white ink frames increase to 85 (another prochara balance change)
+010951A0 A80A8052
+
+// Ink Tank Override
+000833B0 B searchForVersusIdHook
+
+// UIVersusPrivateOptionPage constructor
+014D7418 00058052
+014D742C AB008052
+
+// UIVersusPrivateOptionPage init
+014D76A8 9F1600F1
+
+// UIVersusPrivateOptionPage::onExeCallbackBtnEvent
+014D7780 B onExeCallbackBtnEventHook
+
+// UIVersusPrivateOptionPage::onExePostWake
+014D782C B onExePostWakeHook
+
+// UIVersusPrivateOptionPage::onExeFadeInInit
+014D78C8 B onExeFadeInInitHook
+
+// Gambit mode: never show stealth jump
+10751AC BL calcDraw_SuperJumpSign_Hide_AlwaysHook
+
+// Gambit mode: quick respawn works after u get splatted
+// current implementation is kinda bad, doesn't detect when you die by falling
+// we would need  to change it so instead of "removing" the kill check we make the player always eligible
+01029FE0 BL calcValue_RespawnTime_Save_AlwaysHook
+0102A014 BL calcValue_RespawnTime_Save_AlwaysHook
+0102B7B0 BL calcValue_RespawnTime_Save_AlwaysHook
+0102B7C8 BL calcValue_RespawnTime_Save_AlwaysHook

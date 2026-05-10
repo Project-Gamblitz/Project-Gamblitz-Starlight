@@ -1,4 +1,4 @@
-[version=551, target=main]
+[version=test, target=main]
 // Kraken
 010ED040+1AC 05000014
 01002410+1AAC:
