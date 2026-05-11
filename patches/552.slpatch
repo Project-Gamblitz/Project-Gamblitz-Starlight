@@ -185,9 +185,11 @@
 00181934+B4:
 	BL custommgrjptHook
 	MOV X9, X0
+// ^ Cmn::PlayerCustomMgr::checkAndCreateSpecialWeapon
 001821F8+AA4:
 	BL specialSetupWithoutModelHook
 	MOV X9, X0
+// ^ Cmn::PlayerCustomMgr::setup
 //01097730+88 TBZ W23, #0, #8
 01097730+12B0 ORR W21, W21, W23
 
@@ -421,6 +423,54 @@
 
 // UIVersusPrivateOptionPage::onExeFadeInInit
 014D78C8 B onExeFadeInInitHook
+
+// StageSelectPage UI capacity expansion — 64 → 128 entries
+// =========================================================
+// `sub_7100410AF0` (the makeStageList helper) reads the page's UI list /
+// free list at fixed offsets, with a vanilla 64-slot inline buffer. With
+// our savefile cap extension allowing >64 saved mapIds, the offline-read
+// loop pops past the 64-node free list and null-derefs at the next
+// `STR WZR, [X8]`. To fix this, we wrap every BL to `sub_7100410AF0`
+// with a hook that overrides the page's pointers to point at a 128-slot
+// external buffer (in our mod's BSS) BEFORE the helper runs, then
+// forwards to the vanilla helper. See source/StageSelectPageExpand.cpp.
+//
+// All 3 callsites are `MOV X0, X19; BL sub_7100410AF0`.
+004108F4 BL makeStageListHelperHook
+004111CC BL makeStageListHelperHook
+00411B88 BL makeStageListHelperHook
+
+// Random-rotation list extension — global capacity 64 → 128
+// ---------------------------------------------------------
+// `sub_71004130D0` pushes the page's UI entries into a static global random-
+// rotation list (`*Cmn::StaticMem::sInstance + 0x7A0` / +0xBC0). Vanilla
+// capacity is 64. We override the global descriptor's pointers to point at
+// 128-slot external buffers in our mod's BSS before each call, so vanilla
+// naturally operates on extended buffers and all 128 page entries become
+// eligible for random rotation.
+00410AD0 BL updateStageListForRandomHook
+004112A4 BL updateStageListForRandomHook
+00411C60 BL updateStageListForRandomHook
+0041256C BL updateStageListForRandomHook
+
+
+// Extended Shoal/Private-match map list — 64 slots → 128 slots
+// =============================================================
+// The savefile's `Cmn::SaveDataLocal` map array at body[+0x00..+0xFF]
+// holds 64 × u32 mapIds (256 bytes total). We repack as 128 × u16 in the
+// SAME 256 bytes — savefile layout unchanged, no struct shift, no schema
+// migration of surrounding fields. See source/SaveDataLocalMapList.cpp.
+//
+// 1) Replace setHavePrivateStage entry — full reimpl, runs the one-shot
+//    u32→u16 in-place migration of existing saves on first call.
+0030C4D0 B saveDataLocalSetHavePrivateStageHook
+// 2) Inside sub_7100410AF0 (the merged makeStageList reader, offline branch):
+//    LDR W21,[X8,X22] → LDRH W21,[X8,X22]   (read u16 instead of u32)
+00410C44 15697678
+//    TBNZ W21,#0x1F,target → TBNZ W21,#0xF,target   (sentinel test on bit 15)
+00410C48 35037837
+//    ADD X22,X22,#4 → ADD X22,X22,#2   (loop step matches u16 stride)
+00410CAC D60A0091
 
 // Gambit mode: never show stealth jump
 10751AC BL calcDraw_SuperJumpSign_Hide_AlwaysHook

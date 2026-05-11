@@ -1369,6 +1369,8 @@ bool isSleepingAllHook(Game::BulletMgr *mgr){
 }
 
 #include "flexlion/InkColorExtension.hpp"
+#include "flexlion/SaveDataLocalMapList.hpp"
+#include "flexlion/StageSelectPageExpand.hpp"
 
 void init_starlion(){
 	exl::util::impl::InitMemLayout();
@@ -1933,6 +1935,11 @@ void hooks_init(){
 	searchForVersusIdHook(nullptr, -1);
 	boneMtxLookupSafeHook(0, 0);
 	inkstrikeShootingRangeCleanupHook(NULL, 0);
+	// Extended Shoal/Private-match map list (64 → 128 via u16-pack)
+	saveDataLocalSetHavePrivateStageHook(NULL, 0, 0);
+	// StageSelectPage UI capacity expansion (64 → 128 entries)
+	makeStageListHelperHook(NULL);
+	updateStageListForRandomHook(NULL);
 	// PrivateBattleSkills
 	onExeCallbackBtnEventHook(0, 0);
 	onExePostWakeHook(0);
