@@ -481,11 +481,23 @@ void receiveStartBarrier_Net_Reimpl(Game::Player *player, int duration, int sour
 	int currentFrame = (int)Game::MainMgr::sInstance->mPaintGameFrame;
 	if(player->mBarrierEndFrm > currentFrame) return;
 	int barrierEndFrm = currentFrame + duration;
-	// Clamp clone's endFrm to never exceed the local player's endFrm.
-	// Without this, network timing drift makes checkBarrier_CopyFrom's '>' check
-	// re-trigger startBarrier_Common on the local player every frame (visual re-infect).
+	// Clamp clone's endFrm to never exceed the local player's endFrm — but ONLY
+	// when this event is an echo of the local player's OWN barrier propagating
+	// back (sourcePlayerIdx == local index). In that case network drift can
+	// make the incoming endFrm slightly higher than local's, and without the
+	// clamp checkBarrier_CopyFrom's '>' check would re-trigger startBarrier_Common
+	// on the local player every frame (visual re-infect / drift loop).
+	//
+	// An UNCONDITIONAL clamp here is wrong: it also clobbers legitimate later
+	// activations from OTHER players (different sourcePlayerIdx). E.g. if local B
+	// activated at T=60 with endFrm=481, and remote A activates at T=120 with
+	// endFrm=540, A is NOT an echo of B's barrier — A's barrier should end at
+	// 540, not 481. The source check separates "drift echo of my barrier" from
+	// "someone else's independent activation".
 	Game::Player *localPlayer = Game::PlayerMgr::sInstance->getControlledPerformer();
-	if(localPlayer != NULL && localPlayer->mBarrierEndFrm > currentFrame){
+	if(localPlayer != NULL
+	   && localPlayer->mBarrierEndFrm > currentFrame
+	   && sourcePlayerIdx == localPlayer->mIndex){
 		if(barrierEndFrm > localPlayer->mBarrierEndFrm)
 			barrierEndFrm = localPlayer->mBarrierEndFrm;
 	}
@@ -496,7 +508,20 @@ void receiveStartBarrier_Net_Reimpl(Game::Player *player, int duration, int sour
 // Follows the same pattern as sendStateEvent_StartJetpack (3.1.0: 0x7100e78670):
 // construct event, set packet type, store ints at DWORD[6]/DWORD[7], check offline, push.
 // startBarrier_Common already guards with !mIsRemote before calling this.
-static u32 sBarrierSentExpiry = 0;
+//
+// Throttle state (process-static): tracks the absolute frame at which the
+// last sent barrier expires, used to suppress the network-drift infect
+// loop within a single barrier's lifetime. `sBarrierLastSeenFrame` tracks
+// the most recent mPaintGameFrame we observed at this hook; since the
+// frame counter is monotonic within a match and resets to ~0 at scene
+// boundaries, observing it go BACKWARDS is a definitive signal that the
+// throttle state is stale and must be cleared. This covers the edge case
+// where match 2 fires a barrier at a frame < match 1's last expiry (e.g.
+// match 1 fired at 20000, match 2 fires at 19500) — a pure-threshold
+// stale-detection would miss it because the gap (~920) is shorter than
+// any practical threshold.
+static u32 sBarrierSentExpiry    = 0;
+static u32 sBarrierLastSeenFrame = 0;
 void sendEvent_StartBarrierHook(Game::PlayerNetControl *netCtrl, int barrierEndFrm, int sourcePlayerIdx){
 	if(netCtrl == NULL || netCtrl->mCloneHandle == NULL) return;
 	// Don't re-send while a previous barrier send is still active.
@@ -504,6 +529,13 @@ void sendEvent_StartBarrierHook(Game::PlayerNetControl *netCtrl, int barrierEndF
 	// higher than local player's, causing secondCalc's checkBarrier_CopyFrom (which uses >)
 	// to re-trigger startBarrier_Common on the local player every frame.
 	u32 currentFrame = (u32)Game::MainMgr::sInstance->mPaintGameFrame;
+	// Detect scene/match reset: mPaintGameFrame is monotonic within a match,
+	// so a decrease from the previously observed value means the counter
+	// rolled back at a match boundary and `sBarrierSentExpiry` is stale.
+	if (currentFrame < sBarrierLastSeenFrame) {
+		sBarrierSentExpiry = 0;
+	}
+	sBarrierLastSeenFrame = currentFrame;
 	if(currentFrame < sBarrierSentExpiry) return;
 	sBarrierSentExpiry = (u32)barrierEndFrm;
 	Game::PlayerCloneHandle *handle = netCtrl->mCloneHandle;
