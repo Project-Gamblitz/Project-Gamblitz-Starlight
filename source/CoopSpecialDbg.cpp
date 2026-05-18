@@ -93,7 +93,7 @@ void coopSpecialShufflerHook(void* moderatorState, void* rng) {
         scanned = scanPoolSize(pool);
     }
 
-#if 1
+#if 0
     // Diagnostic: log shift seed + pool state. Flip to `#if 1` to re-enable
     // when iterating on the picker logic.
     u32* st = (u32*)rng;
@@ -133,7 +133,7 @@ void coopSpecialShufflerHook(void* moderatorState, void* rng) {
     }
     _ZN4Game4Coop19CommonRuleModerator18setupChangeWeapon_ERN4sead6RandomE(moderatorState, rng);
 
-#if 1
+#if 0
     // Diagnostic: log the 4 specials vanilla picker just assigned.
     // Output list lives at moderatorState+0x78:
     //   +0x78 packed (mSize, mCap)  — 4 entries after vanilla picker
