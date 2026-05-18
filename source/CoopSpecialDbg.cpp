@@ -133,7 +133,7 @@ void coopSpecialShufflerHook(void* moderatorState, void* rng) {
     }
     _ZN4Game4Coop19CommonRuleModerator18setupChangeWeapon_ERN4sead6RandomE(moderatorState, rng);
 
-#if 0
+#if 1
     // Diagnostic: log the 4 specials vanilla picker just assigned.
     // Output list lives at moderatorState+0x78:
     //   +0x78 packed (mSize, mCap)  — 4 entries after vanilla picker
