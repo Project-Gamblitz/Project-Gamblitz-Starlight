@@ -93,7 +93,7 @@ void coopSpecialShufflerHook(void* moderatorState, void* rng) {
         scanned = scanPoolSize(pool);
     }
 
-#if 0
+#if 1
     // Diagnostic: log shift seed + pool state. Flip to `#if 1` to re-enable
     // when iterating on the picker logic.
     u32* st = (u32*)rng;
