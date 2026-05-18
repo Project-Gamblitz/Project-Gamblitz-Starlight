@@ -242,6 +242,30 @@ _ZNK3Cmn11MushMapInfo14getByMushOrderEi = 0x7E3E0 - 0x2EBE000;
 _ZNK3Cmn11MushMapInfo6searchEi = 0x7E368 - 0x2EBE000;
 _makeStageListHelperOrig = 0x410AF0 - 0x2EBE000;
 _updateStageListForRandomOrig = 0x4130D0 - 0x2EBE000;
+/* Coop SR diagnostic — Actor::create<T> template instantiations called by
+ * Game::SeqMgrCoop::onCreate. We replace onCreate's entry with our hook
+ * and call these via the linker to reproduce vanilla behavior + log. */
+_ZN2Lp3Sys5Actor6createIN4Game4Coop13GuideDirectorEEEPT_PS1_PN4sead4HeapE = 0x5B930C - 0x2EBE000;
+_ZN2Lp3Sys5Actor6createIN4Game4Coop14PlayerDirectorEEEPT_PS1_PN4sead4HeapE = 0x5B944C - 0x2EBE000;
+_ZN2Lp3Sys5Actor6createIN4Game4Coop13EventDirectorEEEPT_PS1_PN4sead4HeapE = 0x5B97E0 - 0x2EBE000;
+/* SR shift-seed RNG init — called twice from Cmn::CoopFacade::init.
+ * The second arg (W1) is the shift seed = CRC32(first 8 bytes of current
+ * Coop phase). Our hook at the first BL site (0x87B14) captures the seed
+ * and forwards to this original. */
+_ZN3Cmn17ScheduleParseUtil22makeRandomByUniqueUserEPN4sead6RandomEj = 0x1AAFF0 - 0x2EBE000;
+/* SR special-pool picker — Game::Coop::CommonRuleModerator::setupChangeWeapon_(this, sead::Random&)
+ * Found by py_eval scan of functions reading BOTH [X+0x160] (pool buffer)
+ * AND [X+0x178] (pool size) on RuleConfig. Size matches 3.1's 0x300 exactly.
+ * We call it from coopSpecialShufflerHook AFTER pre-shuffling the pool. */
+_ZN4Game4Coop19CommonRuleModerator18setupChangeWeapon_ERN4sead6RandomE = 0x73110C - 0x2EBE000;
+/* RuleConfig singleton — function-local static in Cmn::Singleton<RuleConfig>::GetInstance_().
+ * Read by the picker as v12 = *off_7102CFF590[0]; the GOT slot at 0x7102CFF590
+ * points to this variable. Holds Game::Coop::RuleConfig*. */
+_ZZN3Cmn9SingletonIN4Game4Coop10RuleConfigEE12GetInstance_EvE9sInstance = 0x2D5B3C8 - 0x2EBE000;
+/* sead::Random::getU32 — called by sead::PtrArrayImpl::shuffle and by us
+ * during the pool Fisher-Yates. Uses the same rng instance as the picker
+ * so all clients consume the same RNG state and agree on the shuffle. */
+_ZN4sead6Random6getU32Ev = 0x1737A2C - 0x2EBE000;
 _ZN4Game9PlayerMgr24onChangeControlledPlayerEv = 0x10E6AE4 - 0x2EBE000;
 _ZN2Lp3Utl11getGfxLayerEi = 0x19ed7a4 - 0x2EBE000;
 _ZN2Lp3Utl13getGfxLayer3DEi = 0x19ed850 - 0x2EBE000;
@@ -558,31 +582,6 @@ _ZN3Cmn15PlayerCustomMgr27checkAndCreateSpecialWeaponEiNS_12PlayerCustom4KindEb_
 _ZN3Cmn15PlayerCustomMgr27checkAndCreateSpecialWeaponEiNS_12PlayerCustom4KindEb_1D4 = _ZN3Cmn15PlayerCustomMgr27checkAndCreateSpecialWeaponEiNS_12PlayerCustom4KindEb + 0x1D4;
 _ZN2Lp3Sys5Actor6createIN3Cmn19PlayerWeaponShooterEEEPT_PS1_PN4sead4HeapE = 0x1813A0 - 0x2EBE000;
 _ZN4Game15BulletGachihoko22getClassIterNodeStaticEv = 0x4DD3A8 - 0x2EBE000;
-/* BulletGachihoko::firstCalcSubEv — the inner per-frame logic called from
- * BulletBombBase::firstCalc. Overriding this slot lets the outer firstCalc
- * keep advancing position via Cmn::KDUtl::Rigid::updatePosAtt while we
- * suppress the inner gravity/collision/paint pass.
- *
- * 5.5.2 address: 0x4D97D0 (file-relative) verified by size match with xr45
- * (3.1 had 0x131C bytes, 5.5.2 has 0x1324 bytes — same function +8 bytes).
- *
- * Note: the vtable slot index for firstCalcSubEv DRIFTED from 209 (3.1) to
- * 217 (5.5.2) — extra virtual method(s) added in inheritance chain. We use
- * address-find rather than fixed slot index to be robust across versions. */
-_ZN4Game15BulletGachihoko12firstCalcSubEv = 0x4D97D0 - 0x2EBE000;
-/* BulletGachihoko::calcDamageImpl_ — returns the damage value the bullet
- * deals on hit. Vanilla returns getBombDamage() (~60). We override to
- * return 1500 for SuperShot/Inkzooka one-shot kills.
- * 5.5.2 address: 0x4DB3FC (size 0x60, matches xr45 0x710034a514). */
-_ZNK4Game15BulletGachihoko15calcDamageImpl_ENS_6Bullet9ArmorTypeEN3Cmn3Def4TeamERKN4sead7Vector3IfEE = 0x4DB3FC - 0x2EBE000;
-/* BulletGachihoko::initializeSender — wrapper that delegates to ::initialize.
- * Called from PlayerInkAction::shotBullet_N at file-relative 0x10990F4.
- * We hook that BL site (see patches/552.slpatch) to call our wrapper which
- * invokes the original then patches the bullet's vtable BEFORE its onActivate
- * runs next frame — so getXlinkName returns "BulletSuperShot" and the xlink
- * resolves to the friend's elink user (tornado emitters auto-emit on activate).
- * 5.5.2 address: 0x4D933C (size 0x4C, matches xr45 0x710034845c). */
-_ZN4Game15BulletGachihoko16initializeSenderEPKN3Cmn5ActorEiiRKN4sead7Vector3IfEES9_ij = 0x4D933C - 0x2EBE000;
 _ZN2Lp3Sys5Actor6createIN4Game16BulletSpAquaBallEEEPT_PS1_PN4sead4HeapE = 0x4F52C0 - 0x2EBE000;
 _ZN3Cmn18EffectManualHandle13searchAndEmitEPKcii = 0xEABCC - 0x2EBE000;
 _ZN3Cmn18EffectManualHandle12setTeamColorENS_3Def4TeamE = 0xEAE74 - 0x2EBE000;

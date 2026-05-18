@@ -472,6 +472,17 @@
 //    ADD X22,X22,#4 → ADD X22,X22,#2   (loop step matches u16 stride)
 00410CAC D60A0091
 
+// SR special-pool shuffler — replaces the BL inside
+// Game::Coop::Custom/NormalRuleModerator::setupChangeWeapon_ that calls
+// Game::Coop::CommonRuleModerator::setupChangeWeapon_ (the picker at
+// 0x73110C). Our hook pre-shuffles RuleConfig's special pool at
+// (RuleConfig+0x160) using the SR shift seed, then forwards to vanilla.
+// After this, the picker's pool[0..3] window holds 4 random distinct
+// entries from the full bprm pool. See source/CoopSpecialDbg.cpp and
+// docs/COOP_SR_SPECIAL_NOTES.md.
+0073151C BL coopSpecialShufflerHook
+00731FB0 BL coopSpecialShufflerHook
+
 // Gambit mode: never show stealth jump
 10751AC BL calcDraw_SuperJumpSign_Hide_AlwaysHook
 

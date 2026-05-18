@@ -1403,6 +1403,7 @@ bool isSleepingAllHook(Game::BulletMgr *mgr){
 #include "flexlion/InkColorExtension.hpp"
 #include "flexlion/SaveDataLocalMapList.hpp"
 #include "flexlion/StageSelectPageExpand.hpp"
+#include "flexlion/CoopSpecialDbg.hpp"
 
 void init_starlion(){
 	exl::util::impl::InitMemLayout();
@@ -1972,6 +1973,8 @@ void hooks_init(){
 	// StageSelectPage UI capacity expansion (64 → 128 entries)
 	makeStageListHelperHook(NULL);
 	updateStageListForRandomHook(NULL);
+	// SR special-pool shuffler — BL replacement at Custom/Normal's call to Common::setupChangeWeapon_.
+	coopSpecialShufflerHook(NULL, NULL);
 	// PrivateBattleSkills
 	onExeCallbackBtnEventHook(0, 0);
 	onExePostWakeHook(0);
